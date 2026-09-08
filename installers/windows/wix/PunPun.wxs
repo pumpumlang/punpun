@@ -1,5 +1,5 @@
 <Wix xmlns="http://wixtoolset.org/schemas/v4/wxs">
-  <Package Name="PunPun SDK" Manufacturer="PunPun Project" Version="0.5.0" UpgradeCode="7A2B1110-6B5E-45B6-9A86-50C4F5B1A001" Scope="perMachine">
+  <Package Name="PunPun SDK" Manufacturer="PunPun Project" Version="$(ProductVersion)" UpgradeCode="7A2B1110-6B5E-45B6-9A86-50C4F5B1A001" Scope="perMachine">
     <MajorUpgrade DowngradeErrorMessage="A newer PunPun SDK is already installed." />
     <MediaTemplate EmbedCab="yes" CompressionLevel="high" />
     <Feature Id="Main" Title="PunPun SDK" Level="1">

@@ -3,6 +3,7 @@ set -eu
 
 SCRIPT_DIR=$(CDPATH= cd -- "$(dirname -- "$0")" 2>/dev/null && pwd)
 PROJECT_DIR=$(pwd)
+VERSION=$(tr -d '\r\n' < "$SCRIPT_DIR/VERSION")
 
 usage() {
     cat <<'TXT'
@@ -45,7 +46,7 @@ compiler() {
         ppc="$SCRIPT_DIR/build/ppc"
         runtime_lib="$SCRIPT_DIR/runtime/libpunpun.a"
         rebuild=0
-        if [ ! -x "$ppc" ] || [ ! -f "$runtime_lib" ]; then
+        if [ ! -x "$ppc" ] || [ ! -f "$runtime_lib" ] || [ "$SCRIPT_DIR/VERSION" -nt "$ppc" ]; then
             rebuild=1
         elif find "$SCRIPT_DIR/compiler" "$SCRIPT_DIR/runtime" -type f \
             \( -name '*.cpp' -o -name '*.hpp' -o -name '*.c' -o -name '*.h' \) \
@@ -186,7 +187,7 @@ run_tests() {
 
 install_vscode() {
     extension="$SCRIPT_DIR/editors/vscode"
-    vsix="$SCRIPT_DIR/dist/punpun-vscode-0.5.0-beta.vsix"
+    vsix="$SCRIPT_DIR/dist/punpun-vscode-$VERSION.vsix"
     if [ ! -f "$extension/package.json" ]; then
         echo "pp: VS Code extension files are not available beside this launcher" >&2
         exit 1
@@ -201,7 +202,7 @@ install_vscode() {
             fi
         done
     fi
-    destination="$HOME/.vscode/extensions/punpun.punpun-0.5.0-beta"
+    destination="$HOME/.vscode/extensions/punpun.punpun-$VERSION"
     mkdir -p "$(dirname "$destination")"
     rm -rf "$destination"
     cp -a "$extension" "$destination"
@@ -352,7 +353,7 @@ case "$command_name" in
         if command -v node >/dev/null 2>&1; then echo "LSP Node runtime       OK  $(node --version)"; else echo "LSP Node runtime       MISSING (editor LSP unavailable)"; fi
         if command -v code >/dev/null 2>&1; then echo "VS Code CLI            OK"; elif command -v codium >/dev/null 2>&1; then echo "VSCodium CLI           OK"; else echo "VS Code CLI            optional/unavailable"; fi
         if command -v cc >/dev/null 2>&1; then echo "C injection compiler   OK  $(command -v cc)"; else echo "C injection compiler   unavailable until @inject->c is used"; fi
-        if command -v python3 >/dev/null 2>&1 && [ -f "$SCRIPT_DIR/ppx/ppx.py" ]; then echo "PPX package client     OK  0.5.0-beta"; else echo "PPX package client     MISSING (python3 required)"; fi
+        if command -v python3 >/dev/null 2>&1 && [ -f "$SCRIPT_DIR/ppx/ppx.py" ]; then echo "PPX package client     OK  $VERSION"; else echo "PPX package client     MISSING (python3 required)"; fi
         if [ -x "$SCRIPT_DIR/bin/ppc-self" ] || [ -x "$SCRIPT_DIR/build/selfhost/ppc-self" ]; then echo "self-hosted compiler   OK"; else echo "self-hosted compiler   source available; run make selfhost"; fi
         [ -d "$SCRIPT_DIR/packages" ] && echo "first-party packages   OK  $SCRIPT_DIR/packages" || echo "first-party packages   MISSING"
         [ -f "$SCRIPT_DIR/docs-site/dist/index.html" ] && echo "offline docs site      OK" || echo "offline docs site      source only"

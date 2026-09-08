@@ -16,4 +16,4 @@ pp run
 
 ## VS Code
 
-Install the bundled `punpun-vscode-0.5.0-beta.vsix`, reload the editor, and open a `.pp` file. Unknown identifiers are diagnosed from unsaved buffers without building machine code.
+Install the bundled `punpun-vscode-<VERSION>.vsix`, reload the editor, and open a `.pp` file. Unknown identifiers are diagnosed from unsaved buffers without building machine code.

@@ -43,6 +43,10 @@
 #define PP_RUNTIME_DIR "runtime"
 #endif
 
+#ifndef PP_VERSION
+#define PP_VERSION "0.0.0-dev"
+#endif
+
 static std::string read_file(const fs::path &path) {
     std::ifstream input(path);
     if (!input) throw Error("error: cannot read '" + path.string() + "'");
@@ -134,7 +138,7 @@ static bool host_can_use_direct_x86_backend() {
 
 static void usage() {
     std::cerr
-        << "Punpun compiler 0.5.0-beta\n\n"
+        << "Punpun compiler " PP_VERSION "\n\n"
         << "usage: ppc <build|run|go|check|fmt|emit-tokens|emit-ast|emit-hir|emit-ir|emit-c|emit-asm> <file.pp> [options] [-- args...]\n\n"
         << "options:\n"
         << "  -o <path>                    Output executable/source path\n"
@@ -162,9 +166,9 @@ static fs::path verified_runtime(fs::path path) {
         std::ifstream input(marker);
         std::string version;
         std::getline(input, version);
-        if (version != "0.5.0-beta")
+        if (version != PP_VERSION)
             throw Error("error: incompatible PunPun runtime/SDK version '" + version +
-                        "' at " + marker.string() + "; compiler requires 0.5.0-beta");
+                        "' at " + marker.string() + "; compiler requires " PP_VERSION);
     }
     return path;
 }
@@ -299,9 +303,9 @@ static std::string json_escape(const std::string &value) {
 }
 
 static void print_language_info() {
-    std::cout << "{\n  \"compiler_version\": \"0.5.0-beta\",\n";
+    std::cout << "{\n  \"compiler_version\": \"" PP_VERSION "\",\n";
     std::cout << "  \"types\": [\"i64\",\"i32\",\"u64\",\"u32\",\"f64\",\"f32\",\"bool\",\"String\",\"nums\",\"void\"],\n";
-    std::cout << "  \"keywords\": [\"bring\",\"launch\",\"say\",\"fn\",\"struct\",\"object\",\"contract\",\"meets\",\"sealed\",\"init\",\"let\",\"mut\",\"const\",\"return\",\"if\",\"else\",\"while\",\"for\",\"in\",\"break\",\"continue\",\"import\",\"true\",\"false\",\"unsafe\",\"raw\",\"public\",\"private\",\"protected\",\"extern\",\"native\",\"self\",\"async\",\"await\"],\n";
+    std::cout << "  \"keywords\": [\"bring\",\"launch\",\"say\",\"fn\",\"struct\",\"object\",\"contract\",\"meets\",\"sealed\",\"init\",\"let\",\"mut\",\"const\",\"return\",\"if\",\"else\",\"while\",\"for\",\"in\",\"break\",\"continue\",\"import\",\"true\",\"false\",\"unsafe\",\"raw\",\"public\",\"private\",\"protected\",\"extern\",\"native\",\"self\",\"async\",\"await\",\"enum\",\"match\",\"case\",\"where\"],\n";
     std::cout << "  \"legacy_keywords\": [\"craft\",\"gives\",\"as\",\"shape\",\"done\",\"pin\",\"keep\",\"give\",\"when\",\"otherwise\",\"whilst\",\"each\",\"from\",\"until\",\"leave\",\"next\",\"yes\",\"no\",\"and\",\"or\",\"not\"],\n";
     std::cout << "  \"builtins\": [\n";
     const auto &builtins = punpun_builtins();
@@ -388,7 +392,7 @@ static std::string build_fingerprint(const std::vector<Module> &modules, const f
                                      const pptoolchain::Config &toolchain) {
     uint64_t hash = UINT64_C(14695981039346656037);
     const auto add = [&](const std::string &value) { hash = fnv1a_append(hash, value); };
-    add("PunPun-0.5.0-beta\n");
+    add("PunPun-" PP_VERSION "\n");
     add(target_name(target));
     add(release ? "\nrelease\n" : "\ndebug\n");
     add(cc_backend ? "cc-backend\n" : "native-backend\n");
@@ -572,7 +576,7 @@ int main(int argc, char **argv) {
     try {
         if (argc == 2 && std::string(argv[1]) == "semantic-worker") return semantic_worker();
         if (argc == 2 && std::string(argv[1]) == "--version") {
-            std::cout << "ppc 0.5.0-beta\n";
+            std::cout << "ppc " PP_VERSION "\n";
             return 0;
         }
         if (argc == 2 && std::string(argv[1]) == "language-info") {

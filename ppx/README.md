@@ -6,6 +6,8 @@
 
 PPX discovers, resolves and caches PunPun packages using the same `Punpun.toml` and `Punpun.lock` files consumed by `pp`.
 
+> **Works offline by default.** The seven first-party packages and the public catalog snapshot require no local registry process. Network publishing remains an explicitly configured development/hosted-registry operation.
+
 ## Start here
 
 ```sh
@@ -28,6 +30,14 @@ The SDK already includes these first-party packages:
 | `testing` | Lightweight test assertions |
 
 Bundled packages work offline. PPX first checks the configured package source and keeps downloaded artifacts in a checksum-verified cache.
+
+## Resolution pipeline
+
+```text
+Punpun.toml → version selection → checksum cache → path graph → normal PunPun compiler
+```
+
+PPX does not introduce a second compiler or hidden package build format. The exact resolved graph is recorded in `Punpun.lock`.
 
 ## Commands
 
@@ -66,3 +76,13 @@ The reference API in `../ppx-registry/` is intended for development and acceptan
 - credentials are stored in the user's configuration directory, never in a project manifest.
 
 PPX is beta software. Production provenance signing, organizational accounts, full conflict solving and hosted service operations remain tracked work.
+
+## Development checks
+
+```sh
+ppx doctor
+python3 -m unittest tests.test_ecosystem -v
+python3 ppx-site/build.py
+```
+
+The product version is read from the repository-root `VERSION`; package versions remain independently declared in each package's `Punpun.toml`.

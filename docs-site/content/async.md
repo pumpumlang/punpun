@@ -1,6 +1,6 @@
 # Async and await
 
-PunPun 0.5.0-beta includes native task-based `async fn` and `await` support.
+PunPun 0.6 development retains the native task-based `async fn` and `await` foundation.
 
 ```pp
 async fn fetch_later(value: i64) -> i64 {

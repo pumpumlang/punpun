@@ -7,6 +7,7 @@ import re, shutil
 
 ROOT=Path(__file__).resolve().parent
 CONTENT=ROOT/'content'; DIST=ROOT/'dist'; STATIC=ROOT/'static'
+VERSION=(ROOT.parent/'VERSION').read_text(encoding='utf-8').strip()
 
 def inline(text:str)->str:
     text=escape(text)
@@ -46,7 +47,7 @@ def markdown(src:str)->tuple[str,str]:
     return '\n'.join(out),title
 
 def template(title,body,nav):
-    return f'''<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="description" content="PunPun 0.5.0-beta language documentation"><title>{escape(title)} · PunPun</title><link rel="stylesheet" href="assets/site.css"></head><body><header><a class="brand" href="index.html"><img src="assets/punpun-mark.svg" alt="PunPun">PunPun <span>0.5.0-beta</span></a><div class="head-actions"><input id="search" placeholder="Search docs…" aria-label="Search documentation"><button id="theme" aria-label="Toggle theme">◐</button></div></header><div class="layout"><aside><nav>{nav}</nav><div id="results"></div></aside><main>{body}<footer>Public beta documentation. Features marked beta may change before 1.0.</footer></main></div><script src="assets/site.js"></script></body></html>'''
+    return f'''<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="description" content="PunPun {VERSION} language documentation"><title>{escape(title)} · PunPun</title><link rel="stylesheet" href="assets/site.css"></head><body><header><a class="brand" href="index.html"><img src="assets/punpun-mark.svg" alt="PunPun">PunPun <span>{VERSION}</span></a><div class="head-actions"><input id="search" placeholder="Search docs…" aria-label="Search documentation"><button id="theme" aria-label="Toggle theme">◐</button></div></header><div class="layout"><aside><nav>{nav}</nav><div id="results"></div></aside><main>{body}<footer>Development documentation. Features marked planned are not yet implemented.</footer></main></div><script src="assets/site.js"></script></body></html>'''
 
 def main():
     shutil.rmtree(DIST,ignore_errors=True); (DIST/'assets').mkdir(parents=True)

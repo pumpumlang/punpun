@@ -11,7 +11,7 @@ sudo pacman -S --needed git github-cli unzip coreutils
 gh auth login
 ```
 
-Open the extracted `PunPun-0.5.0-beta-publisher` folder in the terminal and run:
+Open the extracted `PunPun-<VERSION>-publisher` folder in the terminal and run:
 
 ```sh
 chmod +x publish-punpun.sh
@@ -25,7 +25,7 @@ The script safely:
 1. derives the account from your authenticated `gh` session;
 2. verifies every bundled checksum;
 3. creates or updates the `punpun` source repository;
-4. creates or updates the `v0.5.0-beta` release and its downloads;
+4. creates or updates the release tag derived from the bundled `VERSION` file;
 5. creates or updates the `punpun-docs` GitHub Pages site;
 6. creates or updates the `punpun-ppx` GitHub Pages site;
 7. prints the exact URLs at the end.
@@ -46,7 +46,7 @@ Do not use `/docs-site/`; that is a source-directory name, not the published rep
 The script automatically checks the current directory, its own directory, Desktop and Downloads. You can also provide the folder explicitly:
 
 ```sh
-env PUNPUN_PUBLISHER_DIR="$HOME/Desktop/PunPun-0.5.0-beta-publisher" bash publish-punpun.sh
+env PUNPUN_PUBLISHER_DIR="$HOME/Desktop/PunPun-<VERSION>-publisher" bash publish-punpun.sh
 ```
 
 ## Local verification from source
@@ -68,8 +68,9 @@ From the extracted publisher folder:
 ```sh
 rm -rf /tmp/punpun-docs-publish /tmp/punpun-ppx-publish
 mkdir -p /tmp/punpun-docs-publish /tmp/punpun-ppx-publish
-unzip "$PWD/websites/PunPun-0.5.0-beta-docs-site.zip" -d /tmp/punpun-docs-publish
-unzip "$PWD/websites/PunPun-0.5.0-beta-ppx-site.zip" -d /tmp/punpun-ppx-publish
+version=$(tr -d '\r\n' < VERSION)
+unzip "$PWD/websites/PunPun-${version}-docs-site.zip" -d /tmp/punpun-docs-publish
+unzip "$PWD/websites/PunPun-${version}-ppx-site.zip" -d /tmp/punpun-ppx-publish
 npx wrangler@latest login
 npx wrangler@latest pages deploy /tmp/punpun-docs-publish --project-name punpun-docs
 npx wrangler@latest pages deploy /tmp/punpun-ppx-publish --project-name punpun-ppx

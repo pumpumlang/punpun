@@ -2,12 +2,11 @@
 from __future__ import annotations
 import argparse, hashlib, json, os, shutil, stat, subprocess, tarfile, tempfile, time, zipfile
 from pathlib import Path
+from versioning import PKGVER, VERSION
 
 ROOT=Path(__file__).resolve().parents[1]
-VERSION='0.5.0-beta'
-PKGVER='0.5.0_beta'
 TARGET='linux-x86_64'
-RELEASE=ROOT/'dist'/'release-0.5.0-beta'
+RELEASE=ROOT/'dist'/f'release-{VERSION}'
 SOURCE_DATE_EPOCH=int(os.environ.get('SOURCE_DATE_EPOCH','1788753600'))
 
 
@@ -51,15 +50,15 @@ def copy_part(src:Path,dst:Path):
 def make_sdk(stage:Path):
     sdk=stage/f'PunPun-{VERSION}-{TARGET}'
     sdk.mkdir(parents=True)
-    for f in ('punpun','pp','README.md','LICENSE','CHANGELOG.md','PROJECT_STATUS.txt','COMPLETION_REPORT.md','PUBLISHING.md','RELEASE_NOTES.md','publish-punpun.sh'):
+    for f in ('VERSION','punpun','pp','README.md','LICENSE','CHANGELOG.md','ROADMAP.md','PROJECT_STATUS.txt','COMPLETION_REPORT.md','PUBLISHING.md','RELEASE_NOTES.md','publish-punpun.sh'):
         copy_part(ROOT/f,sdk/f)
-    for d in ('runtime','stdlib','packages','ppx','tooling','editors','docs','assets','gui-maker','selfhost'):
+    for d in ('runtime','stdlib','packages','ppx','tooling','editors','docs','spec','assets','gui-maker','selfhost'):
         copy_part(ROOT/d,sdk/d)
     # Built docs are consumer-facing; source stays in source/full bundle.
     copy_part(ROOT/'docs-site'/'dist',sdk/'docs-site'/'dist')
     copy_part(ROOT/'ppx-site'/'dist',sdk/'ppx-site'/'dist')
     (sdk/'dist').mkdir(exist_ok=True)
-    copy_part(ROOT/'dist'/'punpun-vscode-0.5.0-beta.vsix',sdk/'dist'/'punpun-vscode-0.5.0-beta.vsix')
+    copy_part(ROOT/'dist'/f'punpun-vscode-{VERSION}.vsix',sdk/'dist'/f'punpun-vscode-{VERSION}.vsix')
     (sdk/'bin').mkdir()
     shutil.copy2(ROOT/'build'/'ppc',sdk/'bin'/'ppc'); executable(sdk/'bin'/'ppc')
     selfhost=ROOT/'build'/'selfhost'/'ppc-self'
@@ -162,6 +161,7 @@ def make_publisher_bundle():
         groups={name:bundle/name for name in ('source','linux','arch','editor','websites','windows','reports')}
         for directory in groups.values(): directory.mkdir(parents=True)
         copies={
+            ROOT/'VERSION':bundle/'VERSION',
             ROOT/'PUBLISHING.md':bundle/'PUBLISHING.md',
             ROOT/'RELEASE_NOTES.md':bundle/'RELEASE_NOTES.md',
             ROOT/'publish-punpun.sh':bundle/'publish-punpun.sh',
@@ -199,7 +199,9 @@ def main():
     ap=argparse.ArgumentParser(); ap.add_argument('--skip-tests',action='store_true'); args=ap.parse_args()
     if RELEASE.exists(): shutil.rmtree(RELEASE)
     RELEASE.mkdir(parents=True)
+    run(['python3','scripts/sync_version.py'])
     run(['make','-s','-B','compiler'])
+    run(['python3','scripts/check_version.py'])
     run(['python3','scripts/privacy_audit.py',str(ROOT)])
     run(['./selfhost/bootstrap.sh'])
     run(['python3','scripts/package_vsix.py'])
@@ -223,7 +225,7 @@ def main():
     zip_tree(ROOT/'docs-site'/'dist',RELEASE/f'PunPun-{VERSION}-docs-site.zip','')
     zip_tree(ROOT/'ppx-site'/'dist',RELEASE/f'PunPun-{VERSION}-ppx-site.zip','')
     zip_tree(ROOT/'installers'/'windows',RELEASE/f'PunPun-{VERSION}-windows-installer-source.zip',f'PunPun-{VERSION}-windows-installer')
-    shutil.copy2(ROOT/'dist'/'punpun-vscode-0.5.0-beta.vsix',RELEASE/f'punpun-vscode-{VERSION}.vsix')
+    shutil.copy2(ROOT/'dist'/f'punpun-vscode-{VERSION}.vsix',RELEASE/f'punpun-vscode-{VERSION}.vsix')
 
     # Validate the artifacts that can actually execute on this host before
     # declaring the release assembled. This includes installing the exact .run

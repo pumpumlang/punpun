@@ -243,7 +243,7 @@ class Registry:
 
 class Handler(BaseHTTPRequestHandler):
     registry: Registry
-    server_version = "PPXRegistry/0.5.0-beta"
+    server_version = "PPXRegistry/" + (Path(__file__).resolve().parents[1] / "VERSION").read_text(encoding="utf-8").strip()
     rate_lock = threading.Lock()
     rate_windows = defaultdict(deque)
     rate_limit = int(os.environ.get("PPX_RATE_LIMIT", "120"))
@@ -285,7 +285,9 @@ class Handler(BaseHTTPRequestHandler):
     def do_GET(self):
         if not self.rate_allowed(): return self.reply(429,{"error":"rate limit exceeded"})
         parsed = urllib.parse.urlparse(self.path); parts = [p for p in parsed.path.split("/") if p]
-        if parsed.path == "/api/v1/health": return self.reply(200, {"status":"ok","version":"0.5.0-beta"})
+        if parsed.path == "/api/v1/health":
+            version = (Path(__file__).resolve().parents[1] / "VERSION").read_text(encoding="utf-8").strip()
+            return self.reply(200, {"status":"ok","version":version})
         if parsed.path == "/api/v1/search":
             q = urllib.parse.parse_qs(parsed.query).get("q", [""])[0][:128]
             return self.reply(200, {"packages": self.registry.search(q)})

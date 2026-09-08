@@ -1,7 +1,12 @@
 #!/usr/bin/env bash
 set -Eeuo pipefail
 
-VERSION="0.5.0-beta"
+SCRIPT_DIR=$(CDPATH= cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
+VERSION=${PUNPUN_VERSION:-}
+if [[ -z "$VERSION" && -f "$SCRIPT_DIR/VERSION" ]]; then
+    VERSION=$(tr -d '\r\n' < "$SCRIPT_DIR/VERSION")
+fi
+[[ -n "$VERSION" ]] || { printf 'publish-punpun: VERSION is missing beside this script\n' >&2; exit 1; }
 TAG="v${VERSION}"
 PUBLISHER_NAME="PunPun-${VERSION}-publisher"
 DOCS_REPO="punpun-docs"
@@ -23,8 +28,8 @@ need() {
 }
 
 find_publisher() {
-    local script_dir candidate
-    script_dir=$(CDPATH= cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
+    local script_dir candidate old_bundle=''
+    script_dir=$SCRIPT_DIR
     for candidate in \
         "${PUNPUN_PUBLISHER_DIR:-}" \
         "$script_dir" \
@@ -34,17 +39,23 @@ find_publisher() {
     do
         [[ -n "$candidate" ]] || continue
         if [[ -f "$candidate/SHA256SUMS" && -d "$candidate/source" && -d "$candidate/websites" ]]; then
-            CDPATH= cd -- "$candidate" && pwd
-            return
+            if unzip -Z1 "$candidate/websites/PunPun-${VERSION}-ppx-site.zip" 2>/dev/null | grep -qx 'static/catalog.json'; then
+                CDPATH= cd -- "$candidate" && pwd
+                return
+            fi
+            old_bundle=$candidate
         fi
     done
+    if [[ -n "$old_bundle" ]]; then
+        die "found an older publisher bundle at $old_bundle. Extract the newly repaired publisher ZIP into a fresh folder, then rerun this script."
+    fi
     die "cannot find $PUBLISHER_NAME. Put this script inside that folder, or set PUNPUN_PUBLISHER_DIR."
 }
 
 git_identity() {
     local repository=$1
-    git -C "$repository" config user.name "$GH_NAME"
-    git -C "$repository" config user.email "${GH_ACCOUNT}@users.noreply.github.com"
+    git -C "$repository" config user.name "PunPun Project"
+    git -C "$repository" config user.email "punpun-project""@""users.noreply.github.com"
 }
 
 replace_checkout_contents() {
@@ -107,13 +118,12 @@ need unzip
 need sha256sum
 
 ROOT=$(find_publisher)
+SCRIPT_PATH=$(CDPATH= cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)/$(basename -- "${BASH_SOURCE[0]}")
 WORK=$(mktemp -d "${TMPDIR:-/tmp}/punpun-publish.XXXXXX")
 trap 'rm -rf -- "$WORK"' EXIT HUP INT TERM
 
 gh auth status >/dev/null 2>&1 || die "GitHub CLI is not logged in; run 'gh auth login' first"
 GH_ACCOUNT=$(gh api user --jq .login)
-GH_NAME=$(gh api user --jq '.name // .login')
-
 printf '%bPunPun %s publisher%b\n' "$green" "$VERSION" "$reset"
 printf 'Account:   %s\nBundle:    %s\n' "$GH_ACCOUNT" "$ROOT"
 
@@ -136,6 +146,8 @@ fi
 
 step "Publishing release downloads"
 shopt -s nullglob
+PUBLISH_SCRIPT="$ROOT/publish-punpun.sh"
+[[ -f "$PUBLISH_SCRIPT" ]] || PUBLISH_SCRIPT="$SCRIPT_PATH"
 assets=(
     "$ROOT"/linux/*
     "$ROOT"/arch/*
@@ -144,7 +156,7 @@ assets=(
     "$ROOT"/websites/*.zip
     "$ROOT"/reports/*
     "$ROOT/SHA256SUMS"
-    "$ROOT/publish-punpun.sh"
+    "$PUBLISH_SCRIPT"
 )
 (( ${#assets[@]} > 1 )) || die "release assets are missing"
 if gh release view "$TAG" --repo "$GH_ACCOUNT/$SOURCE_REPO" >/dev/null 2>&1; then

@@ -1,12 +1,22 @@
-# PunPun continuation engineering report
+# PunPun 0.6 Step 1 engineering report
 
 Date: 2026-09-08  
-Version: 0.5.0-beta continuation
+Version source: repository `VERSION`
 
-This report is the release gate for the continuation archive. It distinguishes
+This report is the release gate for the 0.6 Step 1 development archive. It distinguishes
 implemented and tested code from platform work that cannot honestly be certified
 on the Linux build host. No placeholder MSI, setup EXE, Arch package-manager
 result, signature, or native binary is represented as a real artifact.
+
+## Added in 0.6 Step 1
+
+- Added one canonical version source with synchronized runtime/stdlib/editor mirrors and executable consistency tests.
+- Made compiler output, runtime compatibility, cache fingerprints, PPX, registry metadata, static sites, release artifacts, Arch packaging, Windows output names and publishing paths version-driven.
+- Froze normative 0.6 rules for generics, contract constraints, monomorphization, overload resolution, algebraic enums, `Option`, `Result`, matching, nullability, move-state analysis, borrows and deterministic destruction.
+- Added parser/AST scaffolding for generic declaration headers, inline constraints and nested generic types.
+- Reserved future enum, match and propagation syntax behind stable `E0900` diagnostics.
+- Added modern and migration-dialect compatibility fixtures plus version, specification and syntax-contract regression tests.
+- Added checked-in release-truthfulness, privacy and compatibility rules in `AGENTS.md` and the staged release plan in `ROADMAP.md`.
 
 ## Implemented in this continuation
 

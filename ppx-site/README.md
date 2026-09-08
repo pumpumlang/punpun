@@ -4,7 +4,13 @@
 
 <p align="center"><strong>The fast, dependency-free frontend for PunPun packages.</strong></p>
 
-This repository powers the public PPX catalog. It ships a generated snapshot of every first-party package, so search and package pages work immediately on GitHub Pages—no localhost server and no production API required.
+This repository powers the public PPX catalog. It ships a generated, checksum-bearing snapshot of every first-party package, so search and package pages work immediately on GitHub Pages—no localhost server and no production API required.
+
+| Mode | Data source | Server required |
+| --- | --- | --- |
+| Public/default | `static/catalog.json` generated during the site build | No |
+| Registry development | Explicit `ppxRegistry` browser override | Yes |
+| Offline preview | Same generated catalog through a local static server | No |
 
 ## Build and preview
 
@@ -37,6 +43,8 @@ If an optional live endpoint is unreachable, the site quietly falls back to the 
 
 ## Deployment
 
-The release bundle contains `PunPun-0.5.0-beta-ppx-site.zip`, already built for static hosting. The top-level `publish-punpun.sh` script creates or updates the `punpun-ppx` repository, enables GitHub Pages and prints the correct public URL.
+The release bundle contains `PunPun-<VERSION>-ppx-site.zip`, already built for static hosting. The top-level `publish-punpun.sh` script creates or updates the `punpun-ppx` repository, enables GitHub Pages and prints the correct public URL.
 
 No access token or registry credential belongs in this static site.
+
+The displayed product version and catalog release field come from the repository-root `VERSION` during the build.

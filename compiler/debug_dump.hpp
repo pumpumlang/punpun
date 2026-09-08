@@ -140,13 +140,45 @@ inline std::string dump_modules(const std::vector<Module> &modules) {
         out << "Module \"" << module.file.string() << "\"\n";
         for (const std::string &name : module.imports) out << "  Import " << name << '\n';
         for (const Shape &shape : module.shapes) {
-            out << "  Shape " << shape.name << " @" << shape.token.line << ':' << shape.token.column << '\n';
+            out << "  Shape " << shape.name;
+            if (!shape.generic_parameters.empty()) {
+                out << '<';
+                for (size_t i = 0; i < shape.generic_parameters.size(); ++i) {
+                    if (i) out << ", ";
+                    out << shape.generic_parameters[i].name;
+                    if (!shape.generic_parameters[i].constraints.empty()) {
+                        out << ": ";
+                        for (size_t c = 0; c < shape.generic_parameters[i].constraints.size(); ++c) {
+                            if (c) out << " + ";
+                            out << type_name(shape.generic_parameters[i].constraints[c]);
+                        }
+                    }
+                }
+                out << '>';
+            }
+            out << " @" << shape.token.line << ':' << shape.token.column << '\n';
             for (const Parameter &field : shape.fields)
                 out << "    Field " << field.name << ": " << type_name(field.type)
                     << " @" << field.token.line << ':' << field.token.column << '\n';
         }
         for (const Function &function : module.functions) {
-            out << "  Function " << function.name << '(';
+            out << "  Function " << function.name;
+            if (!function.generic_parameters.empty()) {
+                out << '<';
+                for (size_t i = 0; i < function.generic_parameters.size(); ++i) {
+                    if (i) out << ", ";
+                    out << function.generic_parameters[i].name;
+                    if (!function.generic_parameters[i].constraints.empty()) {
+                        out << ": ";
+                        for (size_t c = 0; c < function.generic_parameters[i].constraints.size(); ++c) {
+                            if (c) out << " + ";
+                            out << type_name(function.generic_parameters[i].constraints[c]);
+                        }
+                    }
+                }
+                out << '>';
+            }
+            out << '(';
             for (size_t i = 0; i < function.parameters.size(); ++i) {
                 if (i) out << ", ";
                 out << function.parameters[i].name << ": " << type_name(function.parameters[i].type);

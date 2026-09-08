@@ -1,5 +1,5 @@
 <Wix xmlns="http://wixtoolset.org/schemas/v4/wxs" xmlns:bal="http://wixtoolset.org/schemas/v4/wxs/bal">
-  <Bundle Name="PunPun Setup" Manufacturer="PunPun Project" Version="0.5.0" UpgradeCode="F13E181B-0121-4B89-9A32-2A2F937D2C55">
+  <Bundle Name="PunPun Setup" Manufacturer="PunPun Project" Version="$(ProductVersion)" UpgradeCode="F13E181B-0121-4B89-9A32-2A2F937D2C55">
     <BootstrapperApplication><bal:WixStandardBootstrapperApplication Theme="none" /></BootstrapperApplication>
     <Chain><MsiPackage SourceFile="$(MsiPath)" /></Chain>
   </Bundle>

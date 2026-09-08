@@ -9,7 +9,7 @@ fi
 ROOT=$(CDPATH= cd -- "$(dirname -- "$0")" 2>/dev/null && pwd)
 PREFIX=${PUNPUN_PREFIX:-"$HOME/.local"}
 BIN_DIR="$PREFIX/bin"
-VERSION="0.5.0-beta"
+VERSION=$(tr -d '\r\n' < "$ROOT/VERSION")
 
 remove_path_block() {
     file=$1

@@ -133,13 +133,13 @@ class Lexer {
                 const std::string pair = symbol + peek();
                 static const std::unordered_set<std::string> pairs = {
                     "<-", "->", "==", "!=", "<=", ">=", "&&", "||", "..", "::",
-                    "+=", "-=", "*=", "/=", "<<", ">>"};
+                    "+=", "-=", "*=", "/=", "<<", ">>", "=>"};
                 if (pairs.count(pair)) symbol += advance();
             }
             static const std::unordered_set<std::string> valid = {
                 "(", ")", "[", "]", "{", "}", ":", ";", ",", ".", "+", "-", "*", "/",
                 "%", "=", "==", "!=", "<", "<=", ">", ">=", "<-", "->", "&&", "||", "!",
-                "&", "|", "^", "~", "<<", ">>", "..", "::", "+=", "-=", "*=", "/=", "@"};
+                "&", "|", "^", "~", "<<", ">>", "..", "::", "+=", "-=", "*=", "/=", "@", "=>", "?"};
             if (!valid.count(symbol)) fail(start_line, start_column, "unexpected character '" + symbol + "'");
             if (symbol == "(" || symbol == "[") ++expression_nesting_;
             if (symbol == ")" || symbol == "]") {
@@ -259,11 +259,18 @@ struct Parameter {
     std::shared_ptr<Expr> default_value;
 };
 
+struct GenericParameter {
+    Token token;
+    std::string name;
+    std::vector<Type> constraints;
+};
+
 struct Function {
     Token token;
     std::string name;          // globally unique lowered name, e.g. Player::hit
     std::string source_name;   // source spelling, e.g. hit
     std::string owner_type;    // empty for free functions
+    std::vector<GenericParameter> generic_parameters;
     std::vector<Parameter> parameters;
     Type result = Type::Void;
     std::vector<Stmt> body;
@@ -293,12 +300,14 @@ struct ContractMethod {
 struct Contract {
     Token token;
     std::string name;
+    std::vector<GenericParameter> generic_parameters;
     std::vector<ContractMethod> methods;
 };
 
 struct Shape {
     Token token;
     std::string name;
+    std::vector<GenericParameter> generic_parameters;
     std::vector<Parameter> fields;
     bool reference_type = false;     // struct=false, object=true
     bool sealed_type = false;
@@ -334,6 +343,7 @@ class Parser {
             else if (match("bring")) module.imports.push_back(parse_legacy_import());
             else if (check("contract")) module.contracts.push_back(parse_contract());
             else if (check("struct") || check("object") || check("sealed")) parse_modern_shape(module);
+            else if (check("enum")) feature_pending(peek(), "algebraic enum declarations", "0.6 Step 3");
             else if (match("shape")) module.shapes.push_back(parse_legacy_shape());
             else if (match("async")) {
                 if (!check("fn")) fail(peek(), "expected 'fn' after 'async'");
@@ -374,6 +384,7 @@ class Parser {
             "fn", "struct", "object", "sealed", "init", "let", "mut", "const", "return", "if", "else",
             "while", "for", "in", "break", "continue", "import", "true", "false", "unsafe", "raw", "public",
             "private", "protected", "self", "sizeof", "alignof", "contract", "meets", "extern", "native", "inject", "async", "await",
+            "enum", "match", "case", "where",
             // 0.4 migration dialect
             "launch", "craft", "gives", "as", "shape", "bring", "done", "pin", "keep", "when",
             "otherwise", "whilst", "each", "from", "until", "leave", "next", "give", "say", "yes", "no",
@@ -394,6 +405,14 @@ class Parser {
                                   const std::string &help = {}) {
         throw Error(ppdiag::format(token.file, token.line, token.column, token.length,
                                    "E0100", message, message, help));
+    }
+
+    [[noreturn]] static void feature_pending(const Token &token, const std::string &feature,
+                                             const std::string &milestone) {
+        throw Error(ppdiag::format(token.file, token.line, token.column, token.length,
+                                   "E0900", feature + " are reserved but not enabled",
+                                   feature + " are reserved but not enabled",
+                                   "This syntax is frozen for " + milestone + "; it is not executable yet."));
     }
 
     static Type canonical_type(std::string name) {
@@ -421,7 +440,51 @@ class Parser {
         }
         const Token token = word("expected a type");
         if (token.text == "inferred") fail(token, "'inferred' is not a type name");
-        return canonical_type(token.text);
+        Type base = canonical_type(token.text);
+        if (!match("<")) return base;
+        std::string name = type_name(base) + "<";
+        bool first = true;
+        do {
+            if (!first) name += ",";
+            name += type_name(parse_type());
+            first = false;
+        } while (match(","));
+        take_type_close("expected '>' after generic type arguments");
+        return Type{std::move(name) + ">"};
+    }
+
+    void take_type_close(const std::string &message) {
+        if (match(">")) return;
+        if (check(">>")) {
+            // The lexer keeps shift operators intact. In a type context, consume
+            // one angle and leave the second for the enclosing generic type.
+            Token &token = tokens_[current_];
+            token.text = ">";
+            ++token.offset;
+            ++token.column;
+            --token.length;
+            return;
+        }
+        fail(peek(), message);
+    }
+
+    std::vector<GenericParameter> parse_generic_parameters() {
+        std::vector<GenericParameter> parameters;
+        if (!match("<")) return parameters;
+        std::unordered_set<std::string> names;
+        do {
+            GenericParameter parameter;
+            parameter.token = identifier("expected generic parameter name");
+            parameter.name = parameter.token.text;
+            if (!names.insert(parameter.name).second)
+                fail(parameter.token, "duplicate generic parameter '" + parameter.name + "'");
+            if (match(":")) {
+                do parameter.constraints.push_back(parse_type()); while (match("+"));
+            }
+            parameters.push_back(std::move(parameter));
+        } while (match(","));
+        take_type_close("expected '>' after generic parameters");
+        return parameters;
     }
 
     Visibility parse_visibility(Visibility fallback) {
@@ -485,6 +548,7 @@ class Parser {
         Contract contract;
         contract.token = identifier("expected contract name");
         contract.name = contract.token.text;
+        contract.generic_parameters = parse_generic_parameters();
         take("{", "expected '{' after contract name");
         separators();
         std::unordered_set<std::string> methods;
@@ -514,6 +578,7 @@ class Parser {
         shape.sealed_type = sealed;
         shape.token = identifier("expected type name");
         shape.name = shape.token.text;
+        shape.generic_parameters = parse_generic_parameters();
         if (match("meets")) {
             do shape.contracts.push_back(identifier("expected contract name after 'meets'").text); while (match(","));
         }
@@ -664,6 +729,7 @@ class Parser {
         Function function;
         function.token = identifier("expected function name");
         function.source_name = function.token.text;
+        function.generic_parameters = parse_generic_parameters();
         function.owner_type = owner;
         function.is_method = !owner.empty();
         function.visibility = visibility;
@@ -773,6 +839,7 @@ class Parser {
 
     // ---- statements shared by both dialects -----------------------------
     Stmt parse_statement() {
+        if (check("match")) feature_pending(peek(), "exhaustive match expressions", "0.6 Step 3");
         if (check("let") || check("const")) {
             const Token keyword = tokens_[current_++];
             Stmt statement{Stmt::Kind::Variable, keyword};
@@ -967,6 +1034,8 @@ class Parser {
                 access->children.push_back(parse_expression());
                 take("]", "expected ']' after index");
                 expression = std::move(access);
+            } else if (check("?")) {
+                feature_pending(peek(), "postfix Option/Result propagation", "0.6 Step 3");
             } else break;
         }
         return expression;
@@ -978,6 +1047,9 @@ class Parser {
         auto expression = std::make_unique<Expr>();
         expression->token = token;
         expression->value = token.text;
+
+        if (token.text == "match")
+            feature_pending(token, "exhaustive match expressions", "0.6 Step 3");
 
         if (token.kind == TokenKind::Integer) expression->kind = Expr::Kind::Integer;
         else if (token.kind == TokenKind::Float) expression->kind = Expr::Kind::Float;

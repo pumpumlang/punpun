@@ -8,6 +8,7 @@ import tomllib
 ROOT=Path(__file__).resolve().parent
 OUT=ROOT/'dist'
 PROJECT_ROOT=ROOT.parent
+VERSION=(PROJECT_ROOT/'VERSION').read_text(encoding='utf-8').strip()
 
 
 def package_digest(package_root: Path) -> str:
@@ -38,7 +39,7 @@ def bundled_catalog() -> dict:
             'checksum':package_digest(package_root),
             'versions':[{'version':version,'yanked':False,'bundled':True}],
         })
-    return {'schema':1,'release':'0.5.0-beta','packages':packages}
+    return {'schema':1,'release':VERSION,'packages':packages}
 
 
 def main() -> None:
@@ -46,7 +47,8 @@ def main() -> None:
         shutil.rmtree(OUT)
     OUT.mkdir()
     for name in ('index.html','package.html','security.html'):
-        shutil.copy2(ROOT/'src'/name, OUT/name)
+        rendered=(ROOT/'src'/name).read_text(encoding='utf-8').replace('{{VERSION}}',VERSION)
+        (OUT/name).write_text(rendered,encoding='utf-8')
     shutil.copytree(ROOT/'static', OUT/'static')
     shutil.copy2(ROOT/'README.md',OUT/'README.md')
     (OUT/'static'/'catalog.json').write_text(

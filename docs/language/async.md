@@ -1,6 +1,6 @@
-# Async tasks in PunPun 0.5.0-beta
+# Async tasks in PunPun 0.6 development
 
-PunPun has a native `async fn` / `await` foundation in 0.5.0-beta. Async calls create native tasks and return immediately; `await` joins the task and yields its typed result.
+PunPun retains a native `async fn` / `await` foundation in the 0.6 development cycle. Async calls create native tasks and return immediately; `await` joins the task and yields its typed result.
 
 ```pp
 async fn delayed(value: i64, delay_ms: i64) -> i64 {
@@ -52,7 +52,7 @@ Programs that never call an async function do not create async tasks or initiali
 
 ## Current boundary
 
-0.5.0-beta does **not** yet claim a production event-loop runtime. Forced
+The current development build does **not** yet claim a production event-loop runtime. Forced
 preemption, nonblocking socket integration, structured concurrency, async file
 I/O, and compiler-generated coroutine/state-machine lowering remain ongoing
 work. The existing implementation is a real native concurrent task foundation

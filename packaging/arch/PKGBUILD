@@ -1,5 +1,5 @@
 pkgname=punpun
-pkgver=0.5.0_beta
+pkgver=0.6.0_dev.1
 pkgrel=1
 pkgdesc="PunPun native programming language SDK"
 arch=('x86_64')
@@ -7,12 +7,12 @@ url="https://example.invalid/punpun"
 license=('MIT')
 depends=('glibc' 'gcc-libs' 'python' 'nodejs')
 optdepends=('base-devel: rebuild compiler and use C injection' 'libcurl: requests package' 'libx11: PunUI Linux backend')
-source=('PunPun-0.5.0-beta-linux-x86_64.tar.zst')
-sha256sums=('0e1e6e6b576ce0fd0a0c2dd743d1456f0b53888c5a8686906330f7ef5d5d999f')
+source=('PunPun-0.6.0-dev.1-linux-x86_64.tar.zst')
+sha256sums=('7e2437b0986989bc063560e8928e035e228f7c0a843dfa5246ea3d2a1f41a351')
 
 package() {
   mkdir -p "$pkgdir/usr/lib/punpun" "$pkgdir/usr/bin" "$pkgdir/usr/share/licenses/punpun" "$pkgdir/usr/share/doc/punpun"
-  cp -a "$srcdir/PunPun-0.5.0-beta-linux-x86_64/." "$pkgdir/usr/lib/punpun/"
+  cp -a "$srcdir/PunPun-0.6.0-dev.1-linux-x86_64/." "$pkgdir/usr/lib/punpun/"
   for name in pp ppc ppx punpun punpun-lsp; do
     printf '#!/bin/sh\nexec /usr/lib/punpun/bin/%s "$@"\n' "$name" > "$pkgdir/usr/bin/$name"
     chmod 755 "$pkgdir/usr/bin/$name"

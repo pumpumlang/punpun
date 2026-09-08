@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 'use strict';
 
-// PunPun 0.5 LSP. Diagnostics come from the SAME compiler semantic analyzer used
+// PunPun LSP. Diagnostics come from the SAME compiler semantic analyzer used
 // by pp check/build/run through one long-lived `ppc semantic-worker` process.
 // Editor-only features deliberately avoid invoking codegen/linking.
 
@@ -9,6 +9,19 @@ const fs = require('fs');
 const path = require('path');
 const childProcess = require('child_process');
 const { fileURLToPath, pathToFileURL } = require('url');
+
+function projectVersion() {
+  if (process.env.PUNPUN_VERSION) return process.env.PUNPUN_VERSION;
+  const versionFile = path.resolve(__dirname, '..', '..', 'VERSION');
+  if (fs.existsSync(versionFile)) return fs.readFileSync(versionFile, 'utf8').trim();
+  const packageFile = path.resolve(__dirname, '..', 'package.json');
+  if (fs.existsSync(packageFile)) {
+    try { return JSON.parse(fs.readFileSync(packageFile, 'utf8')).version; } catch (_) {}
+  }
+  return '0.0.0-dev';
+}
+
+const PROJECT_VERSION = projectVersion();
 
 let inputBuffer = Buffer.alloc(0);
 let shutdownRequested = false;
@@ -109,8 +122,8 @@ const semanticWorker = new SemanticWorker();
 
 function fallbackLanguageInfo() {
   return {
-    compiler_version: '0.5.0-beta',
-    keywords: ['bring', 'launch', 'say', 'fn', 'object', 'struct', 'contract', 'meets', 'init', 'let', 'mut', 'const', 'return', 'if', 'else', 'while', 'for', 'in', 'break', 'continue', 'true', 'false', 'unsafe', 'raw', 'public', 'private', 'protected', 'extern', 'native', 'async', 'await', 'self'],
+    compiler_version: PROJECT_VERSION,
+    keywords: ['bring', 'launch', 'say', 'fn', 'object', 'struct', 'contract', 'meets', 'init', 'let', 'mut', 'const', 'return', 'if', 'else', 'while', 'for', 'in', 'break', 'continue', 'true', 'false', 'unsafe', 'raw', 'public', 'private', 'protected', 'extern', 'native', 'async', 'await', 'self', 'enum', 'match', 'case', 'where'],
     types: ['i64', 'i32', 'u64', 'u32', 'f64', 'f32', 'bool', 'String', 'nums', 'void'],
     builtins: [], modules: [], stdlib_symbols: [],
   };
@@ -586,7 +599,7 @@ function handleRequest(message) {
     if (candidate) rootPath = candidate.startsWith?.('file:') ? (uriToPath(candidate) || rootPath) : candidate;
     languageInfo = readLanguageInfo();
     semanticWorker.start();
-    return response(id, { capabilities: capabilities(), serverInfo: { name: 'punpun-lsp', version: '0.5.0-beta' } });
+    return response(id, { capabilities: capabilities(), serverInfo: { name: 'punpun-lsp', version: PROJECT_VERSION } });
   }
   if (method === 'shutdown') { shutdownRequested = true; semanticWorker.stop(); return response(id, null); }
   if (shutdownRequested) return errorResponse(id, -32600, 'server is shutting down');

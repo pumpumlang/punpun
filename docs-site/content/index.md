@@ -1,6 +1,8 @@
 # PunPun
 
-PunPun 0.5.0-beta is an ahead-of-time native programming language project focused on fast development builds, object/value types, explicit low-level access, and compiler-powered editor tooling.
+PunPun 0.6 development is an ahead-of-time native programming language project focused on fast development builds, object/value types, explicit low-level access, and compiler-powered editor tooling.
+
+Step 1 establishes canonical versioning, frozen generic/enum/ownership rules, parser scaffolding and compatibility gates. Frozen design is not labeled as implemented execution.
 
 ## First program
 

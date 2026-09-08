@@ -1,19 +1,20 @@
-# PunPun 0.5.0-beta
+# PunPun 0.6 development — Step 1
 
-PunPun is an ahead-of-time native programming language beta with direct Linux
-x86-64 output, a portable C backend, compiler-powered editor support, PPX package
-tooling, native async tasks, objects/contracts, explicit low-level access, and a
-PunPun-written fixed-point bootstrap compiler.
+This development checkpoint establishes the rules and release infrastructure required for the 0.6 language work without advertising unimplemented features as complete.
 
-This release includes:
+## Highlights
 
-- Linux x86-64 SDK and self-extracting installer;
-- Arch/CachyOS package payload and `PKGBUILD`;
-- complete sanitized source;
-- PunPun-written `ppc-self` compiler and fixed-point bootstrap;
-- VS Code/VSCodium extension;
-- deploy-ready documentation and PPX static websites;
-- Windows WiX installer source, without fabricated Windows binaries;
-- checksums and the host validation report.
+- A single root `VERSION` now controls compiler output, runtime compatibility, PPX, editor packages, sites, Linux/Arch packaging and Windows installer names.
+- Normative specifications now define generics, monomorphization, constraints, algebraic enums, `Option`, `Result`, exhaustive matching, nullability, move-state analysis, borrowing and deterministic `Drop`.
+- The parser accepts generic declaration headers and nested generic type spellings for AST/tooling work.
+- Reserved enum, match and propagation syntax fails with an explicit implementation-gate diagnostic.
+- Existing valid 0.5 modern and migration-dialect programs remain under compatibility tests.
+- CI and publishing use version-derived paths and anonymous runtime account discovery.
 
-See `COMPLETION_REPORT.md` in the source archive for precise beta boundaries.
+## Honest boundary
+
+This is not the completed 0.6 language release. Generic execution and monomorphization are Step 2; algebraic enums and matching are Step 3; full ownership/drop insertion and MIR authority follow afterward.
+
+The Linux artifacts can be built and validated on Linux. Arch package-manager operations and Windows MSI/setup behavior must be validated by their real platform jobs before those artifacts are claimed as qualified.
+
+See `ROADMAP.md`, `spec/0.6/` and `COMPLETION_REPORT.md` in the source archive.

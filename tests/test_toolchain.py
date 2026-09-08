@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""End-to-end test suite for the PunPun 0.5.0-beta toolchain.
+"""End-to-end compatibility suite for the PunPun toolchain.
 
 This suite drives the real ``build/ppc`` compiler as an external process. Every
 fixture (source file or package project)

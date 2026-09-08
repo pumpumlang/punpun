@@ -10,6 +10,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - name: Read release version
+        run: echo "PUNPUN_VERSION=$(tr -d '\r\n' < VERSION)" >> "$GITHUB_ENV"
       - name: Install runtime test dependencies
         run: sudo apt-get update && sudo apt-get install -y libcurl4-openssl-dev
       - name: Build and test
@@ -24,7 +26,7 @@ jobs:
         with:
           name: punpun-linux-release
           path: |
-            dist/release-0.5.0-beta/
+            dist/release-${{ env.PUNPUN_VERSION }}/
             benchmarks/linux.json
             toolchain-probes/linux.json
 
@@ -35,11 +37,13 @@ jobs:
       - name: Install build tools
         run: pacman -Syu --noconfirm --needed base-devel gcc python nodejs npm zstd libcurl git sudo
       - uses: actions/checkout@v4
+      - name: Read release version
+        run: echo "PUNPUN_VERSION=$(tr -d '\r\n' < VERSION)" >> "$GITHUB_ENV"
       - name: Build release inputs
         run: python3 scripts/release.py --skip-tests
       - name: Build canonical makepkg artifact
         run: |
-          cp dist/release-0.5.0-beta/PunPun-0.5.0-beta-linux-x86_64.tar.zst packaging/arch/
+          cp "dist/release-$PUNPUN_VERSION/PunPun-$PUNPUN_VERSION-linux-x86_64.tar.zst" packaging/arch/
           useradd -m builder
           chown -R builder:builder .
           sudo -u builder bash -lc "cd '$GITHUB_WORKSPACE/packaging/arch' && makepkg --noconfirm --cleanbuild --force"
@@ -63,6 +67,11 @@ jobs:
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
+      - name: Read release version
+        shell: pwsh
+        run: |
+          $version = (Get-Content VERSION -Raw).Trim()
+          "PUNPUN_VERSION=$version" | Out-File -FilePath $env:GITHUB_ENV -Append
       - uses: msys2/setup-msys2@v2
         with:
           msystem: MINGW64
@@ -82,8 +91,8 @@ jobs:
           $payload = "installers/windows/payload"
           New-Item -ItemType Directory -Force "$payload/bin" | Out-Null
           Copy-Item build/ppc.exe "$payload/bin/ppc.exe"
-          Copy-Item runtime,stdlib,packages,ppx,tooling,editors,docs,assets,gui-maker,selfhost -Destination $payload -Recurse
-          Copy-Item README.md,LICENSE,CHANGELOG.md,PROJECT_STATUS.txt,COMPLETION_REPORT.md,PUBLISHING.md,RELEASE_NOTES.md -Destination $payload
+          Copy-Item runtime,stdlib,packages,ppx,tooling,editors,docs,spec,assets,gui-maker,selfhost -Destination $payload -Recurse
+          Copy-Item VERSION,README.md,LICENSE,CHANGELOG.md,ROADMAP.md,PROJECT_STATUS.txt,COMPLETION_REPORT.md,PUBLISHING.md,RELEASE_NOTES.md -Destination $payload
       - name: Install WiX and build installers
         shell: pwsh
         run: |
@@ -93,7 +102,7 @@ jobs:
       - name: MSI install, PATH/file association, native build, upgrade, uninstall
         shell: pwsh
         run: |
-          $msi = (Resolve-Path installers/windows/PunPun-0.5.0-beta-win-x64.msi)
+          $msi = (Resolve-Path "installers/windows/PunPun-$env:PUNPUN_VERSION-win-x64.msi")
           Start-Process msiexec.exe -Wait -ArgumentList "/i `"$msi`" /qn /norestart"
           & "$env:ProgramFiles/PunPun/bin/ppc.exe" --version
           reg query HKLM\Software\Classes\.pp /ve
@@ -104,5 +113,5 @@ jobs:
         with:
           name: punpun-windows-installers
           path: |
-            installers/windows/PunPun-0.5.0-beta-win-x64.msi
-            installers/windows/PunPun-Setup-0.5.0-beta.exe
+            installers/windows/PunPun-${{ env.PUNPUN_VERSION }}-win-x64.msi
+            installers/windows/PunPun-Setup-${{ env.PUNPUN_VERSION }}.exe

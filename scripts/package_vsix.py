@@ -1,14 +1,17 @@
 #!/usr/bin/env python3
 from pathlib import Path
 import json, shutil, zipfile
+from versioning import VERSION
 ROOT=Path(__file__).resolve().parents[1]
 EXT=ROOT/'editors'/'vscode'
-OUT=ROOT/'dist'/'punpun-vscode-0.5.0-beta.vsix'
+OUT=ROOT/'dist'/f'punpun-vscode-{VERSION}.vsix'
 # Keep the extension's bundled server synchronized with the real LSP implementation.
 (EXT/'server').mkdir(exist_ok=True)
 shutil.copy2(ROOT/'tooling'/'lsp'/'server.js', EXT/'server'/'server.js')
 pkg=json.loads((EXT/'package.json').read_text())
 version=pkg['version']
+if version != VERSION:
+    raise SystemExit(f'extension version {version!r} does not match VERSION {VERSION!r}; run scripts/sync_version.py')
 manifest=f'''<?xml version="1.0" encoding="utf-8"?>
 <PackageManifest Version="2.0.0" xmlns="http://schemas.microsoft.com/developer/vsx-schema/2011">
   <Metadata>

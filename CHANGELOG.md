@@ -1,5 +1,23 @@
 # Changelog
 
+## PunPun 0.6 development — Step 1
+
+### Compiler foundation
+
+- Added one canonical root `VERSION`, generated runtime/editor mirrors and an executable consistency gate.
+- Removed release-version literals from compiler metadata, cache fingerprints, PPX, static-site builders, packaging, publishing and Windows build output names.
+- Added parser scaffolding for generic declaration parameters, inline contract constraints and nested constructed types.
+- Reserved `enum`, `match`, `case`, `where`, `=>` and postfix `?`; unfinished enum/match/propagation syntax fails explicitly instead of acquiring placeholder behavior.
+- Added stable `E0900` diagnostics for reserved 0.6 features.
+
+### Specification and reliability
+
+- Froze the 0.6 generic inference, monomorphization, constraints and overload-selection rules.
+- Froze algebraic enum, `Option<T>`, `Result<T,E>`, destructuring, exhaustiveness and non-nullable safe-language rules.
+- Froze move-state, borrow-exclusivity and deterministic lexical destruction rules, including the current abort-without-unwinding boundary.
+- Added modern/legacy compatibility fixtures, syntax-contract tests, CI version tests and durable anonymous engineering rules.
+- Updated the project, documentation, PPX and publishing guides for the 0.6 development cycle.
+
 ## PunPun 0.5.0-beta
 
 This beta is a substantial compiler/toolchain rework rather than a cosmetic version bump.

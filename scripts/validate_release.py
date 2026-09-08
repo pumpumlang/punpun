@@ -12,8 +12,9 @@ import tempfile
 import time
 import zipfile
 
+from versioning import PKGVER, VERSION
+
 ROOT = Path(__file__).resolve().parents[1]
-VERSION = "0.5.0-beta"
 
 
 def run(cmd, *, cwd=None, env=None, check=True, capture=True):
@@ -93,7 +94,7 @@ def main():
     release=args.release.resolve()
     installer=release/f"PunPun-{VERSION}-Linux-x86_64-Installer.run"
     vsix=release/f"punpun-vscode-{VERSION}.vsix"
-    arch=release/"punpun-0.5.0_beta-1-x86_64.pkg.tar.zst"
+    arch=release/f"punpun-{PKGVER}-1-x86_64.pkg.tar.zst"
     sdk_tar=release/f"PunPun-{VERSION}-linux-x86_64.tar.zst"
 
     results=[]
@@ -103,6 +104,8 @@ def main():
     require(any(x.endswith("/bin/ppc") for x in sdk_names),"portable SDK lacks compiler")
     require(any(x.endswith("/bin/ppc-self") for x in sdk_names),"portable SDK lacks self-hosted compiler")
     require(any(x.endswith("/selfhost/ppc_self.pp") for x in sdk_names),"portable SDK lacks self-hosted source")
+    require(any(x.endswith("/VERSION") for x in sdk_names),"portable SDK lacks canonical version marker")
+    require(any(x.endswith("/spec/0.6/ownership.md") for x in sdk_names),"portable SDK lacks 0.6 language specification")
     results.append(("Portable Linux SDK", "PASS", "tar.zst contents and both compiler stages verified"))
     results.append(("Arch package", "PARTIAL", validate_arch_package(arch)))
     results.append(("Windows installers", "HOST-LIMITED", validate_windows_source()))

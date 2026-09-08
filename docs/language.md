@@ -1,4 +1,4 @@
-# PunPun 0.5.0-beta language reference
+# PunPun 0.6 development language reference
 
 PunPun is a statically typed, ahead-of-time compiled language. The normal Linux
 x86-64 build uses the direct native backend; a portable C backend supports
@@ -162,8 +162,13 @@ The distribution also includes a PunPun-written fixed-point compiler for the
 documented bootstrap subset. Run `make selfhost` or use
 `pp selfhost input.pp output.c`; see [`selfhost/README.md`](../selfhost/README.md).
 
-The beta does not yet include production generics, algebraic enums and exhaustive
+The 0.6 Step 1 frontend parses generic declaration headers and nested generic
+type spellings for AST/tooling work. Generic execution, monomorphization,
+algebraic enums and exhaustive matching are still gated. The beta does not yet include
 matching, contract-typed dynamic dispatch, automatic lexical destruction,
 closures/first-class functions, or a complete Machine IR code generator. The
 authoritative implementation matrix is in
 [`COMPLETION_REPORT.md`](../COMPLETION_REPORT.md).
+
+Normative upcoming rules are in [`spec/0.6/`](../spec/0.6/). Examples in that
+specification are labeled as design contracts and are not claims of execution.

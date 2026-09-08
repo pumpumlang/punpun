@@ -1,8 +1,8 @@
 #!/usr/bin/env sh
 set -eu
 
-VERSION="0.5.0-beta"
 ROOT=$(CDPATH= cd -- "$(dirname -- "$0")" 2>/dev/null && pwd)
+VERSION=$(tr -d '\r\n' < "$ROOT/VERSION")
 
 if [ -z "${HOME:-}" ]; then
     echo "Punpun installer: HOME is not set" >&2
@@ -76,7 +76,7 @@ install_extension_dir() {
 }
 
 install_extension_via_cli() {
-    vsix="$INSTALL_DIR/dist/punpun-vscode-0.5.0-beta.vsix"
+    vsix="$INSTALL_DIR/dist/punpun-vscode-$VERSION.vsix"
     [ -f "$vsix" ] || return 1
     for cli in code code-insiders codium code-oss; do
         command -v "$cli" >/dev/null 2>&1 || continue

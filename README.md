@@ -8,7 +8,7 @@
 </p>
 
 <p align="center">
-  <img alt="Version 0.5.0 beta" src="https://img.shields.io/badge/version-0.5.0--beta-b9ff4a?style=for-the-badge&labelColor=11151e">
+  <img alt="Version 0.6 development" src="https://img.shields.io/badge/version-0.6%20development-b9ff4a?style=for-the-badge&labelColor=11151e">
   <img alt="Linux x86-64" src="https://img.shields.io/badge/Linux-x86--64-66e3ff?style=for-the-badge&labelColor=11151e">
   <img alt="MIT license" src="https://img.shields.io/badge/license-MIT-f6f7fa?style=for-the-badge&labelColor=11151e">
 </p>
@@ -23,7 +23,7 @@
 
 ---
 
-PunPun 0.5.0-beta is an ahead-of-time native language focused on fast edit/check/run cycles, concrete object-oriented programming, value-oriented systems work and clear escape hatches for native interoperability.
+PunPun 0.6 development is an ahead-of-time native language focused on fast edit/check/run cycles, concrete object-oriented programming, value-oriented systems work and clear escape hatches for native interoperability.
 
 ```text
 .pp source → parser + semantics → typed HIR/MIR → x86-64 or C backend → native executable
@@ -31,14 +31,25 @@ PunPun 0.5.0-beta is an ahead-of-time native language focused on fast edit/check
 
 Ordinary builds use no interpreter or virtual machine. Linux x86-64 has a direct backend; the portable C backend supports additional toolchains and Windows-oriented builds. Foreign source runs only through explicit `@inject` blocks.
 
-> **Beta means honest boundaries.** The compiler, package client, editor tooling, native builds and self-hosting seed are usable and tested. Production generics, complete ownership, dynamic interface dispatch, full debug information and a hosted public PPX backend remain active engineering work. See [COMPLETION_REPORT.md](COMPLETION_REPORT.md).
+> **Development releases keep honest boundaries.** The compiler, package client, editor tooling, native builds and self-hosting seed are usable and tested. The frozen 0.6 generic, enum and ownership rules are specifications—not claims that every feature is already executable. See [ROADMAP.md](ROADMAP.md) and [COMPLETION_REPORT.md](COMPLETION_REPORT.md).
+
+## 0.6 Step 1 foundation
+
+The first 0.6 milestone removes version drift and turns major language choices into testable contracts:
+
+- one canonical [`VERSION`](VERSION) drives the compiler, runtime, PPX, editor, sites, packages and installers;
+- [`spec/0.6/`](spec/0.6/) freezes generics, constraints, monomorphization, enums, `Option`, `Result`, matching, nullability, moves, borrows and deterministic destruction;
+- the frontend parses generic declaration headers and nested generic type spellings for tooling;
+- future `enum`, `match` and propagation syntax is reserved with `E0900` until its implementation milestone;
+- compatibility fixtures keep valid 0.5 modern and migration syntax working;
+- CI paths derive their artifact names from `VERSION` instead of an old release string.
 
 ## Quick start
 
 Install the Linux x86-64 release without root:
 
 ```sh
-bash PunPun-0.5.0-beta-Linux-x86_64-Installer.run
+bash PunPun-*-Linux-x86_64-Installer.run
 ```
 
 Open a new terminal, then create and run a project:
@@ -140,7 +151,7 @@ C, C++, Rust and assembly injections are content-addressed and cached. `pp check
 
 ## What ships today
 
-| Area | Available in 0.5.0-beta |
+| Area | Available now |
 | --- | --- |
 | Compilation | Direct Linux x86-64 backend, portable C backend, assembler/linker integration |
 | Language | Functions, objects, structs, contracts, references, pointers, async tasks, named/default arguments |
@@ -224,6 +235,14 @@ Build the complete release bundle with:
 python3 scripts/release.py
 ```
 
+Version and policy checks can also be run directly:
+
+```sh
+python3 scripts/sync_version.py
+make version-check
+python3 scripts/privacy_audit.py .
+```
+
 ## Self-hosting
 
 `selfhost/ppc_self.pp` contains a compiler written in PunPun. The bootstrap builds it, recompiles the same source and requires stage-one and stage-two generated C to be byte-identical.
@@ -251,6 +270,7 @@ editors/vscode/    VS Code extension
 selfhost/          compiler written in .pp
 tests/             compiler, runtime, tooling and packaging regressions
 scripts/           release, validation, benchmark and publishing tools
+spec/              normative language and compatibility decisions
 ```
 
 ## Performance

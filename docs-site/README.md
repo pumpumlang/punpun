@@ -6,6 +6,14 @@
 
 The documentation website is a dependency-free static project with responsive navigation, dark/light themes, client-side search and copyable code examples.
 
+| Property | Design |
+| --- | --- |
+| Hosting | Plain static files; GitHub Pages compatible |
+| Build dependency | Python standard library only |
+| Search | Generated local `search.json` |
+| Version | Read from the repository-root `VERSION` |
+| Runtime service | None |
+
 ## Preview locally
 
 ```sh
@@ -26,4 +34,6 @@ The builder emits plain HTML, CSS, JavaScript and `search.json`. It documents im
 
 ## Publish
 
-The release bundle contains `PunPun-0.5.0-beta-docs-site.zip`. Run the bundled `publish-punpun.sh` to update the `punpun-docs` GitHub Pages repository and print its exact URL.
+The release bundle contains `PunPun-<VERSION>-docs-site.zip`. Run the bundled `publish-punpun.sh` to update the `punpun-docs` GitHub Pages repository and print its exact URL.
+
+The 0.6 design specification is checked into `../spec/0.6/`; public pages must distinguish frozen design from executable compiler behavior.
