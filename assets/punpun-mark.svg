@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="PunPun mark">
+  <defs>
+    <linearGradient id="g" x1="80" y1="64" x2="438" y2="448" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#6EE7FF"/>
+      <stop offset="0.5" stop-color="#7C5CFF"/>
+      <stop offset="1" stop-color="#FF4FA3"/>
+    </linearGradient>
+  </defs>
+  <rect x="24" y="24" width="464" height="464" rx="112" fill="#0B1020"/>
+  <path d="M118 116h98c70 0 116 38 116 96 0 43-25 75-68 89l78 95h-76l-70-86h-14v86h-64V116Zm64 58v80h31c34 0 54-14 54-40s-20-40-54-40h-31Z" fill="url(#g)"/>
+  <path d="M300 116h46c50 0 86 21 101 57 9 21 10 45 4 66-8 29-29 52-60 64l62 76-50 41-83-105 31-46c27-7 42-23 42-47 0-30-20-47-56-47h-37v-59Z" fill="#F8FAFF" fill-opacity=".92"/>
+  <path d="M217 317 260 250l43 67-43 79-43-79Z" fill="#6EE7FF"/>
+</svg>

@@ -1,0 +1,105 @@
+name: platform-release
+
+on:
+  workflow_dispatch:
+  push:
+    tags: ["v*"]
+
+jobs:
+  linux:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build and test
+        run: make -j2 test
+      - name: Probe installed compiler/linker capabilities
+        run: python3 scripts/probe_toolchains.py gcc clang --output toolchain-probes/linux.json
+      - name: Large-project smoke benchmark
+        run: python3 scripts/benchmark_projects.py --modules 10 100 --rounds 2 --output benchmarks/linux.json
+      - name: Assemble and validate Linux release
+        run: python3 scripts/release.py
+      - uses: actions/upload-artifact@v4
+        with:
+          name: punpun-linux-release
+          path: |
+            dist/release-0.5.0-beta/
+            benchmarks/linux.json
+            toolchain-probes/linux.json
+
+  arch:
+    runs-on: ubuntu-latest
+    container: archlinux:latest
+    steps:
+      - name: Install build tools
+        run: pacman -Syu --noconfirm --needed base-devel gcc python nodejs npm zstd libcurl git sudo
+      - uses: actions/checkout@v4
+      - name: Build release inputs
+        run: python3 scripts/release.py --skip-tests
+      - name: Build canonical makepkg artifact
+        run: |
+          cp dist/release-0.5.0-beta/PunPun-0.5.0-beta-linux-x86_64.tar.zst packaging/arch/
+          useradd -m builder
+          chown -R builder:builder .
+          sudo -u builder bash -lc 'cd "$GITHUB_WORKSPACE/packaging/arch" && makepkg --noconfirm --cleanbuild --force'
+      - name: Install, compile, upgrade, and uninstall
+        run: |
+          pacman -U --noconfirm packaging/arch/punpun-*.pkg.tar.zst
+          ppc --version
+          tmp=$(mktemp -d)
+          printf 'launch { say("arch-ok"); }\n' > "$tmp/main.pp"
+          (cd "$tmp" && pp build main.pp -o smoke && ./smoke | grep -Fx arch-ok)
+          pacman -U --noconfirm packaging/arch/punpun-*.pkg.tar.zst
+          pacman -R --noconfirm punpun
+          ! command -v ppc
+      - uses: actions/upload-artifact@v4
+        with:
+          name: punpun-arch-package
+          path: packaging/arch/punpun-*.pkg.tar.zst
+
+  windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: msys2/setup-msys2@v2
+        with:
+          msystem: MINGW64
+          update: true
+          install: mingw-w64-x86_64-gcc make python nodejs
+      - name: Build Windows compiler and runtime
+        shell: msys2 {0}
+        run: |
+          make -B compiler CXX=g++ CC=gcc
+          ./build/ppc.exe --version
+          printf 'launch { say("windows-ok"); }\n' > windows-smoke.pp
+          ./build/ppc.exe build windows-smoke.pp -o windows-smoke.exe --cc-backend
+          ./windows-smoke.exe | grep -Fx windows-ok
+      - name: Stage Windows SDK payload
+        shell: pwsh
+        run: |
+          $payload = "installers/windows/payload"
+          New-Item -ItemType Directory -Force "$payload/bin" | Out-Null
+          Copy-Item build/ppc.exe "$payload/bin/ppc.exe"
+          Copy-Item runtime,stdlib,packages,ppx,tooling,editors,docs,assets,gui-maker,selfhost -Destination $payload -Recurse
+          Copy-Item README.md,LICENSE,CHANGELOG.md,PROJECT_STATUS.txt,COMPLETION_REPORT.md,PUBLISHING.md,RELEASE_NOTES.md -Destination $payload
+      - name: Install WiX and build installers
+        shell: pwsh
+        run: |
+          dotnet tool install --global wix
+          wix extension add WixToolset.Bal.wixext
+          ./installers/windows/build.ps1
+      - name: MSI install, PATH/file association, native build, upgrade, uninstall
+        shell: pwsh
+        run: |
+          $msi = (Resolve-Path installers/windows/PunPun-0.5.0-beta-win-x64.msi)
+          Start-Process msiexec.exe -Wait -ArgumentList "/i `"$msi`" /qn /norestart"
+          & "$env:ProgramFiles/PunPun/bin/ppc.exe" --version
+          reg query HKLM\Software\Classes\.pp /ve
+          Start-Process msiexec.exe -Wait -ArgumentList "/i `"$msi`" /qn /norestart REINSTALL=ALL REINSTALLMODE=vomus"
+          Start-Process msiexec.exe -Wait -ArgumentList "/x `"$msi`" /qn /norestart"
+          if (Test-Path "$env:ProgramFiles/PunPun/bin/ppc.exe") { throw "uninstall left compiler behind" }
+      - uses: actions/upload-artifact@v4
+        with:
+          name: punpun-windows-installers
+          path: |
+            installers/windows/PunPun-0.5.0-beta-win-x64.msi
+            installers/windows/PunPun-Setup-0.5.0-beta.exe

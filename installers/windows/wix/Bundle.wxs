@@ -1,0 +1,6 @@
+<Wix xmlns="http://wixtoolset.org/schemas/v4/wxs" xmlns:bal="http://wixtoolset.org/schemas/v4/wxs/bal">
+  <Bundle Name="PunPun Setup" Manufacturer="PunPun Project" Version="0.5.0" UpgradeCode="F13E181B-0121-4B89-9A32-2A2F937D2C55">
+    <BootstrapperApplication><bal:WixStandardBootstrapperApplication Theme="hyperlinkLicense" LicenseUrl="" /></BootstrapperApplication>
+    <Chain><MsiPackage SourceFile="PunPun-0.5.0-beta-win-x64.msi" /></Chain>
+  </Bundle>
+</Wix>

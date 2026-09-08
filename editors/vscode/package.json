@@ -1,0 +1,109 @@
+{
+  "name": "punpun",
+  "displayName": "Punpun",
+  "description": "PunPun 0.5 language support powered by the real compiler semantic engine: live diagnostics, semantic completion, navigation, rename, formatting, inlay hints, semantic highlighting, and build commands.",
+  "version": "0.5.0-beta",
+  "publisher": "punpun",
+  "license": "MIT",
+  "engines": {
+    "vscode": "^1.80.0"
+  },
+  "categories": [
+    "Programming Languages"
+  ],
+  "keywords": [
+    "compiler",
+    "craft",
+    "launch",
+    "lsp",
+    "native",
+    "oop",
+    "pp",
+    "punpun",
+    "semantic",
+    "systems"
+  ],
+  "activationEvents": [
+    "onLanguage:punpun"
+  ],
+  "main": "./extension.js",
+  "contributes": {
+    "languages": [
+      {
+        "id": "punpun",
+        "aliases": [
+          "Punpun",
+          "punpun"
+        ],
+        "extensions": [
+          ".pp"
+        ],
+        "configuration": "./language-configuration.json"
+      }
+    ],
+    "grammars": [
+      {
+        "language": "punpun",
+        "scopeName": "source.punpun",
+        "path": "./syntaxes/punpun.tmLanguage.json"
+      }
+    ],
+    "snippets": [
+      {
+        "language": "punpun",
+        "path": "./snippets.json"
+      }
+    ],
+    "commands": [
+      {
+        "command": "punpun.build",
+        "title": "Punpun: Build Current File"
+      },
+      {
+        "command": "punpun.run",
+        "title": "Punpun: Run Current File"
+      },
+      {
+        "command": "punpun.check",
+        "title": "Punpun: Check Current File"
+      },
+      {
+        "command": "punpun.buildWindows",
+        "title": "Punpun: Build Windows x86-64 .exe"
+      },
+      {
+        "command": "punpun.format",
+        "title": "Punpun: Format Current File"
+      },
+      {
+        "command": "punpun.test",
+        "title": "Punpun: Run Project Tests"
+      },
+      {
+        "command": "punpun.restartLanguageServer",
+        "title": "PunPun: Restart Language Server"
+      }
+    ],
+    "configuration": {
+      "title": "Punpun",
+      "properties": {
+        "punpun.toolPath": {
+          "type": "string",
+          "default": "",
+          "description": "Path to the punpun launcher. Empty uses a workspace-local ./punpun or PATH."
+        },
+        "punpun.compilerPath": {
+          "type": "string",
+          "default": "",
+          "description": "Path to ppc. Empty automatically discovers the compiler installed with PunPun."
+        },
+        "punpun.languageServerPath": {
+          "type": "string",
+          "default": "",
+          "description": "Path to PunPun LSP server.js. Empty uses the server bundled with this extension."
+        }
+      }
+    }
+  },
+  "icon": "assets/punpun-icon-128.png"
+}

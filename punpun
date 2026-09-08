@@ -1,0 +1,443 @@
+#!/usr/bin/env sh
+set -eu
+
+SCRIPT_DIR=$(CDPATH= cd -- "$(dirname -- "$0")" 2>/dev/null && pwd)
+PROJECT_DIR=$(pwd)
+
+usage() {
+    cat <<'TXT'
+Punpun toolchain
+
+usage:
+  pp new <name>
+  pp init [name]
+  pp add <name> <path>
+  pp remove <name>
+  pp update | fetch | tree
+  pp doctor | info | explain <CODE>
+  pp toolchain detect|list|info <name>
+  pp toolchain probe [clang|gcc|zig|mingw ...]
+  pp selfhost <input.pp> <output.c>
+  pp migrate [file.pp]
+  pp build [file.pp] [--release] [--target native|linux-x86_64|windows-x86_64] [-o output]
+  pp run   [file.pp] [--release] [-- args...]
+  pp check [file.pp]
+  pp test
+  pp fmt   [file.pp] [--check]
+  pp clean
+  pp emit-tokens [file.pp] [-o output.txt]
+  pp emit-ast    [file.pp] [-o output.txt]
+  pp emit-c      [file.pp] [-o output.c]
+  pp emit-asm    [file.pp] [-o output.s]
+  pp ast|ir|asm  [file.pp]
+  pp editor install-vscode
+  pp lsp
+  pp language-info
+
+If file.pp is omitted, Punpun uses ./main.pp and then ./src/main.pp.
+`pp new` and `pp init` create Punpun.toml projects without requiring Cargo.
+The source-tree launcher bootstraps build/ppc automatically with make.
+TXT
+}
+
+compiler() {
+    if [ -f "$SCRIPT_DIR/Makefile" ] && [ -d "$SCRIPT_DIR/compiler" ]; then
+        ppc="$SCRIPT_DIR/build/ppc"
+        runtime_lib="$SCRIPT_DIR/runtime/libpunpun.a"
+        rebuild=0
+        if [ ! -x "$ppc" ] || [ ! -f "$runtime_lib" ]; then
+            rebuild=1
+        elif find "$SCRIPT_DIR/compiler" "$SCRIPT_DIR/runtime" -type f \
+            \( -name '*.cpp' -o -name '*.hpp' -o -name '*.c' -o -name '*.h' \) \
+            -newer "$ppc" -print -quit | grep -q .; then
+            rebuild=1
+        fi
+        if [ "$rebuild" -eq 1 ]; then
+            command -v make >/dev/null 2>&1 || {
+                echo "pp: compiler sources changed but make is not installed" >&2
+                exit 1
+            }
+            make -s -C "$SCRIPT_DIR" compiler
+        fi
+        printf '%s\n' "$ppc"
+        return
+    fi
+    if command -v ppc >/dev/null 2>&1; then
+        command -v ppc
+        return
+    fi
+    echo "pp: cannot find ppc compiler" >&2
+    exit 1
+}
+
+selfhost_compiler() {
+    if [ -x "$SCRIPT_DIR/bin/ppc-self" ]; then
+        printf '%s\n' "$SCRIPT_DIR/bin/ppc-self"
+        return
+    fi
+    if [ -x "$SCRIPT_DIR/build/selfhost/ppc-self" ]; then
+        printf '%s\n' "$SCRIPT_DIR/build/selfhost/ppc-self"
+        return
+    fi
+    if [ -f "$SCRIPT_DIR/Makefile" ] && [ -x "$SCRIPT_DIR/selfhost/bootstrap.sh" ]; then
+        command -v make >/dev/null 2>&1 || {
+            echo "pp: make is required to bootstrap ppc-self" >&2
+            exit 1
+        }
+        make -s -C "$SCRIPT_DIR" selfhost
+        printf '%s\n' "$SCRIPT_DIR/build/selfhost/ppc-self"
+        return
+    fi
+    echo "pp: self-hosted compiler is not installed" >&2
+    exit 1
+}
+
+default_source() {
+    if [ -f "$PROJECT_DIR/main.pp" ]; then
+        printf '%s\n' "$PROJECT_DIR/main.pp"
+    elif [ -f "$PROJECT_DIR/src/main.pp" ]; then
+        printf '%s\n' "$PROJECT_DIR/src/main.pp"
+    else
+        echo "pp: no source specified and no main.pp or src/main.pp exists here" >&2
+        exit 2
+    fi
+}
+
+valid_name() {
+    case "$1" in
+        ''|[!A-Za-z]*|*[!A-Za-z0-9_-]*) return 1 ;;
+        *) return 0 ;;
+    esac
+}
+
+write_project() {
+    root=$1
+    name=$2
+    mkdir -p "$root/src" "$root/tests"
+    cat > "$root/Punpun.toml" <<EOF_MANIFEST
+[package]
+name = "$name"
+version = "0.1.0"
+entry = "src/main.pp"
+
+[dependencies]
+EOF_MANIFEST
+    cat > "$root/src/main.pp" <<EOF_SOURCE
+bring std::io;
+
+launch {
+    say("hello from $name");
+}
+EOF_SOURCE
+    cat > "$root/README.md" <<EOF_README
+# $name
+
+A PunPun package.
+
+\`\`\`sh
+pp run
+pp test
+\`\`\`
+EOF_README
+    printf '.punpun/\n' > "$root/.gitignore"
+}
+
+new_project() {
+    [ $# -eq 1 ] || { echo "pp: usage: pp new <name>" >&2; exit 2; }
+    name=$1
+    valid_name "$name" || { echo "pp: invalid package name '$name'" >&2; exit 2; }
+    [ ! -e "$name" ] || { echo "pp: '$name' already exists" >&2; exit 1; }
+    write_project "$name" "$name"
+    echo "Created package '$name'"
+}
+
+init_project() {
+    [ $# -le 1 ] || { echo "pp: usage: pp init [name]" >&2; exit 2; }
+    name=${1:-$(basename "$PROJECT_DIR")}
+    valid_name "$name" || { echo "pp: invalid package name '$name'" >&2; exit 2; }
+    [ ! -e "$PROJECT_DIR/Punpun.toml" ] || { echo "pp: Punpun.toml already exists" >&2; exit 1; }
+    [ ! -e "$PROJECT_DIR/src/main.pp" ] || { echo "pp: src/main.pp already exists" >&2; exit 1; }
+    write_project "$PROJECT_DIR" "$name"
+    echo "Initialized package '$name'"
+}
+
+run_tests() {
+    PPC=$(compiler)
+    found=0
+    passed=0
+    for test_file in "$PROJECT_DIR"/tests/*.pp; do
+        [ -f "$test_file" ] || continue
+        found=$((found + 1))
+        printf 'test %s ... ' "$(basename "$test_file")"
+        if "$PPC" run "$test_file" >/dev/null; then
+            echo "ok"
+            passed=$((passed + 1))
+        else
+            echo "FAILED"
+            exit 1
+        fi
+    done
+    if [ "$found" -eq 0 ]; then
+        echo "pp: no tests/*.pp files found" >&2
+        exit 1
+    fi
+    echo "$passed/$found Punpun tests passed"
+}
+
+install_vscode() {
+    extension="$SCRIPT_DIR/editors/vscode"
+    vsix="$SCRIPT_DIR/dist/punpun-vscode-0.5.0-beta.vsix"
+    if [ ! -f "$extension/package.json" ]; then
+        echo "pp: VS Code extension files are not available beside this launcher" >&2
+        exit 1
+    fi
+    if [ -f "$vsix" ]; then
+        for cli in code code-insiders codium code-oss; do
+            command -v "$cli" >/dev/null 2>&1 || continue
+            if "$cli" --install-extension "$vsix" --force; then
+                echo "installed Punpun VS Code support using $cli"
+                echo "reload the editor; .pp files now use Punpun language tooling"
+                return
+            fi
+        done
+    fi
+    destination="$HOME/.vscode/extensions/punpun.punpun-0.5.0-beta"
+    mkdir -p "$(dirname "$destination")"
+    rm -rf "$destination"
+    cp -a "$extension" "$destination"
+    echo "installed Punpun VS Code support -> $destination"
+    echo "reload VS Code; .pp files now get language tooling"
+}
+
+
+tool_version() {
+    tool=$1
+    shift || true
+    if command -v "$tool" >/dev/null 2>&1; then
+        path=$(command -v "$tool")
+        version=$("$tool" "$@" --version 2>/dev/null | head -n 1 || true)
+        [ -n "$version" ] || version="available"
+        printf '%-12s %-9s %s\n' "$tool" "OK" "$path  $version"
+        return 0
+    fi
+    printf '%-12s %-9s %s\n' "$tool" "missing" "-"
+    return 1
+}
+
+toolchain_detect() {
+    echo "PunPun native toolchain detection"
+    echo "C / compiler drivers:"
+    tool_version clang || true
+    tool_version gcc || true
+    tool_version cc || true
+    if command -v zig >/dev/null 2>&1; then
+        printf '%-12s %-9s %s\n' "zig cc" "OK" "$(command -v zig)  $(zig version 2>/dev/null || true)"
+    else
+        printf '%-12s %-9s %s\n' "zig cc" "missing" "-"
+    fi
+    tool_version x86_64-w64-mingw32-gcc || true
+    echo "C++:"
+    tool_version clang++ || true
+    tool_version g++ || true
+    echo "Linkers:"
+    tool_version mold || true
+    tool_version ld.lld || true
+    tool_version ld || true
+    echo "Assemblers / archivers:"
+    tool_version as || true
+    tool_version nasm || true
+    tool_version llvm-ar || true
+    tool_version ar || true
+}
+
+toolchain_list() {
+    for name in clang gcc zig mingw; do
+        case "$name" in
+            clang) command -v clang >/dev/null 2>&1 && echo clang ;;
+            gcc) command -v gcc >/dev/null 2>&1 && echo gcc ;;
+            zig) command -v zig >/dev/null 2>&1 && echo zig ;;
+            mingw) command -v x86_64-w64-mingw32-gcc >/dev/null 2>&1 && echo mingw ;;
+        esac
+    done
+    if command -v cl.exe >/dev/null 2>&1; then echo msvc; fi
+}
+
+toolchain_info() {
+    [ $# -eq 1 ] || { echo "pp: usage: pp toolchain info <clang|gcc|zig|mingw|msvc|executable>" >&2; exit 2; }
+    name=$1
+    case "$name" in
+        clang) cc=clang; cxx=clang++; linker="lld/mold/GNU ld via -fuse-ld" ;;
+        gcc) cc=gcc; cxx=g++; linker="mold/lld/GNU ld via -fuse-ld" ;;
+        zig) cc=zig; cxx=zig; linker="Zig-selected" ;;
+        mingw) cc=x86_64-w64-mingw32-gcc; cxx=x86_64-w64-mingw32-g++; linker="MinGW" ;;
+        msvc) cc=cl.exe; cxx=cl.exe; linker=link.exe ;;
+        *) cc=$name; cxx=$name; linker="custom" ;;
+    esac
+    echo "profile:    $name"
+    if command -v "$cc" >/dev/null 2>&1; then
+        echo "compiler:   $(command -v "$cc")"
+        if [ "$name" = zig ]; then echo "version:    $(zig version 2>/dev/null || echo unknown)"; else echo "version:    $("$cc" --version 2>/dev/null | head -n 1 || echo unknown)"; fi
+        echo "available:  yes"
+    else
+        echo "compiler:   $cc"
+        echo "available:  no"
+    fi
+    echo "c++:        $cxx"
+    echo "linker:     $linker"
+    echo "selection:  pp build --toolchain $name"
+}
+
+[ $# -gt 0 ] || { usage; exit 2; }
+command_name=$1
+shift
+
+case "$command_name" in
+    help|-h|--help)
+        usage
+        exit 0
+        ;;
+    version|--version|-V)
+        "$(compiler)" --version
+        exit $?
+        ;;
+    new)
+        new_project "$@"
+        exit 0
+        ;;
+    init)
+        init_project "$@"
+        exit 0
+        ;;
+    clean)
+        [ $# -eq 0 ] || { echo "pp: clean does not accept arguments" >&2; exit 2; }
+        rm -rf "$PROJECT_DIR/.punpun"
+        echo "Cleaned $PROJECT_DIR/.punpun"
+        exit 0
+        ;;
+    test)
+        [ $# -eq 0 ] || { echo "pp: test currently runs every tests/*.pp file and accepts no arguments" >&2; exit 2; }
+        run_tests
+        exit 0
+        ;;
+    editor)
+        if [ "${1:-}" = "install-vscode" ] && [ $# -eq 1 ]; then
+            install_vscode
+            exit 0
+        fi
+        echo "pp: usage: pp editor install-vscode" >&2
+        exit 2
+        ;;
+    toolchain)
+        sub=${1:-detect}
+        case "$sub" in
+            detect) [ $# -eq 1 ] || { echo "pp: usage: pp toolchain detect" >&2; exit 2; }; toolchain_detect ;;
+            list) [ $# -eq 1 ] || { echo "pp: usage: pp toolchain list" >&2; exit 2; }; toolchain_list ;;
+            info) shift; toolchain_info "$@" ;;
+            probe) shift; exec python3 "$SCRIPT_DIR/scripts/probe_toolchains.py" "$@" ;;
+            *) echo "pp: usage: pp toolchain detect|list|info <name> | probe [profiles...]" >&2; exit 2 ;;
+        esac
+        exit 0
+        ;;
+    selfhost)
+        [ $# -eq 2 ] || { echo "pp: usage: pp selfhost <input.pp> <output.c>" >&2; exit 2; }
+        exec "$(selfhost_compiler)" "$1" "$2"
+        ;;
+    doctor)
+        [ $# -eq 0 ] || { echo "pp: doctor accepts no arguments" >&2; exit 2; }
+        PPC=$(compiler)
+        echo "PunPun doctor"
+        echo "compiler              OK  $($PPC --version)"
+        if "$PPC" language-info >/dev/null 2>&1; then echo "semantic metadata      OK"; else echo "semantic metadata      FAILED"; fi
+        if command -v cc >/dev/null 2>&1; then echo "native C/linker        OK  $(cc --version 2>/dev/null | head -n 1)"; else echo "native C/linker        MISSING"; fi
+        if command -v node >/dev/null 2>&1; then echo "LSP Node runtime       OK  $(node --version)"; else echo "LSP Node runtime       MISSING (editor LSP unavailable)"; fi
+        if command -v code >/dev/null 2>&1; then echo "VS Code CLI            OK"; elif command -v codium >/dev/null 2>&1; then echo "VSCodium CLI           OK"; else echo "VS Code CLI            optional/unavailable"; fi
+        if command -v cc >/dev/null 2>&1; then echo "C injection compiler   OK  $(command -v cc)"; else echo "C injection compiler   unavailable until @inject->c is used"; fi
+        if command -v python3 >/dev/null 2>&1 && [ -f "$SCRIPT_DIR/ppx/ppx.py" ]; then echo "PPX package client     OK  0.5.0-beta"; else echo "PPX package client     MISSING (python3 required)"; fi
+        if [ -x "$SCRIPT_DIR/bin/ppc-self" ] || [ -x "$SCRIPT_DIR/build/selfhost/ppc-self" ]; then echo "self-hosted compiler   OK"; else echo "self-hosted compiler   source available; run make selfhost"; fi
+        [ -d "$SCRIPT_DIR/packages" ] && echo "first-party packages   OK  $SCRIPT_DIR/packages" || echo "first-party packages   MISSING"
+        [ -f "$SCRIPT_DIR/docs-site/dist/index.html" ] && echo "offline docs site      OK" || echo "offline docs site      source only"
+        echo "cache                  $PROJECT_DIR/.punpun/cache"
+        exit 0
+        ;;
+    info)
+        [ $# -eq 0 ] || { echo "pp: info accepts no arguments" >&2; exit 2; }
+        PPC=$(compiler)
+        echo "version:       $($PPC --version)"
+        echo "compiler:      $PPC"
+        echo "toolchain:     $SCRIPT_DIR"
+        echo "target:        $(uname -m 2>/dev/null || echo unknown)-$(uname -s 2>/dev/null | tr '[:upper:]' '[:lower:]' || echo unknown)"
+        echo "backend:       direct x86-64 on supported Linux hosts; portable C otherwise"
+        echo "cache:         $PROJECT_DIR/.punpun/cache"
+        echo "stdlib:        $SCRIPT_DIR/stdlib"
+        echo "LSP:           $SCRIPT_DIR/tooling/lsp/server.js"
+        echo "PPX:           $SCRIPT_DIR/ppx/ppx.py"
+        echo "packages:      $SCRIPT_DIR/packages"
+        echo "docs:          $SCRIPT_DIR/docs-site/dist"
+        exit 0
+        ;;
+    explain)
+        [ $# -eq 1 ] || { echo "pp: usage: pp explain <E0201>" >&2; exit 2; }
+        code=$1
+        doc="$SCRIPT_DIR/docs/errors/$code.md"
+        [ -f "$doc" ] || { echo "pp: no extended explanation is installed for '$code'" >&2; exit 1; }
+        cat "$doc"
+        exit 0
+        ;;
+    migrate)
+        if [ $# -gt 1 ]; then echo "pp: usage: pp migrate [file.pp]" >&2; exit 2; fi
+        source_file=${1:-$(default_source)}
+        migrator="$SCRIPT_DIR/tooling/migrate.py"
+        [ -f "$migrator" ] || { echo "pp: migration tool is unavailable" >&2; exit 1; }
+        command -v python3 >/dev/null 2>&1 || { echo "pp: pp migrate currently requires python3" >&2; exit 1; }
+        python3 "$migrator" "$source_file"
+        "$(compiler)" fmt "$source_file"
+        "$(compiler)" check "$source_file"
+        exit $?
+        ;;
+    ast) command_name=emit-ast ;;
+    ir) command_name=emit-ir ;;
+    asm) command_name=emit-asm ;;
+    language-info)
+        [ $# -eq 0 ] || { echo "pp: language-info accepts no arguments" >&2; exit 2; }
+        exec "$(compiler)" language-info
+        ;;
+    lsp)
+        [ $# -eq 0 ] || { echo "pp: lsp accepts no arguments" >&2; exit 2; }
+        server="$SCRIPT_DIR/tooling/lsp/server.js"
+        [ -f "$server" ] || { echo "pp: LSP server is not available beside this launcher" >&2; exit 1; }
+        command -v node >/dev/null 2>&1 || { echo "pp: Node.js is required for the LSP server" >&2; exit 1; }
+        PUNPUN_PPC="$(compiler)" exec node "$server"
+        ;;
+    add)
+        [ $# -eq 2 ] || { echo "pp: usage: pp add <name> <path>" >&2; exit 2; }
+        exec "$(compiler)" package-add "$1" "$2"
+        ;;
+    remove)
+        [ $# -eq 1 ] || { echo "pp: usage: pp remove <name>" >&2; exit 2; }
+        exec "$(compiler)" package-remove "$1"
+        ;;
+    tree|update|fetch)
+        [ $# -eq 0 ] || { echo "pp: $command_name accepts no arguments" >&2; exit 2; }
+        exec "$(compiler)" "package-$command_name"
+        ;;
+    build|run|go|check|fmt|emit-tokens|emit-ast|emit-hir|emit-ir|emit-c|emit-asm)
+        ;;
+    *)
+        echo "pp: unknown command '$command_name'" >&2
+        usage >&2
+        exit 2
+        ;;
+esac
+
+case "${1:-}" in
+    *.pp)
+        source_file=$1
+        shift
+        ;;
+    *)
+        source_file=$(default_source)
+        ;;
+esac
+
+PPC=$(compiler)
+exec "$PPC" "$command_name" "$source_file" "$@"

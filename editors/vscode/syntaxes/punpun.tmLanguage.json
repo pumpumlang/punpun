@@ -1,0 +1,165 @@
+{
+  "$schema": "https://raw.githubusercontent.com/martinring/tmLanguage/master/tmlanguage.json",
+  "name": "PunPun",
+  "scopeName": "source.punpun",
+  "fileTypes": ["pp"],
+  "patterns": [
+    { "include": "#comments" },
+    { "include": "#inject-c" },
+    { "include": "#strings" },
+    { "include": "#imports" },
+    { "include": "#type-definitions" },
+    { "include": "#function-definitions" },
+    { "include": "#attributes" },
+    { "include": "#keywords" },
+    { "include": "#types" },
+    { "include": "#constants" },
+    { "include": "#numbers" },
+    { "include": "#builtin-functions" },
+    { "include": "#member-call" },
+    { "include": "#constructor-call" },
+    { "include": "#function-call" },
+    { "include": "#operators" },
+    { "include": "#punctuation" },
+    { "include": "#legacy" }
+  ],
+  "repository": {
+    "comments": {
+      "patterns": [
+        { "name": "comment.line.double-slash.punpun", "match": "//.*$" },
+        { "name": "comment.line.number-sign.punpun", "match": "#.*$" }
+      ]
+    },
+    "inject-c": {
+      "name": "meta.embedded.block.c.punpun",
+      "begin": "(@inject)(->)(c)(\\s*\\(\\s*\"\"\")",
+      "beginCaptures": {
+        "1": { "name": "storage.type.annotation.punpun" },
+        "2": { "name": "keyword.operator.arrow.punpun" },
+        "3": { "name": "entity.name.language.punpun" },
+        "4": { "name": "punctuation.definition.string.begin.punpun" }
+      },
+      "end": "(\"\"\")(\\s*\\))",
+      "endCaptures": {
+        "1": { "name": "punctuation.definition.string.end.punpun" },
+        "2": { "name": "punctuation.section.embedded.end.punpun" }
+      },
+      "contentName": "source.c",
+      "patterns": [{ "include": "source.c" }]
+    },
+    "strings": {
+      "patterns": [
+        {
+          "name": "string.quoted.triple.punpun",
+          "begin": "\"\"\"",
+          "end": "\"\"\""
+        },
+        {
+          "name": "string.quoted.double.punpun",
+          "begin": "\"",
+          "end": "\"",
+          "patterns": [
+            { "name": "constant.character.escape.punpun", "match": "\\\\[nrt\"\\\\]" },
+            { "name": "invalid.illegal.unknown-escape.punpun", "match": "\\\\." }
+          ]
+        }
+      ]
+    },
+    "imports": {
+      "match": "\\b(bring|import)\\b\\s+([A-Za-z_][A-Za-z0-9_]*(?:(?:::|\\.)[A-Za-z_][A-Za-z0-9_]*)*)",
+      "captures": {
+        "1": { "name": "keyword.control.import.punpun" },
+        "2": { "name": "entity.name.namespace.punpun" }
+      }
+    },
+    "type-definitions": {
+      "match": "\\b(sealed\\s+)?(object|struct|contract)\\s+([A-Za-z_][A-Za-z0-9_]*)",
+      "captures": {
+        "1": { "name": "storage.modifier.punpun" },
+        "2": { "name": "keyword.declaration.type.punpun" },
+        "3": { "name": "entity.name.type.punpun" }
+      }
+    },
+    "function-definitions": {
+      "patterns": [
+        {
+          "match": "\\b(extern\\s+native\\s+)?(fn)\\s+([A-Za-z_][A-Za-z0-9_]*)",
+          "captures": {
+            "1": { "name": "storage.modifier.punpun" },
+            "2": { "name": "keyword.declaration.function.punpun" },
+            "3": { "name": "entity.name.function.punpun" }
+          }
+        },
+        { "match": "\\b(init)\\b", "name": "entity.name.function.constructor.punpun" }
+      ]
+    },
+    "attributes": {
+      "match": "@[A-Za-z_][A-Za-z0-9_]*(?:->[A-Za-z_][A-Za-z0-9_]*)?",
+      "name": "storage.type.annotation.punpun"
+    },
+    "keywords": {
+      "patterns": [
+        { "name": "keyword.control.entry.punpun", "match": "\\b(launch|say)\\b" },
+        { "name": "keyword.control.conditional.punpun", "match": "\\b(if|else)\\b" },
+        { "name": "keyword.control.loop.punpun", "match": "\\b(while|for|in|break|continue)\\b" },
+        { "name": "keyword.control.flow.punpun", "match": "\\b(return)\\b" },
+        { "name": "keyword.control.safety.punpun", "match": "\\b(unsafe|raw)\\b" },
+        { "name": "keyword.other.contract.punpun", "match": "\\b(meets)\\b" },
+        { "name": "storage.modifier.punpun", "match": "\\b(public|private|protected|sealed|mut|static|extern|native)\\b" },
+        { "name": "storage.modifier.binding.punpun", "match": "\\b(let|const)\\b" },
+        { "name": "variable.language.punpun", "match": "\\b(self)\\b" }
+      ]
+    },
+    "types": {
+      "patterns": [
+        { "name": "storage.type.primitive.punpun", "match": "\\b(i64|i32|u64|u32|f64|f32|bool|String|nums|void|int|float|str)\\b" },
+        { "name": "support.type.intrinsic.punpun", "match": "\\b(sizeof|alignof)\\b" }
+      ]
+    },
+    "constants": {
+      "patterns": [
+        { "name": "constant.language.boolean.punpun", "match": "\\b(true|false)\\b" },
+        { "name": "constant.language.null.punpun", "match": "\\b(null)\\b" }
+      ]
+    },
+    "numbers": {
+      "patterns": [
+        { "name": "constant.numeric.float.punpun", "match": "\\b[0-9]+\\.[0-9]+\\b" },
+        { "name": "constant.numeric.integer.punpun", "match": "\\b[0-9]+\\b" }
+      ]
+    },
+    "builtin-functions": {
+      "match": "\\b(print|println|len|abs|clock_ms|panic|numbers|push|at|put|size|pop|sort|concat|slice|contains|read_text|write_text|text|parse_int|decimal|whole|assert|arg_count|arg|file_exists|current_dir|env_has|env_or|platform|read_line|sleep_ms)\\b(?=\\s*\\()",
+      "name": "support.function.builtin.punpun"
+    },
+    "member-call": { "match": "(?<=\\.)[A-Za-z_][A-Za-z0-9_]*(?=\\s*\\()", "name": "entity.name.function.method.punpun" },
+    "constructor-call": { "match": "\\b[A-Z][A-Za-z0-9_]*(?=\\s*\\()", "name": "entity.name.type.constructor.punpun" },
+    "function-call": { "match": "\\b[A-Za-z_][A-Za-z0-9_]*(?=\\s*\\()", "name": "entity.name.function.call.punpun" },
+    "operators": {
+      "patterns": [
+        { "name": "keyword.operator.logical.punpun", "match": "(&&|\\|\\||!)" },
+        { "name": "keyword.operator.assignment.punpun", "match": "(=|\\+=|-=|\\*=|/=|<-)" },
+        { "name": "keyword.operator.comparison.punpun", "match": "(==|!=|<=|>=|<|>)" },
+        { "name": "keyword.operator.bitwise.punpun", "match": "(<<|>>|&|\\||\\^|~)" },
+        { "name": "keyword.operator.arithmetic.punpun", "match": "(\\+|-|\\*|/|%)" },
+        { "name": "keyword.operator.range.punpun", "match": "\\.\\." },
+        { "name": "keyword.operator.namespace.punpun", "match": "::" },
+        { "name": "keyword.operator.arrow.punpun", "match": "->" }
+      ]
+    },
+    "punctuation": {
+      "patterns": [
+        { "name": "punctuation.separator.punpun", "match": "[,;.]" },
+        { "name": "punctuation.section.block.punpun", "match": "[{}]" },
+        { "name": "punctuation.section.group.punpun", "match": "[()]" },
+        { "name": "punctuation.section.brackets.punpun", "match": "[\\[\\]]" },
+        { "name": "punctuation.separator.type.punpun", "match": ":" }
+      ]
+    },
+    "legacy": {
+      "patterns": [
+        { "name": "invalid.deprecated.punpun", "match": "\\b(craft|shape|done|pin|keep|give|when|otherwise|whilst|each|from|until|leave|next|yes|no|and|or|not|gives|as)\\b" }
+      ]
+    }
+  }
+}

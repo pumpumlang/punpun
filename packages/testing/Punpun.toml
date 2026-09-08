@@ -1,0 +1,7 @@
+[package]
+name = "testing"
+version = "0.1.0"
+description = "Tiny first-party test helpers"
+entry = "src/main.pp"
+
+[dependencies]

@@ -1,0 +1,7 @@
+[package]
+name = "filesystem"
+version = "0.1.0"
+description = "Filesystem convenience helpers built on PunPun runtime primitives"
+entry = "src/main.pp"
+
+[dependencies]

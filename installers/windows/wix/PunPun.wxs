@@ -1,0 +1,25 @@
+<Wix xmlns="http://wixtoolset.org/schemas/v4/wxs">
+  <Package Name="PunPun SDK" Manufacturer="PunPun Project" Version="0.5.0" UpgradeCode="7A2B1110-6B5E-45B6-9A86-50C4F5B1A001" Scope="perMachine">
+    <MajorUpgrade DowngradeErrorMessage="A newer PunPun SDK is already installed." />
+    <MediaTemplate EmbedCab="yes" CompressionLevel="high" />
+    <Feature Id="Main" Title="PunPun SDK" Level="1">
+      <ComponentGroupRef Id="PunPunSdkFiles" />
+      <ComponentRef Id="PathComponent" />
+      <ComponentRef Id="FileAssociation" />
+    </Feature>
+    <StandardDirectory Id="ProgramFiles64Folder">
+      <Directory Id="INSTALLFOLDER" Name="PunPun" />
+    </StandardDirectory>
+    <StandardDirectory Id="ProgramMenuFolder">
+      <Directory Id="PunPunMenu" Name="PunPun" />
+    </StandardDirectory>
+    <Component Id="PathComponent" Directory="INSTALLFOLDER" Guid="1A9D0DA1-1A01-4BB7-8E16-3B41318DE901">
+      <Environment Id="PunPunPath" Name="PATH" Value="[INSTALLFOLDER]bin" Permanent="no" Part="last" Action="set" System="yes" />
+    </Component>
+    <Component Id="FileAssociation" Directory="INSTALLFOLDER" Guid="34F8BA81-D888-4B79-949E-3E4B9DCE9912">
+      <RegistryValue Root="HKLM" Key="Software\Classes\.pp" Value="PunPun.Source" Type="string" />
+      <RegistryValue Root="HKLM" Key="Software\Classes\PunPun.Source" Value="PunPun Source File" Type="string" />
+      <RegistryValue Root="HKLM" Key="Software\Classes\PunPun.Source\DefaultIcon" Value="[INSTALLFOLDER]assets\punpun-icon-256.png" Type="string" />
+    </Component>
+  </Package>
+</Wix>

@@ -1,0 +1,31 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "Punpun: build root",
+      "type": "shell",
+      "command": "./punpun build",
+      "group": {"kind": "build", "isDefault": true},
+      "problemMatcher": []
+    },
+    {
+      "label": "Punpun: run root",
+      "type": "shell",
+      "command": "./punpun run",
+      "problemMatcher": []
+    },
+    {
+      "label": "Punpun: check root",
+      "type": "shell",
+      "command": "./punpun check",
+      "problemMatcher": []
+    },
+    {
+      "label": "Punpun: Windows .exe",
+      "type": "shell",
+      "command": "./punpun build --target windows-x86_64",
+      "group": "build",
+      "problemMatcher": []
+    }
+  ]
+}

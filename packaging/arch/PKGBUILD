@@ -1,0 +1,22 @@
+pkgname=punpun
+pkgver=0.5.0_beta
+pkgrel=1
+pkgdesc="PunPun native programming language SDK"
+arch=('x86_64')
+url="https://example.invalid/punpun"
+license=('MIT')
+depends=('glibc' 'gcc-libs' 'python' 'nodejs')
+optdepends=('base-devel: rebuild compiler and use C injection' 'libcurl: requests package' 'libx11: PunUI Linux backend')
+source=('PunPun-0.5.0-beta-linux-x86_64.tar.zst')
+sha256sums=('12d56a93f5116529a5a24956b54226c7c2b01948fe365d4ffe680042976ad154')
+
+package() {
+  mkdir -p "$pkgdir/usr/lib/punpun" "$pkgdir/usr/bin" "$pkgdir/usr/share/licenses/punpun" "$pkgdir/usr/share/doc/punpun"
+  cp -a "$srcdir/PunPun-0.5.0-beta-linux-x86_64/." "$pkgdir/usr/lib/punpun/"
+  for name in pp ppc ppx punpun punpun-lsp; do
+    printf '#!/bin/sh\nexec /usr/lib/punpun/bin/%s "$@"\n' "$name" > "$pkgdir/usr/bin/$name"
+    chmod 755 "$pkgdir/usr/bin/$name"
+  done
+  cp "$pkgdir/usr/lib/punpun/LICENSE" "$pkgdir/usr/share/licenses/punpun/LICENSE"
+  cp "$pkgdir/usr/lib/punpun/README.md" "$pkgdir/usr/share/doc/punpun/README.md"
+}

@@ -1,0 +1,48 @@
+Punpun 0.5.0-beta development snapshot
+Packaged: 2026-09-08
+
+Verification performed on this source tree before packaging:
+- compiler rebuilt with C17/C++17 warnings-as-errors
+- full Python compiler/tooling suite: 149 tests
+- 148 passed
+- 1 skipped: conditional Rust-injection test; rustc is unavailable in the packaging environment
+- 0 failed
+- modern root main.pp checked and executed natively
+- VS Code extension JavaScript syntax validated with Node
+- VS Code JSON grammar/config/snippets validated
+- packaged VSIX archive structure validated
+- installer tested in an isolated HOME
+- installer test rebuilt compiler/runtime, installed command wrappers, invoked a fake VS Code CLI with the VSIX, scaffolded a modern project, compiled and ran it natively, then uninstalled cleanly
+
+Included:
+- compiler source
+- modern 0.5 parser/frontend with temporary legacy-syntax migration support
+- semantic analyzer and diagnostics
+- typed HIR + optimizer passes
+- inspectable MIR, liveness intervals, linear-scan register assignments, and spill modeling
+- direct Linux x86-64 native backend
+- portable C backend / Windows MinGW cross-build path
+- runtime source + bootstrap runtime archive
+- standard library
+- object/value-type and reference/raw-pointer foundations
+- pp/punpun CLI
+- native local/path package graph + lockfile support in ppc
+- prebuilt Linux x86-64 compiler at build/ppc
+- PunPun-written fixed-point compiler source and prebuilt build/selfhost/ppc-self
+- LSP server / semantic worker foundation
+- VS Code extension source + packaged VSIX
+- tests, examples, and docs
+- user-local Linux installer/uninstaller
+
+Known major incomplete areas:
+- complete ownership/lifetime/escape model beyond explicit move/drop checking
+- traits/interfaces and production generics/monomorphization
+- native code generation driven by MIR/Machine IR and production register allocation
+- expansion of the self-hosting compiler from its verified bootstrap subset to the full production language
+- global/interprocedural optimization and deeper loop/alias/vector optimization
+- function-level incremental codegen / interface hashing
+- remote package registry/version resolution
+- direct Windows PE/COFF native backend
+- complete debugger information / stack traces
+- full atomics/SIMD/ABI validation and a production async event-loop/structured-concurrency layer
+- native task-based async/await and cooperative cancellation are implemented and tested; tasks currently use worker threads

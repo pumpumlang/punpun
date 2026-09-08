@@ -1,0 +1,169 @@
+# PunPun 0.5.0-beta language reference
+
+PunPun is a statically typed, ahead-of-time compiled language. The normal Linux
+x86-64 build uses the direct native backend; a portable C backend supports
+additional toolchains. This page describes the supported 0.5 syntax. The older
+`launch: ... done` dialect is accepted only by the migration tool.
+
+## Program structure
+
+```punpun
+bring std::io;
+
+fn twice(value: i64 = 21) -> i64 {
+    return value * 2;
+}
+
+launch {
+    say(twice());
+    say(twice(value: 10));
+}
+```
+
+Files use `.pp`, comments start with `//`, blocks use braces, and statements end
+with semicolons. A complete executable has one `launch` block. Imported module
+paths use `::`.
+
+## Bindings and core types
+
+```punpun
+let name: text = "PunPun";
+let mut count: i64 = 1;
+count = count + 1;
+```
+
+`let` is immutable and `let mut` permits reassignment. Current built-in types
+include `i64`, `f64`, `bool`, `text`, `nums`, `void`, safe references `&T` and
+`&mut T`, raw pointers `*T`, concrete objects/structs, and typed async tasks.
+There are no implicit numeric or text conversions.
+
+Function, constructor, and method calls support positional arguments, named
+arguments, and literal default values. Positional arguments must precede named
+arguments. A parameter without a default cannot follow one with a default.
+
+## Functions and control flow
+
+```punpun
+fn classify(value: i64) -> text {
+    if value > 10 {
+        return "large";
+    } else {
+        return "small";
+    }
+}
+
+launch {
+    let mut i = 0;
+    while i < 3 {
+        say(classify(i));
+        i += 1;
+    }
+}
+```
+
+Conditions are `bool`. Integer arithmetic is checked. Calls and operands are
+evaluated left-to-right; `and` and `or` short-circuit. Non-void functions must
+conservatively return a value on every path.
+
+## Objects, structs, and contracts
+
+```punpun
+contract Named {
+    fn name() -> text;
+}
+
+object User meets Named {
+    private let label: text;
+
+    public init(label: text) {
+        self.label = label;
+    }
+
+    public fn name() -> text {
+        return self.label;
+    }
+}
+
+launch {
+    let user = User(label: "Ada");
+    say(user.name());
+}
+```
+
+Objects have identity-oriented runtime storage. Structs are value-oriented.
+Fields and methods can be public or private. Contracts currently provide
+compile-time conformance for concrete types; contract-typed values and mature
+dynamic dispatch are not yet implemented.
+
+## References, raw pointers, move, and drop
+
+```punpun
+fn bump(value: &mut i64) {
+    *value += 1;
+}
+
+launch {
+    let mut value = 41;
+    bump(&mut value);
+
+    unsafe {
+        let pointer: *i64 = &raw value;
+        *pointer += 1;
+    }
+
+    let mut first = User("Ada");
+    let second = move(first);
+    drop(second);
+    first = User("Grace");
+}
+```
+
+Safe references participate in the compiler's borrow and escape checks. Raw
+pointer creation, dereference, and arithmetic require `unsafe`. `move` transfers
+an owned object or `nums` value, and subsequent use is rejected until a mutable
+binding is reinitialized. `drop` deterministically releases a supported owned
+value. Full lexical drop insertion and production lifetime analysis remain
+future work.
+
+## Async tasks
+
+```punpun
+async fn work(value: i64) -> i64 {
+    if cancelled() {
+        return 0;
+    }
+    return value;
+}
+
+launch {
+    let task = work(42);
+    say(await task);
+}
+```
+
+Async calls create native tasks. `await` is valid in `async fn` and `launch`.
+`cancel(task)`, `task_done(task)`, and `cancelled()` provide cooperative
+cancellation and completion inspection. See [language/async.md](language/async.md).
+
+## Native injection and FFI
+
+`extern native fn` declarations bridge PunPun calls to explicitly injected C,
+C++, Rust, or assembly blocks. Injection is compiled only by `build`/`run`, is
+content-addressed and cached, and is never evaluated by `check` or the language
+server. See [injection/README.md](injection/README.md).
+
+## Diagnostics and current boundaries
+
+The frontend uses source spans and stable diagnostic codes. `pp explain CODE`
+shows extended guidance. `pp emit-hir` and `pp emit-ir` expose typed HIR and MIR
+for compiler work.
+
+The distribution also includes a PunPun-written fixed-point compiler for the
+documented bootstrap subset. Run `make selfhost` or use
+`pp selfhost input.pp output.c`; see [`selfhost/README.md`](../selfhost/README.md).
+
+The beta does not yet include production generics, algebraic enums and exhaustive
+matching, contract-typed dynamic dispatch, automatic lexical destruction,
+closures/first-class functions, or a complete Machine IR code generator. The
+authoritative implementation matrix is in
+[`COMPLETION_REPORT.md`](../COMPLETION_REPORT.md).

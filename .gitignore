@@ -1,0 +1,12 @@
+/build/
+/runtime/*.o
+/runtime/*.a
+/tests/tmp/
+/.punpun/
+**/__pycache__/
+*.pyc
+/.pytest_cache/
+/dist/
+/docs-site/dist/
+/ppx-site/dist/
+.DS_Store

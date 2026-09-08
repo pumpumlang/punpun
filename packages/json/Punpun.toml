@@ -1,0 +1,7 @@
+[package]
+name = "json"
+version = "0.1.0"
+description = "Small dependency-free JSON validation and field extraction helpers"
+entry = "src/main.pp"
+
+[dependencies]

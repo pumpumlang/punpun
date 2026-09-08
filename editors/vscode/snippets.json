@@ -1,0 +1,104 @@
+{
+  "PunPun launch": {
+    "prefix": "launch",
+    "body": [
+      "launch {",
+      "    $0",
+      "}"
+    ],
+    "description": "PunPun program entry point"
+  },
+  "PunPun function": {
+    "prefix": "fn",
+    "body": [
+      "fn ${1:name}(${2})${3: -> i64} {",
+      "    $0",
+      "}"
+    ],
+    "description": "PunPun function"
+  },
+  "PunPun object": {
+    "prefix": "object",
+    "body": [
+      "object ${1:Name} {",
+      "    private let mut ${2:value}: ${3:i64};",
+      "",
+      "    public init(${2:value}: ${3:i64}) {",
+      "        self.${2:value} = ${2:value};",
+      "    }",
+      "",
+      "    public fn ${4:get}() -> ${3:i64} {",
+      "        return self.${2:value};",
+      "    }",
+      "}"
+    ],
+    "description": "PunPun identity/reference object"
+  },
+  "PunPun struct": {
+    "prefix": "struct",
+    "body": [
+      "struct ${1:Name} {",
+      "    ${2:x}: ${3:i64},",
+      "    ${4:y}: ${3:i64},",
+      "}"
+    ],
+    "description": "PunPun value type"
+  },
+  "PunPun contract": {
+    "prefix": "contract",
+    "body": [
+      "contract ${1:Name} {",
+      "    fn ${2:method}(${3})${4: -> void};",
+      "}"
+    ],
+    "description": "PunPun zero-cost interface contract"
+  },
+  "PunPun C injection": {
+    "prefix": "injectc",
+    "body": [
+      "@inject->c(\"\"\"",
+      "#include <stdint.h>",
+      "${1:int64_t native_fn(int64_t value) {",
+      "    return value;",
+      "}}",
+      "\"\"\");",
+      "",
+      "extern native fn ${2:native_fn}(value: i64) -> i64;"
+    ],
+    "description": "Explicit cached C interoperability block"
+  },
+  "PunPun unsafe": {
+    "prefix": "unsafe",
+    "body": [
+      "unsafe {",
+      "    $0",
+      "}"
+    ],
+    "description": "Explicit low-level unsafe region"
+  },
+  "PunPun for range": {
+    "prefix": "for",
+    "body": [
+      "for ${1:i} in ${2:0}..${3:end} {",
+      "    $0",
+      "}"
+    ],
+    "description": "PunPun range loop"
+  },
+  "PunPun async function": {
+    "prefix": "asyncfn",
+    "body": [
+      "async fn ${1:name}(${2})${3: -> i64} {",
+      "    $0",
+      "}"
+    ],
+    "description": "PunPun native async task function"
+  },
+  "PunPun await": {
+    "prefix": "await",
+    "body": [
+      "await ${1:task};"
+    ],
+    "description": "Await a PunPun Task"
+  }
+}
