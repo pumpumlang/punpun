@@ -1,6 +1,6 @@
 # Examples
 
-All `.pp` sources here use Punpun 0.3 syntax. Commands below assume the repository
+The `.pp` sources cover current syntax and retained migration examples. Commands below assume the repository
 root and a built toolchain (`make`). `go` and `run` both compile before executing;
 `--` separates compiler options from program arguments.
 
@@ -10,6 +10,14 @@ root and a built toolchain (`make`). `go` and `run` both compile before executin
 | [`showcase.pp`](showcase.pp) | Nested value records, shared lists, CLI/file text, ranges, statistics, standard-library imports |
 | [`algorithms/sieve.pp`](algorithms/sieve.pp) | Sieve of Eratosthenes, reusable integer-list storage, checked CLI input, monotonic timing |
 | [`packages/app/src/main.pp`](packages/app/src/main.pp) | A package importing a local `greeter` dependency |
+| [`generics-and-results.pp`](generics-and-results.pp) | Generic structs/methods, `Option`, `Result`, matching and fallback helpers |
+
+Run the 0.6 generics and results example with either backend:
+
+```sh
+build/ppc run examples/generics-and-results.pp
+build/ppc run examples/generics-and-results.pp --cc-backend
+```
 
 `hello/math.pp` and `packages/greeter/src/main.pp` are library modules, not
 standalone entry points. They are checked as part of the programs importing them.

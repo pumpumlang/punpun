@@ -19,7 +19,7 @@ constexpr ValueId NoValue = static_cast<ValueId>(-1);
 constexpr BlockId NoBlock = static_cast<BlockId>(-1);
 
 enum class Op {
-    Parameter, Constant, Load, Store, Call, Construct, Await, Unary, Binary, Member, Index, List,
+    Parameter, Constant, Load, Store, Call, Construct, EnumConstruct, Match, Propagate, Await, Unary, Binary, Member, Index, List,
     AddressOf, Deref, SizeOf, AlignOf, StoreMember, StoreIndex, StoreIndirect, Say
 };
 
@@ -67,6 +67,9 @@ inline const char *op_name(Op op) {
         case Op::Store: return "store";
         case Op::Call: return "call";
         case Op::Construct: return "construct";
+        case Op::EnumConstruct: return "enum.construct";
+        case Op::Match: return "match";
+        case Op::Propagate: return "propagate";
         case Op::Await: return "await";
         case Op::Unary: return "unary";
         case Op::Binary: return "binary";
@@ -416,6 +419,25 @@ class Lowerer {
                     return NoValue;
                 }
                 return emit_value(op, type, expression.value, std::move(arguments), expression.token);
+            }
+            case Expr::Kind::EnumConstruct: {
+                std::vector<ValueId> arguments;
+                for (const auto &child : expression.children) arguments.push_back(lower_expression(*child));
+                return emit_value(Op::EnumConstruct, type, expression.value + "::" + expression.enum_variant,
+                                  std::move(arguments), expression.token);
+            }
+            case Expr::Kind::Match: {
+                std::vector<ValueId> values;
+                for (const auto &child : expression.children) values.push_back(lower_expression(*child));
+                if (type == Type::Void) {
+                    emit_effect(Op::Match, std::to_string(expression.match_patterns.size()), std::move(values), expression.token);
+                    return NoValue;
+                }
+                return emit_value(Op::Match, type, std::to_string(expression.match_patterns.size()), std::move(values), expression.token);
+            }
+            case Expr::Kind::Propagate: {
+                const ValueId value = lower_expression(*expression.children[0]);
+                return emit_value(Op::Propagate, type, expression.value, {value}, expression.token);
             }
             case Expr::Kind::SizeOf:
                 return emit_value(Op::SizeOf, type, expression.value, {}, expression.token);

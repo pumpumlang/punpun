@@ -7,8 +7,8 @@ PunPun is being developed toward Java-level reliability and C++-class native per
 | Step | Scope | State |
 | --- | --- | --- |
 | 1 | Canonical versioning, green baseline, frozen generic/enum/nullability/ownership rules, parser scaffolding and compatibility gates | Complete in `0.6.0-dev.1` |
-| 2 | Generic declarations/calls, constraints, monomorphization and deterministic specialization caching | Planned |
-| 3 | Algebraic enums, `Option<T>`, `Result<T,E>`, destructuring and exhaustive matching | Planned |
+| 2 | Generic declarations/calls, constraints, monomorphization and deterministic specialization caching | Complete in `0.6.0-dev.3` |
+| 3 | Algebraic enums, `Option<T>`, `Result<T,E>`, nested destructuring, exhaustive matching and `?` | Complete in `0.6.0-dev.3` |
 | 4 | Full move-state analysis, implicit lexical `Drop`, safer borrows and slices | Planned |
 | 5 | Make MIR authoritative for optimization and backend lowering; add interface/function fingerprints | Planned |
 | 6 | Standard-library integration, release qualification and 0.6 compatibility report | Planned |

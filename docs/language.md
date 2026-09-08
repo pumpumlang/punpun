@@ -162,13 +162,13 @@ The distribution also includes a PunPun-written fixed-point compiler for the
 documented bootstrap subset. Run `make selfhost` or use
 `pp selfhost input.pp output.c`; see [`selfhost/README.md`](../selfhost/README.md).
 
-The 0.6 Step 1 frontend parses generic declaration headers and nested generic
-type spellings for AST/tooling work. Generic execution, monomorphization,
-algebraic enums and exhaustive matching are still gated. The beta does not yet include
-matching, contract-typed dynamic dispatch, automatic lexical destruction,
+The 0.6 Steps 2 and 3 frontend executes inferred and explicit generic calls,
+deterministically monomorphizes generic types and methods, and checks algebraic
+enum patterns for reachability and exhaustiveness. Prelude `Option<T>` and
+`Result<T,E>` values support postfix `?`. The beta does not yet include
+contract-typed dynamic dispatch, automatic lexical destruction,
 closures/first-class functions, or a complete Machine IR code generator. The
 authoritative implementation matrix is in
 [`COMPLETION_REPORT.md`](../COMPLETION_REPORT.md).
 
-Normative upcoming rules are in [`spec/0.6/`](../spec/0.6/). Examples in that
-specification are labeled as design contracts and are not claims of execution.
+Normative 0.6 rules and implementation status are in [`spec/0.6/`](../spec/0.6/).

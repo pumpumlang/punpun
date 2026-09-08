@@ -47,17 +47,54 @@ class LanguageSurfaceContractTests(unittest.TestCase):
         self.assertIn("Result<U,Option<T>>", result.stdout)
         self.assertIn("Function identity<T: Copy + Comparable<T>>", result.stdout)
 
-    def test_enum_syntax_has_stable_feature_gate(self):
-        result = run("check", FIXTURES / "enum_pending.pp")
-        self.assertNotEqual(result.returncode, 0)
-        self.assertIn("E0900", result.stderr)
-        self.assertIn("0.6 Step 3", result.stderr)
+    def test_generic_functions_types_and_methods_execute_on_both_backends(self):
+        expected = "9\n12\ngeneric\n14\ncontract\n"
+        for extra in ((), ("--cc-backend",)):
+            with self.subTest(backend=extra or ("direct",)):
+                result = run("run", FIXTURES / "generics_run.pp", *extra)
+                self.assertEqual(result.returncode, 0, result.stderr)
+                self.assertEqual(result.stdout, expected)
 
-    def test_match_syntax_has_stable_feature_gate(self):
-        result = run("check", FIXTURES / "match_pending.pp")
+    def test_monomorphization_is_visible_and_deduplicated_in_hir(self):
+        result = run("emit-hir", FIXTURES / "generics_run.pp")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(result.stdout.count("func @identity$3_int$("), 1)
+        self.assertEqual(result.stdout.count("func @identity$3_str$("), 1)
+
+    def test_enums_nested_patterns_option_result_and_propagation_execute(self):
+        expected = "3\n4\n7\n55\n66\n"
+        for extra in ((), ("--cc-backend",)):
+            with self.subTest(backend=extra or ("direct",)):
+                result = run("run", FIXTURES / "enums_run.pp", *extra)
+                self.assertEqual(result.returncode, 0, result.stderr)
+                self.assertEqual(result.stdout, expected)
+
+    def test_enum_ast_is_no_longer_feature_gated(self):
+        result = run("emit-ast", FIXTURES / "enums_run.pp")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("Enum Choice<T>", result.stdout)
+        self.assertIn("Variant Value(T)", result.stdout)
+        self.assertIn("Match", result.stdout)
+
+    def test_non_exhaustive_match_reports_missing_variant(self):
+        result = run("check", FIXTURES / "non_exhaustive.pp")
         self.assertNotEqual(result.returncode, 0)
-        self.assertIn("E0900", result.stderr)
-        self.assertIn("0.6 Step 3", result.stderr)
+        self.assertIn("E1716", result.stderr)
+        self.assertIn("missing Busy", result.stderr)
+
+    def test_generic_constraint_failure_is_diagnostic(self):
+        result = run("check", FIXTURES / "generic_constraint_error.pp")
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("E1604", result.stderr)
+        self.assertIn("does not satisfy constraint 'Copy'", result.stderr)
+
+    def test_option_result_stdlib_example_runs_on_both_backends(self):
+        expected = "PunPun\n42\n7\n"
+        example = ROOT / "examples/generics-and-results.pp"
+        for extra in ((), ("--cc-backend",)):
+            result = run("run", example, *extra)
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertEqual(result.stdout, expected)
 
     def test_0_5_modern_and_migration_sources_remain_valid(self):
         for fixture in ("compat_modern.pp", "compat_legacy.pp"):
@@ -79,6 +116,10 @@ class SpecificationContractTests(unittest.TestCase):
             text = (ROOT / "spec/0.6" / filename).read_text(encoding="utf-8")
             for needle in needles:
                 self.assertIn(needle, text, f"{filename} lacks {needle}")
+
+    def test_new_diagnostics_have_explanations(self):
+        for code in ("E1604", "E1716"):
+            self.assertTrue((ROOT / "docs/errors" / f"{code}.md").is_file())
 
 
 if __name__ == "__main__":

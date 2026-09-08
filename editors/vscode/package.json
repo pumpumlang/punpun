@@ -2,7 +2,7 @@
   "name": "punpun",
   "displayName": "Punpun",
   "description": "PunPun language support powered by the compiler semantic engine: live diagnostics, semantic completion, navigation, rename, formatting, inlay hints, semantic highlighting, and build commands.",
-  "version": "0.6.0-dev.1",
+  "version": "0.6.0-dev.3",
   "publisher": "punpun",
   "license": "MIT",
   "engines": {

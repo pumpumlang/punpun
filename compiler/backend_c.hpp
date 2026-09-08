@@ -101,7 +101,10 @@ class CBackend {
         out.reserve(value.size() + 8);
         for (unsigned char c : value) {
             if (std::isalnum(c) || c == '_') out += static_cast<char>(c);
-            else out += '_';
+            else {
+                static const char hex[] = "0123456789abcdef";
+                out += '_'; out += hex[c >> 4]; out += hex[c & 15];
+            }
         }
         return out;
     }
@@ -497,6 +500,9 @@ class CBackend {
             }
             case Expr::Kind::Call:
             case Expr::Kind::MethodCall: return generate_call(expression);
+            case Expr::Kind::EnumConstruct: return generate_enum_construct(expression);
+            case Expr::Kind::Match: return generate_match(expression);
+            case Expr::Kind::Propagate: return generate_propagate(expression);
             case Expr::Kind::SizeOf:
                 return {Type::Int, "(int64_t)sizeof(" + c_type(Type{expression.value}) + ")"};
             case Expr::Kind::AlignOf:
@@ -505,6 +511,95 @@ class CBackend {
             case Expr::Kind::Binary: return generate_binary(expression);
         }
         internal("unknown expression kind");
+    }
+
+    std::size_t variant_index(const Shape &shape, const std::string &name) const {
+        for (std::size_t i = 0; i < shape.enum_variants.size(); ++i)
+            if (shape.enum_variants[i].name == name) return i;
+        internal("unknown enum variant '" + name + "'");
+    }
+
+    Generated generate_enum_construct(const Expr &expression) {
+        const Shape &shape = *shapes_.at(expression.value);
+        const std::size_t index = variant_index(shape, expression.enum_variant);
+        const std::string name = "pp_enum_" + std::to_string(unique_++);
+        line(c_type(Type{shape.name}) + " " + name + " = {0};");
+        line(name + ".pp_f___tag = INT64_C(" + std::to_string(index) + ");");
+        for (std::size_t i = 0; i < expression.children.size(); ++i) {
+            Generated payload = generate_expression(*expression.children[i]);
+            line(name + ".pp_f___v" + std::to_string(index) + "_" + std::to_string(i) + " = " + payload.code + ";");
+        }
+        return {Type{shape.name}, name};
+    }
+
+    std::string pattern_condition(const Pattern &pattern, Type type, const std::string &code) {
+        if (pattern.kind == Pattern::Kind::Wildcard || pattern.kind == Pattern::Kind::Binding) return "true";
+        if (pattern.kind == Pattern::Kind::Integer) return "(" + code + " == INT64_C(" + pattern.value + "))";
+        if (pattern.kind == Pattern::Kind::Boolean) return "(" + code + " == " + (pattern.value == "yes" ? "true" : "false") + ")";
+        if (pattern.kind == Pattern::Kind::String) return "pp_str_eq(" + code + ", " + c_string(pattern.value) + ")";
+        const Shape &shape = *shapes_.at(type.name);
+        std::string condition = "(" + code + ".pp_f___tag == INT64_C(" + std::to_string(pattern.variant_index) + "))";
+        for (std::size_t i = 0; i < pattern.children.size(); ++i) {
+            const std::string payload = code + ".pp_f___v" + std::to_string(pattern.variant_index) + "_" + std::to_string(i);
+            condition += " && " + pattern_condition(pattern.children[i], shape.enum_variants[pattern.variant_index].payload[i], payload);
+        }
+        return "(" + condition + ")";
+    }
+
+    void bind_pattern_variables(const Pattern &pattern, Type type, const std::string &code) {
+        if (pattern.kind == Pattern::Kind::Binding) {
+            scopes_.back()[pattern.value] = {type, code};
+            return;
+        }
+        if (pattern.kind != Pattern::Kind::Variant) return;
+        const Shape &shape = *shapes_.at(type.name);
+        for (std::size_t i = 0; i < pattern.children.size(); ++i) {
+            const Type payload_type = shape.enum_variants[pattern.variant_index].payload[i];
+            const std::string payload = code + ".pp_f___v" + std::to_string(pattern.variant_index) + "_" + std::to_string(i);
+            bind_pattern_variables(pattern.children[i], payload_type, payload);
+        }
+    }
+
+    Generated generate_match(const Expr &expression) {
+        Generated subject = freeze(generate_expression(*expression.children[0]));
+        const std::string result_name = "pp_match_" + std::to_string(unique_++);
+        const std::string end = "pp_match_end_" + std::to_string(unique_++);
+        if (expression.inferred_type != Type::Void) line(c_type(expression.inferred_type) + " " + result_name + ";");
+        for (std::size_t i = 0; i < expression.match_patterns.size(); ++i) {
+            const Pattern &pattern = expression.match_patterns[i];
+            line("if (" + pattern_condition(pattern, subject.type, subject.code) + ") {");
+            ++indent_; scopes_.push_back({});
+            bind_pattern_variables(pattern, subject.type, subject.code);
+            Generated arm = generate_expression(*expression.children[i + 1]);
+            if (expression.inferred_type == Type::Void) line(arm.code + ";");
+            else line(result_name + " = " + arm.code + ";");
+            line("goto " + end + ";");
+            scopes_.pop_back(); --indent_;
+            line("}");
+        }
+        line(end + ":;");
+        return {expression.inferred_type, expression.inferred_type == Type::Void ? "(void)0" : result_name};
+    }
+
+    Generated generate_propagate(const Expr &expression) {
+        Generated source = freeze(generate_expression(*expression.children[0]));
+        const Shape &source_shape = *shapes_.at(source.type.name);
+        const Shape &result_shape = *shapes_.at(current_result_.name);
+        const std::size_t success = variant_index(source_shape, expression.enum_variant);
+        const std::string failure_name = expression.enum_variant == "Some" ? "None" : "Error";
+        const std::size_t source_failure = variant_index(source_shape, failure_name);
+        const std::size_t result_failure = variant_index(result_shape, failure_name);
+        line("if (" + source.code + ".pp_f___tag != INT64_C(" + std::to_string(success) + ")) {");
+        ++indent_;
+        const std::string failure = "pp_propagate_" + std::to_string(unique_++);
+        line(c_type(current_result_) + " " + failure + " = {0};");
+        line(failure + ".pp_f___tag = INT64_C(" + std::to_string(result_failure) + ");");
+        if (!source_shape.enum_variants[source_failure].payload.empty())
+            line(failure + ".pp_f___v" + std::to_string(result_failure) + "_0 = " + source.code +
+                 ".pp_f___v" + std::to_string(source_failure) + "_0;");
+        line("return " + failure + ";");
+        --indent_; line("}");
+        return {expression.inferred_type, source.code + ".pp_f___v" + std::to_string(success) + "_0"};
     }
 
     Generated generate_unary(const Expr &expression) {

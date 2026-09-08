@@ -1,5 +1,16 @@
 # Changelog
 
+## PunPun 0.6 development — Steps 2 and 3
+
+- Added generic function, struct, object and method execution with explicit/inferred type arguments.
+- Added deterministic, deduplicated monomorphization and specialization work limits.
+- Added compiler-known `Copy`, scalar comparison and user-contract constraint checking.
+- Added algebraic enums with unit and tuple variants, generic payloads and nested enum values.
+- Added nested variant/literal/binding/wildcard patterns with unreachable-arm and exhaustiveness diagnostics.
+- Added prelude `Option<T>`, `Result<T,E>`, cross-success-type `?` propagation and standard helpers.
+- Added HIR visibility plus direct Linux x86-64 and portable C backend lowering for every new construct.
+- Added dual-backend executions, negative diagnostics, examples and documentation regressions.
+
 ## PunPun 0.6 development — Step 1
 
 ### Compiler foundation

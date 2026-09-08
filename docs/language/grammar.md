@@ -1,4 +1,4 @@
-# PunPun 0.5 grammar overview
+# PunPun 0.6 development grammar overview
 
 PunPun 0.5 uses structured brace blocks and semicolon-terminated ordinary
 statements. During the beta the compiler can still parse the 0.4 migration
@@ -33,6 +33,33 @@ fn add(a: i64, b: i64) -> i64 {
     return a + b;
 }
 ```
+
+Generic parameters and inline constraints follow the declared name. Calls may
+infer their type arguments or spell them explicitly.
+
+```punpun
+fn identity<T: Copy>(value: T) -> T { return value; }
+let first = identity(42);
+let second = identity<str>("typed");
+```
+
+## Enums and matching
+
+```punpun
+enum OptionLike<T> { None, Some(T) }
+
+fn value_or(item: OptionLike<int>) -> int {
+    return match item {
+        OptionLike::Some(value) => value,
+        OptionLike::None => 0,
+    };
+}
+```
+
+Enum, boolean, integer and string patterns are supported. Enum and boolean
+matches must be exhaustive; integer and string matches require `_`. Variant
+payload patterns may nest. Prelude `Option<T>` and `Result<T,E>` additionally
+support postfix `?` in a compatible return type.
 
 ## Control flow
 

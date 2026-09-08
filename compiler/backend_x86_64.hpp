@@ -167,7 +167,13 @@ class X86Backend {
     static std::string function_symbol(const std::string &name) {
         std::string result = "pp_fn_";
         result.reserve(name.size() + 6);
-        for (unsigned char c : name) result += (std::isalnum(c) || c == '_') ? static_cast<char>(c) : '_';
+        for (unsigned char c : name) {
+            if (std::isalnum(c) || c == '_') result += static_cast<char>(c);
+            else {
+                static const char hex[] = "0123456789abcdef";
+                result += '_'; result += hex[c >> 4]; result += hex[c & 15];
+            }
+        }
         return result;
     }
 
@@ -529,6 +535,9 @@ class X86Backend {
             case Expr::Kind::List: return gen_list(expression);
             case Expr::Kind::Call: return gen_call(expression);
             case Expr::Kind::MethodCall: return gen_call(expression);
+            case Expr::Kind::EnumConstruct: return gen_enum_construct(expression);
+            case Expr::Kind::Match: return gen_match(expression);
+            case Expr::Kind::Propagate: return gen_propagate(expression);
             case Expr::Kind::SizeOf:
                 emit("mov rax, " + std::to_string(type_size(Type{expression.value})));
                 return Type::Int;
@@ -539,6 +548,132 @@ class X86Backend {
             case Expr::Kind::Binary: return gen_binary(expression);
         }
         internal("unreachable expression");
+    }
+
+    std::size_t enum_variant_index(const Shape &shape, const std::string &name) const {
+        for (std::size_t i = 0; i < shape.enum_variants.size(); ++i)
+            if (shape.enum_variants[i].name == name) return i;
+        internal("unknown enum variant '" + name + "'");
+    }
+
+    Type gen_enum_construct(const Expr &expression) {
+        const Shape *shape = shapes_.at(expression.value);
+        const ShapeLayout &shape_layout = layout(shape->name);
+        const std::size_t index = enum_variant_index(*shape, expression.enum_variant);
+        const int64_t result = alloc(shape_layout.size);
+        for (int64_t offset = 0; offset < shape_layout.size; offset += 8)
+            emit("mov qword ptr " + mem_rbp(result + offset) + ", 0");
+        emit("mov qword ptr " + mem_rbp(result + shape_layout.fields.at("__tag").offset) + ", " + std::to_string(index));
+        for (std::size_t i = 0; i < expression.children.size(); ++i) {
+            const Type payload = gen_expression(*expression.children[i]);
+            const FieldInfo &field = shape_layout.fields.at("__v" + std::to_string(index) + "_" + std::to_string(i));
+            if (is_record(payload)) {
+                emit("mov rsi, rax");
+                copy_rsi_to_frame(result + field.offset, type_size(payload));
+            } else emit("mov " + mem_rbp(result + field.offset) + ", rax");
+        }
+        emit("lea rax, " + mem_rbp(result));
+        return Type{shape->name};
+    }
+
+    void emit_pattern(const Pattern &pattern, Type type, int64_t address_slot, const std::string &failure) {
+        if (pattern.kind == Pattern::Kind::Wildcard) return;
+        if (pattern.kind == Pattern::Kind::Binding) {
+            const int64_t slot = alloc(type_size(type));
+            emit("mov rsi, " + mem_rbp(address_slot));
+            if (is_record(type)) copy_rsi_to_frame(slot, type_size(type));
+            else { emit("mov rax, " + mem("rsi", 0)); emit("mov " + mem_rbp(slot) + ", rax"); }
+            scopes_.back()[pattern.value] = {type, slot, false};
+            return;
+        }
+        emit("mov rcx, " + mem_rbp(address_slot));
+        if (pattern.kind == Pattern::Kind::Integer) {
+            emit("movabs rax, " + pattern.value); emit("cmp " + mem("rcx", 0) + ", rax"); emit("jne " + failure); return;
+        }
+        if (pattern.kind == Pattern::Kind::Boolean) {
+            emit("cmp qword ptr " + mem("rcx", 0) + ", " + (pattern.value == "yes" ? "1" : "0")); emit("jne " + failure); return;
+        }
+        if (pattern.kind == Pattern::Kind::String) {
+            emit("mov rdi, " + mem("rcx", 0)); emit("lea rsi, [rip + " + add_string(pattern.value) + "]");
+            emit("call pp_str_eq@PLT"); emit("cmp rax, 0"); emit("je " + failure); return;
+        }
+        const Shape *shape = shapes_.at(type.name);
+        const ShapeLayout &shape_layout = layout(type.name);
+        emit("mov rax, " + mem("rcx", shape_layout.fields.at("__tag").offset));
+        emit("cmp rax, " + std::to_string(pattern.variant_index)); emit("jne " + failure);
+        for (std::size_t i = 0; i < pattern.children.size(); ++i) {
+            const FieldInfo &field = shape_layout.fields.at("__v" + std::to_string(pattern.variant_index) + "_" + std::to_string(i));
+            const int64_t child_address = alloc(8);
+            emit("mov rax, " + mem_rbp(address_slot));
+            if (field.offset) emit("add rax, " + std::to_string(field.offset));
+            emit("mov " + mem_rbp(child_address) + ", rax");
+            emit_pattern(pattern.children[i], shape->enum_variants[pattern.variant_index].payload[i], child_address, failure);
+        }
+    }
+
+    Type gen_match(const Expr &expression) {
+        const Type subject_type = gen_expression(*expression.children[0]);
+        const int64_t subject = alloc(type_size(subject_type));
+        if (is_record(subject_type)) { emit("mov rsi, rax"); copy_rsi_to_frame(subject, type_size(subject_type)); }
+        else emit("mov " + mem_rbp(subject) + ", rax");
+        const int64_t subject_address = alloc(8);
+        emit("lea rax, " + mem_rbp(subject)); emit("mov " + mem_rbp(subject_address) + ", rax");
+        const Type result_type = expression.inferred_type;
+        const int64_t result = result_type == Type::Void ? 0 : alloc(type_size(result_type));
+        const std::string end = new_label();
+        for (std::size_t i = 0; i < expression.match_patterns.size(); ++i) {
+            const std::string next = new_label();
+            scopes_.push_back({});
+            emit_pattern(expression.match_patterns[i], subject_type, subject_address, next);
+            const Type arm = gen_expression(*expression.children[i + 1]);
+            if (result_type != Type::Void) {
+                if (is_record(arm)) { emit("mov rsi, rax"); copy_rsi_to_frame(result, type_size(arm)); }
+                else emit("mov " + mem_rbp(result) + ", rax");
+            }
+            scopes_.pop_back();
+            emit("jmp " + end); label(next);
+        }
+        label(end);
+        if (result_type == Type::Void) emit("xor eax, eax");
+        else if (is_record(result_type)) emit("lea rax, " + mem_rbp(result));
+        else emit("mov rax, " + mem_rbp(result));
+        return result_type;
+    }
+
+    Type gen_propagate(const Expr &expression) {
+        const Type source_type = gen_expression(*expression.children[0]);
+        const Shape *source_shape = shapes_.at(source_type.name);
+        const Shape *result_shape = shapes_.at(current_result_.name);
+        const ShapeLayout &source_layout = layout(source_type.name);
+        const ShapeLayout &result_layout = layout(current_result_.name);
+        const std::size_t success = enum_variant_index(*source_shape, expression.enum_variant);
+        const std::string failure_name = expression.enum_variant == "Some" ? "None" : "Error";
+        const std::size_t source_failure = enum_variant_index(*source_shape, failure_name);
+        const std::size_t result_failure = enum_variant_index(*result_shape, failure_name);
+        const int64_t source_address = alloc(8);
+        emit("mov " + mem_rbp(source_address) + ", rax");
+        emit("mov rcx, rax"); emit("cmp qword ptr " + mem("rcx", source_layout.fields.at("__tag").offset) + ", " + std::to_string(success));
+        const std::string ok = new_label(); emit("je " + ok);
+        const int64_t failure = alloc(result_layout.size);
+        for (int64_t offset = 0; offset < result_layout.size; offset += 8)
+            emit("mov qword ptr " + mem_rbp(failure + offset) + ", 0");
+        emit("mov qword ptr " + mem_rbp(failure + result_layout.fields.at("__tag").offset) + ", " + std::to_string(result_failure));
+        if (!source_shape->enum_variants[source_failure].payload.empty()) {
+            const FieldInfo &from = source_layout.fields.at("__v" + std::to_string(source_failure) + "_0");
+            const FieldInfo &to = result_layout.fields.at("__v" + std::to_string(result_failure) + "_0");
+            emit("mov rcx, " + mem_rbp(source_address));
+            if (is_record(from.type)) {
+                emit("lea rsi, " + mem("rcx", from.offset)); copy_rsi_to_frame(failure + to.offset, type_size(from.type));
+            } else { emit("mov rax, " + mem("rcx", from.offset)); emit("mov " + mem_rbp(failure + to.offset) + ", rax"); }
+        }
+        emit("mov rcx, " + mem_rbp(args_ptr_off_)); emit("mov rdi, " + mem("rcx", 0));
+        emit("lea rsi, " + mem_rbp(failure)); copy_via_rdi_rsi(result_layout.size); emit("jmp " + ret_label_);
+        label(ok);
+        const FieldInfo &payload = source_layout.fields.at("__v" + std::to_string(success) + "_0");
+        emit("mov rax, " + mem_rbp(source_address));
+        if (payload.offset) emit("add rax, " + std::to_string(payload.offset));
+        if (!is_record(payload.type)) emit("mov rax, " + mem("rax", 0));
+        return payload.type;
     }
 
     Type gen_variable_load(const Expr &expression) {

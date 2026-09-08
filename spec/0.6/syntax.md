@@ -53,4 +53,4 @@ Postfix `?` propagates an `Option::None` or `Result::Error(error)` from a functi
 
 ## Implementation gates
 
-`0.6.0-dev.1` parses generic declaration headers and nested generic type spellings for tooling. Generic execution is enabled in Step 2. `enum`, `match` and `?` remain reserved until Step 3 and must produce a diagnostic rather than placeholder output.
+`0.6.0-dev.3` implements generic execution, deterministic specialization, algebraic enums, matching and `?` across semantic analysis, HIR, direct Linux x86-64 and portable C lowering.

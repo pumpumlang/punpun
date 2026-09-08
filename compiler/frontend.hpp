@@ -192,6 +192,15 @@ struct Type {
     bool operator!=(const Type &other) const { return !(*this == other); }
     static const Type Infer, Void, Int, Float, Bool, Str, Nums;
 };
+
+struct Pattern {
+    enum class Kind { Wildcard, Binding, Variant, Integer, String, Boolean } kind = Kind::Wildcard;
+    Token token;
+    std::string value;
+    std::vector<Pattern> children;
+    std::size_t variant_index = 0;
+    std::vector<Type> payload_types;
+};
 inline const Type Type::Infer{"inferred"};
 inline const Type Type::Void{"void"};
 inline const Type Type::Int{"int"};
@@ -217,7 +226,7 @@ inline Type pointee_type(const Type &type) {
 struct Expr {
     enum class Kind {
         Integer, Float, String, Boolean, Variable, Call, MethodCall, Unary, Binary,
-        Member, Index, List, SizeOf, AlignOf
+        Member, Index, List, SizeOf, AlignOf, EnumConstruct, Match, Propagate
     } kind;
     Token token;
     std::string value;
@@ -226,6 +235,9 @@ struct Expr {
     // children so semantic analysis can reorder named arguments once the
     // selected signature is known.
     std::vector<std::string> argument_names;
+    std::vector<Type> type_arguments;
+    std::vector<Pattern> match_patterns;
+    std::string enum_variant;
     Type inferred_type = Type::Infer;
 };
 
@@ -304,6 +316,19 @@ struct Contract {
     std::vector<ContractMethod> methods;
 };
 
+struct EnumVariant {
+    Token token;
+    std::string name;
+    std::vector<Type> payload;
+};
+
+struct EnumDecl {
+    Token token;
+    std::string name;
+    std::vector<GenericParameter> generic_parameters;
+    std::vector<EnumVariant> variants;
+};
+
 struct Shape {
     Token token;
     std::string name;
@@ -314,6 +339,8 @@ struct Shape {
     std::string initializer_name;    // lowered function name or empty
     std::vector<std::string> method_names;
     std::vector<std::string> contracts; // zero-cost compile-time conformance metadata
+    bool enum_type = false;
+    std::vector<EnumVariant> enum_variants;
 };
 
 struct Module {
@@ -322,6 +349,7 @@ struct Module {
     std::vector<Function> functions;
     std::vector<Shape> shapes;
     std::vector<Contract> contracts;
+    std::vector<EnumDecl> enums;
     std::vector<ForeignInjection> injections;
 };
 
@@ -343,7 +371,7 @@ class Parser {
             else if (match("bring")) module.imports.push_back(parse_legacy_import());
             else if (check("contract")) module.contracts.push_back(parse_contract());
             else if (check("struct") || check("object") || check("sealed")) parse_modern_shape(module);
-            else if (check("enum")) feature_pending(peek(), "algebraic enum declarations", "0.6 Step 3");
+            else if (check("enum")) module.enums.push_back(parse_enum());
             else if (match("shape")) module.shapes.push_back(parse_legacy_shape());
             else if (match("async")) {
                 if (!check("fn")) fail(peek(), "expected 'fn' after 'async'");
@@ -413,6 +441,35 @@ class Parser {
                                    "E0900", feature + " are reserved but not enabled",
                                    feature + " are reserved but not enabled",
                                    "This syntax is frozen for " + milestone + "; it is not executable yet."));
+    }
+
+    EnumDecl parse_enum() {
+        take("enum", "expected 'enum'");
+        EnumDecl result;
+        result.token = identifier("expected enum name");
+        result.name = result.token.text;
+        result.generic_parameters = parse_generic_parameters();
+        take("{", "expected '{' after enum name");
+        separators();
+        std::unordered_set<std::string> names;
+        while (!check("}") && !is_end()) {
+            EnumVariant variant;
+            variant.token = identifier("expected enum variant name");
+            variant.name = variant.token.text;
+            if (!names.insert(variant.name).second) fail(variant.token, "duplicate enum variant '" + variant.name + "'");
+            if (match("(")) {
+                if (!check(")")) {
+                    do variant.payload.push_back(parse_type()); while (match(","));
+                }
+                take(")", "expected ')' after variant payload");
+            }
+            result.variants.push_back(std::move(variant));
+            separators();
+        }
+        take("}", "expected '}' after enum declaration");
+        separators();
+        if (result.variants.empty()) fail(result.token, "enum must declare at least one variant");
+        return result;
     }
 
     static Type canonical_type(std::string name) {
@@ -839,7 +896,6 @@ class Parser {
 
     // ---- statements shared by both dialects -----------------------------
     Stmt parse_statement() {
-        if (check("match")) feature_pending(peek(), "exhaustive match expressions", "0.6 Step 3");
         if (check("let") || check("const")) {
             const Token keyword = tokens_[current_++];
             Stmt statement{Stmt::Kind::Variable, keyword};
@@ -1034,8 +1090,12 @@ class Parser {
                 access->children.push_back(parse_expression());
                 take("]", "expected ']' after index");
                 expression = std::move(access);
-            } else if (check("?")) {
-                feature_pending(peek(), "postfix Option/Result propagation", "0.6 Step 3");
+            } else if (match("?")) {
+                auto propagated = std::make_unique<Expr>();
+                propagated->kind = Expr::Kind::Propagate;
+                propagated->token = tokens_[current_ - 1];
+                propagated->children.push_back(std::move(expression));
+                expression = std::move(propagated);
             } else break;
         }
         return expression;
@@ -1048,8 +1108,7 @@ class Parser {
         expression->token = token;
         expression->value = token.text;
 
-        if (token.text == "match")
-            feature_pending(token, "exhaustive match expressions", "0.6 Step 3");
+        if (token.text == "match") return parse_match_expression(token);
 
         if (token.kind == TokenKind::Integer) expression->kind = Expr::Kind::Integer;
         else if (token.kind == TokenKind::Float) expression->kind = Expr::Kind::Float;
@@ -1065,6 +1124,16 @@ class Parser {
             expression->kind = token.text == "sizeof" ? Expr::Kind::SizeOf : Expr::Kind::AlignOf;
             expression->value = type.name;
         } else if (token.kind == TokenKind::Word) {
+            std::string qualified = token.text;
+            if (looks_like_generic_call()) {
+                take("<", "expected '<'");
+                do expression->type_arguments.push_back(parse_type()); while (match(","));
+                take_type_close("expected '>' after explicit type arguments");
+            }
+            while (match("::")) {
+                qualified += "::" + identifier("expected qualified name segment").text;
+            }
+            expression->value = qualified;
             if (match("(")) {
                 expression->kind = Expr::Kind::Call;
                 parse_call_arguments(*expression, false);
@@ -1080,6 +1149,72 @@ class Parser {
             take(")", "expected ')' after expression");
         } else fail(token, "expected expression");
         return expression;
+    }
+
+    bool looks_like_generic_call() const {
+        if (!check("<")) return false;
+        int depth = 0;
+        for (std::size_t i = current_; i < tokens_.size(); ++i) {
+            const std::string &text = tokens_[i].text;
+            if (text == "<") ++depth;
+            else if (text == ">") {
+                if (--depth == 0) return i + 1 < tokens_.size() &&
+                    (tokens_[i + 1].text == "(" || tokens_[i + 1].text == "::");
+            } else if (text == ">>") {
+                depth -= 2;
+                if (depth <= 0) return i + 1 < tokens_.size() &&
+                    (tokens_[i + 1].text == "(" || tokens_[i + 1].text == "::");
+            } else if (depth > 0 && (text == ";" || text == "{" || text == "=" || text == "=>")) return false;
+        }
+        return false;
+    }
+
+    Pattern parse_pattern() {
+        Pattern pattern;
+        pattern.token = peek();
+        if (match("_")) { pattern.kind = Pattern::Kind::Wildcard; pattern.value = "_"; return pattern; }
+        if (peek().kind == TokenKind::Integer) {
+            pattern.kind = Pattern::Kind::Integer; pattern.value = tokens_[current_++].text; return pattern;
+        }
+        if (peek().kind == TokenKind::String) {
+            pattern.kind = Pattern::Kind::String; pattern.value = tokens_[current_++].text; return pattern;
+        }
+        if (check("true") || check("false") || check("yes") || check("no")) {
+            pattern.kind = Pattern::Kind::Boolean;
+            if (match("true") || match("yes")) pattern.value = "yes";
+            else { ++current_; pattern.value = "no"; }
+            return pattern;
+        }
+        Token first = identifier("expected pattern");
+        std::string name = first.text;
+        while (match("::")) name += "::" + identifier("expected variant name").text;
+        const bool variant = name.find("::") != std::string::npos || (!name.empty() && std::isupper(static_cast<unsigned char>(name[0])));
+        pattern.kind = variant ? Pattern::Kind::Variant : Pattern::Kind::Binding;
+        pattern.value = name;
+        if (match("(")) {
+            pattern.kind = Pattern::Kind::Variant;
+            if (!check(")")) do pattern.children.push_back(parse_pattern()); while (match(","));
+            take(")", "expected ')' after variant pattern");
+        }
+        return pattern;
+    }
+
+    std::unique_ptr<Expr> parse_match_expression(const Token &token) {
+        auto result = std::make_unique<Expr>();
+        result->kind = Expr::Kind::Match;
+        result->token = token;
+        result->children.push_back(parse_expression());
+        take("{", "expected '{' after match value");
+        separators();
+        while (!check("}") && !is_end()) {
+            result->match_patterns.push_back(parse_pattern());
+            take("=>", "expected '=>' after match pattern");
+            result->children.push_back(parse_expression());
+            separators();
+        }
+        take("}", "expected '}' after match expression");
+        if (result->match_patterns.empty()) fail(token, "match must contain at least one arm");
+        return result;
     }
 };
 

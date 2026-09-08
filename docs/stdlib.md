@@ -1,5 +1,12 @@
 # Standard Library
 
+## Generic sum types
+
+`Option<T>` and `Result<T,E>` are available from the prelude. Import
+`std::option` for `option_is_some`, `option_is_none`, and `option_unwrap_or`.
+Import `std::result` for `result_is_ok`, `result_is_error`, and
+`result_unwrap_or`. The `*_unwrap_or` helpers require a `Copy` success type.
+
 The `stdlib/` import root is included automatically. Modules are ordinary Punpun
 source, with no entry point or global constants. Import only what you need:
 

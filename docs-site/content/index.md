@@ -2,7 +2,7 @@
 
 PunPun 0.6 development is an ahead-of-time native programming language project focused on fast development builds, object/value types, explicit low-level access, and compiler-powered editor tooling.
 
-Step 1 establishes canonical versioning, frozen generic/enum/ownership rules, parser scaffolding and compatibility gates. Frozen design is not labeled as implemented execution.
+Steps 2 and 3 add executable generics, deterministic monomorphization, algebraic enums, exhaustive patterns, `Option`, `Result`, and `?` on both Linux backends.
 
 ## First program
 
@@ -31,4 +31,4 @@ pp run
 - Explicit `@inject->c` native interoperability with cached foreign objects.
 - A PunPun-written compiler with verified stage-one/stage-two fixed-point output.
 
-Advanced generics, full async/await state-machine lowering, dynamic contract dispatch, and the remote PPX service remain beta work rather than claimed finished features.
+Full move/drop analysis, async state-machine lowering, dynamic contract dispatch, and the remote PPX service remain beta work rather than claimed finished features.

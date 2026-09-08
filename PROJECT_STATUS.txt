@@ -1,10 +1,10 @@
-PunPun 0.6 development snapshot — Step 1
+PunPun 0.6 development snapshot — Steps 2 and 3
 
 Current milestone:
 - canonical repository version source and generated consistency checks
 - frozen 0.6 type, generic, enum, nullability, ownership and compatibility specifications
-- generic declaration/type parser scaffolding for tooling
-- explicit E0900 gates for reserved enum, match and propagation syntax
+- executable generic calls/types/methods, constraints and deterministic monomorphization
+- executable algebraic enums, nested destructuring, exhaustive matching, Option/Result and postfix ?
 - 0.5 compatibility fixtures retained
 
 Expected local release verification:
@@ -22,4 +22,4 @@ Platform truthfulness:
 - Windows WiX sources are packaged locally; MSI/setup binaries and install/upgrade/uninstall claims require the Windows CI job.
 
 Next milestone:
-- Step 2 implements generic calls, inference, constraints, monomorphization and specialization caching.
+- Step 4 implements full move-state dataflow, lexical Drop, stronger borrows and slices.

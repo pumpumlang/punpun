@@ -5,7 +5,9 @@
 #include <cmath>
 #include <limits>
 #include <cstdint>
+#include <deque>
 #include <optional>
+#include <sstream>
 #include <string>
 #include <unordered_map>
 #include <unordered_set>
@@ -45,7 +47,10 @@ class SemanticAnalyzer {
     void analyze() {
         collect_builtins();
         collect_contracts();
+        collect_generic_declarations();
+        materialize_referenced_types();
         collect_shapes();
+        validate_materialized_constraints();
         collect_functions();
         validate_contracts();
         validate_conformance();
@@ -56,7 +61,25 @@ class SemanticAnalyzer {
             validate_shape(*shape);
         }
         for (Module &module : modules_)
-            for (Function &function : module.functions) analyze_function(function);
+            for (Function &function : module.functions)
+                if (function.generic_parameters.empty() && !generic_owner(function.owner_type)) analyze_function(function);
+        for (std::size_t i = 0; i < specializations_.size(); ++i) analyze_function(specializations_[i]);
+        for (Module &module : modules_) {
+            module.functions.erase(std::remove_if(module.functions.begin(), module.functions.end(), [&](const Function &function) {
+                return !function.generic_parameters.empty() || generic_owner(function.owner_type);
+            }), module.functions.end());
+            module.shapes.erase(std::remove_if(module.shapes.begin(), module.shapes.end(), [](const Shape &shape) {
+                return !shape.generic_parameters.empty();
+            }), module.shapes.end());
+            module.enums.clear();
+        }
+        if (!materialized_shapes_.empty() || !specializations_.empty()) {
+            Module generated;
+            generated.file = modules_.empty() ? fs::path{} : modules_.front().file;
+            for (Shape &shape : materialized_shapes_) generated.shapes.push_back(std::move(shape));
+            for (Function &function : specializations_) generated.functions.push_back(std::move(function));
+            modules_.push_back(std::move(generated));
+        }
     }
 
     const std::unordered_map<std::string, SemanticSignature> &signatures() const { return signatures_; }
@@ -67,6 +90,17 @@ class SemanticAnalyzer {
     std::unordered_map<std::string, SemanticSignature> signatures_;
     std::unordered_map<std::string, const Shape *> shapes_;
     std::unordered_map<std::string, const Contract *> contracts_;
+    std::unordered_map<std::string, const Function *> generic_functions_;
+    std::unordered_map<std::string, const Shape *> generic_shapes_;
+    std::unordered_map<std::string, const EnumDecl *> enum_templates_;
+    std::deque<EnumDecl> builtin_enums_;
+    std::deque<Shape> materialized_shapes_;
+    std::deque<Function> specializations_;
+    std::deque<Function> owned_generic_functions_;
+    std::unordered_set<std::string> specialization_keys_;
+    std::unordered_set<std::string> materialized_names_;
+    bool shape_map_ready_ = false;
+    bool function_map_ready_ = false;
     std::unordered_map<std::string, int> shape_state_;
     std::vector<std::unordered_map<std::string, SemanticVariable>> scopes_;
     Type current_result_ = Type::Void;
@@ -74,6 +108,55 @@ class SemanticAnalyzer {
     const Function *current_function_ = nullptr;
     int loop_depth_ = 0;
     int unsafe_depth_ = 0;
+    Type expected_type_ = Type::Infer;
+    std::size_t specialization_work_ = 0;
+
+    struct TypeParts { std::string base; std::vector<Type> arguments; };
+
+    static TypeParts split_type(const Type &type) {
+        TypeParts result{type.name, {}};
+        const std::size_t open = type.name.find('<');
+        if (open == std::string::npos || type.name.back() != '>') return result;
+        result.base = type.name.substr(0, open);
+        std::size_t start = open + 1;
+        int depth = 0;
+        for (std::size_t i = start; i + 1 < type.name.size(); ++i) {
+            if (type.name[i] == '<') ++depth;
+            else if (type.name[i] == '>') --depth;
+            else if (type.name[i] == ',' && depth == 0) {
+                result.arguments.push_back(Type{type.name.substr(start, i - start)});
+                start = i + 1;
+            }
+        }
+        result.arguments.push_back(Type{type.name.substr(start, type.name.size() - start - 1)});
+        return result;
+    }
+
+    static std::string constructed_name(const std::string &base, const std::vector<Type> &arguments) {
+        if (arguments.empty()) return base;
+        std::string result = base + "<";
+        for (std::size_t i = 0; i < arguments.size(); ++i) {
+            if (i) result += ",";
+            result += arguments[i].name;
+        }
+        return result + ">";
+    }
+
+    static Type substitute_type(Type type, const std::unordered_map<std::string, Type> &bindings) {
+        if (auto found = bindings.find(type.name); found != bindings.end()) return found->second;
+        if (is_pointer_like_type(type)) {
+            const Type inner = substitute_type(pointee_type(type), bindings);
+            if (is_mut_reference_type(type)) return Type{"&mut " + inner.name};
+            return Type{type.name.substr(0, 1) + inner.name};
+        }
+        const TypeParts parts = split_type(type);
+        if (parts.arguments.empty()) return type;
+        std::vector<Type> arguments;
+        for (Type argument : parts.arguments) arguments.push_back(substitute_type(argument, bindings));
+        return Type{constructed_name(parts.base, arguments)};
+    }
+
+    bool generic_owner(const std::string &owner) const { return !owner.empty() && generic_shapes_.count(owner); }
 
     [[noreturn]] static void fail(const Token &token, const std::string &message,
                                   const std::string &help = {}, const std::string &code = "E1000") {
@@ -140,12 +223,198 @@ class SemanticAnalyzer {
         }
     }
 
+    void add_builtin_enum_templates() {
+        const Token token = builtin_token();
+        EnumDecl option;
+        option.token = token; option.name = "Option";
+        option.generic_parameters.push_back(GenericParameter{token, "T", {}});
+        option.variants.push_back(EnumVariant{token, "None", {}});
+        option.variants.push_back(EnumVariant{token, "Some", {Type{"T"}}});
+        builtin_enums_.push_back(std::move(option));
+
+        EnumDecl result;
+        result.token = token; result.name = "Result";
+        result.generic_parameters.push_back(GenericParameter{token, "T", {}});
+        result.generic_parameters.push_back(GenericParameter{token, "E", {}});
+        result.variants.push_back(EnumVariant{token, "Ok", {Type{"T"}}});
+        result.variants.push_back(EnumVariant{token, "Error", {Type{"E"}}});
+        builtin_enums_.push_back(std::move(result));
+        for (const EnumDecl &declaration : builtin_enums_) enum_templates_[declaration.name] = &declaration;
+    }
+
+    void collect_generic_declarations() {
+        add_builtin_enum_templates();
+        for (const Module &module : modules_) {
+            for (const Shape &shape : module.shapes) {
+                if (!shape.generic_parameters.empty()) generic_shapes_[shape.name] = &shape;
+            }
+            for (const EnumDecl &declaration : module.enums) {
+                if (enum_templates_.count(declaration.name) || generic_shapes_.count(declaration.name) || contracts_.count(declaration.name))
+                    fail(declaration.token, "duplicate enum/type/contract name '" + declaration.name + "'", {}, "E0202");
+                enum_templates_[declaration.name] = &declaration;
+            }
+            for (const Function &function : module.functions) {
+                if (!function.generic_parameters.empty() || generic_owner(function.owner_type)) {
+                    if (generic_functions_.count(function.name))
+                        fail(function.token, "duplicate generic function '" + function.name + "'", {}, "E0202");
+                    generic_functions_[function.name] = &function;
+                }
+            }
+        }
+        for (const auto &[name, shape] : generic_shapes_) {
+            if (enum_templates_.count(name) || contracts_.count(name))
+                fail(shape->token, "duplicate generic type/enum/contract name '" + name + "'", {}, "E0202");
+        }
+    }
+
+    void ensure_concrete_type(Type type) {
+        if (is_task_type(type)) { ensure_concrete_type(task_result_type(type)); return; }
+        if (is_pointer_like_type(type)) { ensure_concrete_type(pointee_type(type)); return; }
+        const TypeParts parts = split_type(type);
+        for (Type argument : parts.arguments) ensure_concrete_type(argument);
+        if (enum_templates_.count(parts.base)) materialize_enum(type, *enum_templates_.at(parts.base), parts.arguments);
+        else if (generic_shapes_.count(parts.base)) materialize_shape(type, *generic_shapes_.at(parts.base), parts.arguments);
+    }
+
+    std::unordered_map<std::string, Type> type_bindings(const std::vector<GenericParameter> &parameters,
+                                                        const std::vector<Type> &arguments,
+                                                        const Token &token) const {
+        if (parameters.size() != arguments.size())
+            fail(token, "generic declaration expects " + std::to_string(parameters.size()) +
+                 " type argument(s), got " + std::to_string(arguments.size()), {}, "E1600");
+        std::unordered_map<std::string, Type> result;
+        for (std::size_t i = 0; i < parameters.size(); ++i) result[parameters[i].name] = arguments[i];
+        return result;
+    }
+
+    void materialize_enum(Type concrete, const EnumDecl &declaration, const std::vector<Type> &arguments) {
+        if (materialized_names_.count(concrete.name)) return;
+        materialized_names_.insert(concrete.name);
+        const auto bindings = type_bindings(declaration.generic_parameters, arguments, declaration.token);
+        Shape shape;
+        shape.token = declaration.token;
+        shape.name = concrete.name;
+        shape.enum_type = true;
+        Parameter tag{declaration.token, "__tag", Type::Int, true, Visibility::Private, {}};
+        shape.fields.push_back(std::move(tag));
+        shape.enum_variants = declaration.variants;
+        for (std::size_t i = 0; i < shape.enum_variants.size(); ++i) {
+            EnumVariant &variant = shape.enum_variants[i];
+            for (std::size_t j = 0; j < variant.payload.size(); ++j) {
+                variant.payload[j] = substitute_type(variant.payload[j], bindings);
+                ensure_concrete_type(variant.payload[j]);
+                shape.fields.push_back(Parameter{variant.token, "__v" + std::to_string(i) + "_" + std::to_string(j),
+                                                 variant.payload[j], true, Visibility::Private, {}});
+            }
+        }
+        materialized_shapes_.push_back(std::move(shape));
+        if (shape_map_ready_) shapes_[materialized_shapes_.back().name] = &materialized_shapes_.back();
+    }
+
+    void materialize_shape(Type concrete, const Shape &declaration, const std::vector<Type> &arguments) {
+        if (materialized_names_.count(concrete.name)) return;
+        const auto bindings = type_bindings(declaration.generic_parameters, arguments, declaration.token);
+        Shape shape = declaration;
+        shape.name = concrete.name;
+        shape.generic_parameters.clear();
+        shape.method_names.clear();
+        shape.initializer_name.clear();
+        materialized_names_.insert(shape.name);
+        for (Parameter &field : shape.fields) {
+            field.type = substitute_type(field.type, bindings);
+            ensure_concrete_type(field.type);
+        }
+        materialized_shapes_.push_back(std::move(shape));
+        Shape &materialized = materialized_shapes_.back();
+        if (shape_map_ready_) shapes_[materialized.name] = &materialized;
+        for (const Module &module : modules_) for (const Function &source : module.functions) {
+            if (source.owner_type != declaration.name) continue;
+            Function method = clone_function(source);
+            method.owner_type = concrete.name;
+            method.name = concrete.name + "::" + method.source_name;
+            method.result = substitute_type(method.result, bindings);
+            for (Parameter &parameter : method.parameters) {
+                parameter.type = substitute_type(parameter.type, bindings);
+                if (parameter.name == "self") {
+                    if (is_mut_reference_type(parameter.type)) parameter.type = Type{"&mut " + concrete.name};
+                    else if (is_reference_type(parameter.type)) parameter.type = Type{"&" + concrete.name};
+                    else parameter.type = concrete;
+                }
+                if (parameter.default_value) substitute_expression(*parameter.default_value, bindings);
+            }
+            for (Stmt &statement : method.body) substitute_statement(statement, bindings);
+            materialized.method_names.push_back(method.name);
+            if (method.is_initializer) materialized.initializer_name = method.name;
+            if (method.generic_parameters.empty()) {
+                specializations_.push_back(std::move(method));
+                if (function_map_ready_) register_concrete_function(specializations_.back());
+            }
+            else {
+                owned_generic_functions_.push_back(std::move(method));
+                generic_functions_[owned_generic_functions_.back().name] = &owned_generic_functions_.back();
+            }
+        }
+    }
+
+    void scan_expression_types(const Expr &expression) {
+        for (Type type : expression.type_arguments) ensure_concrete_type(type);
+        if (expression.kind == Expr::Kind::SizeOf || expression.kind == Expr::Kind::AlignOf)
+            ensure_concrete_type(Type{expression.value});
+        for (const auto &child : expression.children) scan_expression_types(*child);
+    }
+
+    void scan_statement_types(const Stmt &statement) {
+        if (statement.declared_type != Type::Infer) ensure_concrete_type(statement.declared_type);
+        if (statement.expression) scan_expression_types(*statement.expression);
+        if (statement.target) scan_expression_types(*statement.target);
+        if (statement.upper) scan_expression_types(*statement.upper);
+        for (const Stmt &child : statement.body) scan_statement_types(child);
+        for (const Stmt &child : statement.alternative) scan_statement_types(child);
+    }
+
+    void materialize_referenced_types() {
+        for (const auto &[name, declaration] : enum_templates_)
+            if (declaration->generic_parameters.empty()) materialize_enum(Type{name}, *declaration, {});
+        for (const Module &module : modules_) {
+            for (const Shape &shape : module.shapes) if (shape.generic_parameters.empty())
+                for (const Parameter &field : shape.fields) ensure_concrete_type(field.type);
+            for (const Function &function : module.functions) if (function.generic_parameters.empty() && !generic_owner(function.owner_type)) {
+                ensure_concrete_type(function.result);
+                for (const Parameter &parameter : function.parameters) ensure_concrete_type(parameter.type);
+                for (const Stmt &statement : function.body) scan_statement_types(statement);
+            }
+        }
+    }
+
     void collect_shapes() {
         for (const Module &module : modules_) {
             for (const Shape &shape : module.shapes) {
+                if (!shape.generic_parameters.empty()) continue;
                 if (shapes_.count(shape.name) || contracts_.count(shape.name) || signatures_.count(shape.name))
                     fail(shape.token, "duplicate type/contract or built-in name '" + shape.name + "'");
                 shapes_[shape.name] = &shape;
+            }
+        }
+        for (const Shape &shape : materialized_shapes_) {
+            if (shapes_.count(shape.name)) fail(shape.token, "duplicate materialized type '" + shape.name + "'", {}, "E0202");
+            shapes_[shape.name] = &shape;
+        }
+        shape_map_ready_ = true;
+    }
+
+    void validate_materialized_constraints() {
+        for (const Shape &shape : materialized_shapes_) {
+            const TypeParts parts = split_type(Type{shape.name});
+            auto source = generic_shapes_.find(parts.base);
+            if (source == generic_shapes_.end()) continue;
+            const auto bindings = type_bindings(source->second->generic_parameters, parts.arguments, shape.token);
+            for (std::size_t i = 0; i < source->second->generic_parameters.size(); ++i) {
+                const GenericParameter &parameter = source->second->generic_parameters[i];
+                for (Type constraint : parameter.constraints) {
+                    constraint = substitute_type(constraint, bindings);
+                    if (!satisfies_constraint(parts.arguments[i], constraint))
+                        fail(shape.token, "type '" + parts.arguments[i].name + "' does not satisfy constraint '" + constraint.name + "'", {}, "E1604");
+                }
             }
         }
     }
@@ -153,41 +422,48 @@ class SemanticAnalyzer {
     void collect_functions() {
         for (const Module &module : modules_) {
             for (const Function &function : module.functions) {
-                if (signatures_.count(function.name) || (!function.is_method && shapes_.count(function.name)))
-                    fail(function.token, "duplicate function '" + function.name + "'");
-                validate_type(function.result, function.token, true);
-                SemanticSignature signature{{}, {}, {}, function.result, function.token, false,
-                                            function.owner_type, function.self_mutable,
-                                            function.is_initializer, function.visibility};
-                signature.is_async = function.is_async;
-                if (function.is_async) {
-                    if (function.is_initializer)
-                        fail(function.token, "constructors cannot be async", {}, "E1500");
-                    if (function.name == "main")
-                        fail(function.token, "the program entry function cannot be async",
-                             "use launch { await work(); } as the root executor", "E1500");
-                    if (auto result_shape = shapes_.find(function.result.name);
-                        result_shape != shapes_.end() && !result_shape->second->reference_type)
-                        fail(function.token, "async functions cannot yet return by-value structs",
-                             "return a scalar, object/reference value, or void in this beta", "E1501");
-                }
-                for (const Parameter &parameter : function.parameters) {
-                    validate_type(parameter.type, parameter.token);
-                    if (function.is_async && (is_pointer_like_type(parameter.type) || parameter.type == Type::Nums || is_object(parameter.type)))
-                        fail(parameter.token, "async parameters must be independently owned values in this beta",
-                             "references, raw pointers, object identities, and nums handles need Send/ownership analysis before crossing task boundaries", "E1502");
-                    signature.parameters.push_back(parameter.type);
-                    signature.parameter_names.push_back(parameter.name);
-                    signature.defaults.push_back(parameter.default_value);
-                }
-                signatures_[function.name] = std::move(signature);
+                if (!function.generic_parameters.empty() || generic_owner(function.owner_type)) continue;
+                register_concrete_function(function);
             }
         }
+        for (const Function &function : specializations_)
+            if (!signatures_.count(function.name)) register_concrete_function(function);
+        function_map_ready_ = true;
     }
 
-    void validate_contracts() const {
+    void register_concrete_function(const Function &function) {
+        if (signatures_.count(function.name) || (!function.is_method && shapes_.count(function.name)))
+            fail(function.token, "duplicate function '" + function.name + "'");
+        validate_type(function.result, function.token, true);
+        SemanticSignature signature{{}, {}, {}, function.result, function.token, false,
+                                    function.owner_type, function.self_mutable,
+                                    function.is_initializer, function.visibility};
+        signature.is_async = function.is_async;
+        if (function.is_async) {
+            if (function.is_initializer) fail(function.token, "constructors cannot be async", {}, "E1500");
+            if (function.name == "main") fail(function.token, "the program entry function cannot be async",
+                                               "use launch { await work(); } as the root executor", "E1500");
+            if (auto result_shape = shapes_.find(function.result.name);
+                result_shape != shapes_.end() && !result_shape->second->reference_type)
+                fail(function.token, "async functions cannot yet return by-value structs",
+                     "return a scalar, object/reference value, or void in this beta", "E1501");
+        }
+        for (const Parameter &parameter : function.parameters) {
+            validate_type(parameter.type, parameter.token);
+            if (function.is_async && (is_pointer_like_type(parameter.type) || parameter.type == Type::Nums || is_object(parameter.type)))
+                fail(parameter.token, "async parameters must be independently owned values in this beta",
+                     "references, raw pointers, object identities, and nums handles need Send/ownership analysis before crossing task boundaries", "E1502");
+            signature.parameters.push_back(parameter.type);
+            signature.parameter_names.push_back(parameter.name);
+            signature.defaults.push_back(parameter.default_value);
+        }
+        signatures_[function.name] = std::move(signature);
+    }
+
+    void validate_contracts() {
         for (const auto &[name, contract] : contracts_) {
             (void)name;
+            if (!contract->generic_parameters.empty()) continue;
             for (const ContractMethod &method : contract->methods) {
                 validate_type(method.result, method.token, true);
                 for (const Parameter &parameter : method.parameters) validate_type(parameter.type, parameter.token);
@@ -254,7 +530,8 @@ class SemanticAnalyzer {
             fail(main->second.token, "invalid main signature; expected fn main() or fn main() -> i64");
     }
 
-    void validate_type(Type type, const Token &token, bool allow_void = false) const {
+    void validate_type(Type type, const Token &token, bool allow_void = false) {
+        ensure_concrete_type(type);
         if (is_task_type(type)) {
             validate_type(task_result_type(type), token, true);
             return;
@@ -455,7 +732,8 @@ class SemanticAnalyzer {
             case Stmt::Kind::Variable: {
                 if (scopes_.back().count(statement.name))
                     fail(statement.token, "duplicate variable '" + statement.name + "' in this scope");
-                const Type value = expression_type(*statement.expression);
+                if (statement.declared_type != Type::Infer) ensure_concrete_type(statement.declared_type);
+                const Type value = expression_type_as(*statement.expression, statement.declared_type);
                 const Type type = statement.declared_type == Type::Infer ? value : statement.declared_type;
                 validate_type(type, statement.token);
                 require(value, type, statement.expression->token, "initializer");
@@ -505,7 +783,7 @@ class SemanticAnalyzer {
             case Stmt::Kind::Return:
                 if (!statement.expression) require(Type::Void, current_result_, statement.token, "return");
                 else {
-                    const Type value = expression_type(*statement.expression);
+                    const Type value = expression_type_as(*statement.expression, current_result_);
                     require(value, current_result_, statement.expression->token, "return");
                     if (is_reference_type(value) && statement.expression->kind == Expr::Kind::Unary &&
                         (statement.expression->value == "&" || statement.expression->value == "&mut") &&
@@ -554,6 +832,15 @@ class SemanticAnalyzer {
         return inferred;
     }
 
+    Type expression_type_as(Expr &expression, Type expected) {
+        if (expected == Type::Infer) return expression_type(expression);
+        const Type previous = expected_type_;
+        expected_type_ = expected;
+        const Type result = expression_type(expression);
+        expected_type_ = previous;
+        return result;
+    }
+
     Type infer_expression_type(Expr &expression) {
         switch (expression.kind) {
             case Expr::Kind::Integer:
@@ -566,6 +853,11 @@ class SemanticAnalyzer {
             case Expr::Kind::String: return Type::Str;
             case Expr::Kind::Boolean: return Type::Bool;
             case Expr::Kind::Variable: {
+                if (const std::size_t separator = expression.value.rfind("::"); separator != std::string::npos) {
+                    const std::string owner = expression.value.substr(0, separator);
+                    if (enum_templates_.count(split_type(Type{owner}).base))
+                        return enum_constructor_type(expression, owner, expression.value.substr(separator + 2));
+                }
                 const auto variable = lookup(expression.value);
                 if (!variable) fail(expression.token, "unknown name '" + expression.value + "'", name_help(expression.value), "E0201");
                 if (variable->moved)
@@ -587,6 +879,12 @@ class SemanticAnalyzer {
                 return call_type(expression);
             case Expr::Kind::MethodCall:
                 return method_call_type(expression);
+            case Expr::Kind::EnumConstruct:
+                throw Error("internal error: enum constructor was analyzed twice");
+            case Expr::Kind::Match:
+                return match_type(expression);
+            case Expr::Kind::Propagate:
+                return propagate_type(expression);
             case Expr::Kind::SizeOf:
             case Expr::Kind::AlignOf:
                 validate_type(Type{expression.value}, expression.token);
@@ -692,7 +990,400 @@ class SemanticAnalyzer {
         fail(expression.token, "address-of requires an addressable variable, field, or dereference", {}, "E0700");
     }
 
+    static bool generic_parameter_named(const Function &function, const std::string &name) {
+        return std::any_of(function.generic_parameters.begin(), function.generic_parameters.end(),
+                           [&](const GenericParameter &parameter) { return parameter.name == name; });
+    }
+
+    static bool infer_binding(Type pattern, Type actual, const Function &function,
+                              std::unordered_map<std::string, Type> &bindings) {
+        if (generic_parameter_named(function, pattern.name)) {
+            auto found = bindings.find(pattern.name);
+            if (found == bindings.end()) { bindings[pattern.name] = actual; return true; }
+            return found->second == actual;
+        }
+        if (is_pointer_like_type(pattern) || is_pointer_like_type(actual)) {
+            if (is_mut_reference_type(pattern) != is_mut_reference_type(actual) ||
+                is_reference_type(pattern) != is_reference_type(actual) ||
+                is_raw_pointer_type(pattern) != is_raw_pointer_type(actual)) return false;
+            return infer_binding(pointee_type(pattern), pointee_type(actual), function, bindings);
+        }
+        const TypeParts left = split_type(pattern), right = split_type(actual);
+        if (left.base != right.base || left.arguments.size() != right.arguments.size()) return false;
+        if (left.arguments.empty()) return pattern == actual;
+        for (std::size_t i = 0; i < left.arguments.size(); ++i)
+            if (!infer_binding(left.arguments[i], right.arguments[i], function, bindings)) return false;
+        return true;
+    }
+
+    bool satisfies_constraint(Type actual, Type constraint) const {
+        const TypeParts parts = split_type(constraint);
+        if (parts.base == "Copy") {
+            if (actual == Type::Int || actual == Type::Float || actual == Type::Bool || actual == Type::Str || is_pointer_like_type(actual)) return true;
+            auto shape = shapes_.find(actual.name);
+            if (shape == shapes_.end() || shape->second->reference_type) return false;
+            for (const Parameter &field : shape->second->fields)
+                if (!satisfies_constraint(field.type, Type{"Copy"})) return false;
+            return true;
+        }
+        if (parts.base == "Comparable" || parts.base == "Equatable")
+            return actual == Type::Int || actual == Type::Float || actual == Type::Bool || actual == Type::Str || is_pointer_like_type(actual) || is_object(actual);
+        auto shape = shapes_.find(actual.name);
+        if (shape == shapes_.end()) return false;
+        return std::any_of(shape->second->contracts.begin(), shape->second->contracts.end(),
+                           [&](const std::string &name) { return split_type(Type{name}).base == parts.base; });
+    }
+
+    static std::string specialization_name(const std::string &name, const std::vector<Type> &arguments) {
+        std::string result = name + "$";
+        for (const Type &argument : arguments)
+            result += std::to_string(argument.name.size()) + "_" + argument.name + "$";
+        return result;
+    }
+
+    static Stmt clone_statement(const Stmt &source) {
+        Stmt result{source.kind, source.token};
+        result.name = source.name;
+        result.declared_type = source.declared_type;
+        result.mutable_value = source.mutable_value;
+        result.constant_value = source.constant_value;
+        result.assignment_op = source.assignment_op;
+        if (source.expression) result.expression = clone_expression(*source.expression);
+        if (source.target) result.target = clone_expression(*source.target);
+        if (source.upper) result.upper = clone_expression(*source.upper);
+        for (const Stmt &child : source.body) result.body.push_back(clone_statement(child));
+        for (const Stmt &child : source.alternative) result.alternative.push_back(clone_statement(child));
+        return result;
+    }
+
+    static Function clone_function(const Function &source) {
+        Function result;
+        result.token = source.token; result.name = source.name; result.source_name = source.source_name;
+        result.owner_type = source.owner_type; result.generic_parameters = source.generic_parameters;
+        result.result = source.result; result.is_method = source.is_method; result.is_initializer = source.is_initializer;
+        result.self_mutable = source.self_mutable; result.visibility = source.visibility;
+        result.is_extern_native = source.is_extern_native; result.is_async = source.is_async; result.native_symbol = source.native_symbol;
+        for (const Parameter &parameter : source.parameters) {
+            Parameter copy = parameter;
+            if (parameter.default_value) copy.default_value = std::shared_ptr<Expr>(clone_expression(*parameter.default_value).release());
+            result.parameters.push_back(std::move(copy));
+        }
+        for (const Stmt &statement : source.body) result.body.push_back(clone_statement(statement));
+        return result;
+    }
+
+    static void substitute_expression(Expr &expression, const std::unordered_map<std::string, Type> &bindings) {
+        for (Type &type : expression.type_arguments) type = substitute_type(type, bindings);
+        if (expression.kind == Expr::Kind::SizeOf || expression.kind == Expr::Kind::AlignOf)
+            expression.value = substitute_type(Type{expression.value}, bindings).name;
+        for (auto &child : expression.children) substitute_expression(*child, bindings);
+    }
+
+    static void substitute_statement(Stmt &statement, const std::unordered_map<std::string, Type> &bindings) {
+        statement.declared_type = substitute_type(statement.declared_type, bindings);
+        if (statement.expression) substitute_expression(*statement.expression, bindings);
+        if (statement.target) substitute_expression(*statement.target, bindings);
+        if (statement.upper) substitute_expression(*statement.upper, bindings);
+        for (Stmt &child : statement.body) substitute_statement(child, bindings);
+        for (Stmt &child : statement.alternative) substitute_statement(child, bindings);
+    }
+
+    Type specialize_generic_call(Expr &expression, const Function &function, std::size_t self_count) {
+        SemanticSignature pattern{{}, {}, {}, function.result, function.token, false, function.owner_type,
+                                  function.self_mutable, function.is_initializer, function.visibility, function.is_async};
+        for (const Parameter &parameter : function.parameters) {
+            pattern.parameters.push_back(parameter.type); pattern.parameter_names.push_back(parameter.name); pattern.defaults.push_back(parameter.default_value);
+        }
+        normalize_call_arguments(expression, pattern, self_count, self_count);
+        if (expression.children.size() != pattern.parameters.size())
+            fail(expression.token, "generic call expects " + std::to_string(pattern.parameters.size() - self_count) +
+                 " argument(s), got " + std::to_string(expression.children.size() - self_count), {}, "E1601");
+
+        std::unordered_map<std::string, Type> bindings;
+        if (!expression.type_arguments.empty()) {
+            if (expression.type_arguments.size() != function.generic_parameters.size())
+                fail(expression.token, "explicit generic call supplies the wrong number of type arguments", {}, "E1600");
+            for (std::size_t i = 0; i < expression.type_arguments.size(); ++i)
+                bindings[function.generic_parameters[i].name] = expression.type_arguments[i];
+        }
+        for (std::size_t i = self_count; i < expression.children.size(); ++i) {
+            const Type actual = expression_type(*expression.children[i]);
+            if (!infer_binding(pattern.parameters[i], actual, function, bindings))
+                fail(expression.children[i]->token, "generic argument inference conflicts for parameter '" +
+                     pattern.parameter_names[i] + "'", {}, "E1602");
+        }
+        if (expected_type_ != Type::Infer) (void)infer_binding(function.result, expected_type_, function, bindings);
+
+        std::vector<Type> arguments;
+        for (const GenericParameter &parameter : function.generic_parameters) {
+            auto found = bindings.find(parameter.name);
+            if (found == bindings.end()) fail(expression.token, "cannot infer generic type parameter '" + parameter.name + "'",
+                                              "supply it explicitly as <Type>", "E1603");
+            ensure_concrete_type(found->second);
+            for (Type constraint : parameter.constraints) {
+                constraint = substitute_type(constraint, bindings);
+                const std::string constraint_base = split_type(constraint).base;
+                if (constraint_base != "Copy" && constraint_base != "Comparable" && constraint_base != "Equatable" &&
+                    !contracts_.count(constraint_base))
+                    fail(parameter.token, "unknown generic constraint '" + constraint_base + "'", {}, "E1604");
+                if (!satisfies_constraint(found->second, constraint))
+                    fail(expression.token, "type '" + found->second.name + "' does not satisfy constraint '" + constraint.name + "'", {}, "E1604");
+            }
+            arguments.push_back(found->second);
+        }
+        const std::string name = specialization_name(function.name, arguments);
+        if (!signatures_.count(name)) {
+            if (++specialization_work_ > 256)
+                fail(expression.token, "generic specialization limit exceeded", "check for infinitely expanding generic recursion", "E1605");
+            Function specialized = clone_function(function);
+            specialized.name = name;
+            specialized.owner_type = substitute_type(Type{function.owner_type}, bindings).name;
+            specialized.generic_parameters.clear();
+            specialized.result = substitute_type(specialized.result, bindings);
+            ensure_concrete_type(specialized.result);
+            for (Parameter &parameter : specialized.parameters) {
+                parameter.type = substitute_type(parameter.type, bindings);
+                ensure_concrete_type(parameter.type);
+                if (parameter.default_value) substitute_expression(*parameter.default_value, bindings);
+            }
+            for (Stmt &statement : specialized.body) substitute_statement(statement, bindings);
+            SemanticSignature signature{{}, {}, {}, specialized.result, specialized.token, false, specialized.owner_type,
+                                        specialized.self_mutable, specialized.is_initializer, specialized.visibility, specialized.is_async};
+            for (const Parameter &parameter : specialized.parameters) {
+                signature.parameters.push_back(parameter.type); signature.parameter_names.push_back(parameter.name); signature.defaults.push_back(parameter.default_value);
+            }
+            signatures_[name] = std::move(signature);
+            specializations_.push_back(std::move(specialized));
+        }
+        expression.value = name;
+        expression.type_arguments.clear();
+        check_call_arguments(expression, signatures_.at(name), self_count);
+        const SemanticSignature &signature = signatures_.at(name);
+        return signature.is_async ? task_type(signature.result) : signature.result;
+    }
+
+    Type enum_constructor_type(Expr &expression, const std::string &owner, const std::string &variant_name) {
+        TypeParts owner_parts = split_type(Type{owner});
+        auto declaration_it = enum_templates_.find(owner_parts.base);
+        if (declaration_it == enum_templates_.end()) return Type::Infer;
+        const EnumDecl &declaration = *declaration_it->second;
+        const EnumVariant *variant = nullptr;
+        for (const EnumVariant &candidate : declaration.variants) if (candidate.name == variant_name) { variant = &candidate; break; }
+        if (!variant) fail(expression.token, "enum '" + owner_parts.base + "' has no variant '" + variant_name + "'", {}, "E1700");
+        if (variant->payload.size() != expression.children.size())
+            fail(expression.token, "variant '" + variant_name + "' expects " + std::to_string(variant->payload.size()) +
+                 " value(s), got " + std::to_string(expression.children.size()), {}, "E1701");
+
+        std::unordered_map<std::string, Type> bindings;
+        const std::vector<Type> explicit_arguments = !expression.type_arguments.empty() ? expression.type_arguments : owner_parts.arguments;
+        if (!explicit_arguments.empty()) bindings = type_bindings(declaration.generic_parameters, explicit_arguments, expression.token);
+        if (expected_type_ != Type::Infer) {
+            const TypeParts expected = split_type(expected_type_);
+            if (expected.base == owner_parts.base && expected.arguments.size() == declaration.generic_parameters.size())
+                for (std::size_t i = 0; i < expected.arguments.size(); ++i)
+                    bindings[declaration.generic_parameters[i].name] = expected.arguments[i];
+        }
+        Function inference;
+        inference.generic_parameters = declaration.generic_parameters;
+        for (std::size_t i = 0; i < variant->payload.size(); ++i) {
+            const Type actual = expression_type(*expression.children[i]);
+            if (!infer_binding(variant->payload[i], actual, inference, bindings))
+                fail(expression.children[i]->token, "enum payload conflicts with inferred generic arguments", {}, "E1702");
+        }
+        std::vector<Type> arguments;
+        for (const GenericParameter &parameter : declaration.generic_parameters) {
+            auto found = bindings.find(parameter.name);
+            if (found == bindings.end()) fail(expression.token, "cannot infer enum type parameter '" + parameter.name + "'",
+                                              "qualify the constructor, for example " + owner_parts.base + "<Type>::" + variant_name, "E1703");
+            arguments.push_back(found->second);
+        }
+        const Type concrete{constructed_name(owner_parts.base, arguments)};
+        ensure_concrete_type(concrete);
+        const Shape &shape = *shapes_.at(concrete.name);
+        std::size_t variant_index = 0;
+        while (shape.enum_variants[variant_index].name != variant_name) ++variant_index;
+        for (std::size_t i = 0; i < expression.children.size(); ++i)
+            require(expression_type_as(*expression.children[i], shape.enum_variants[variant_index].payload[i]),
+                    shape.enum_variants[variant_index].payload[i], expression.children[i]->token, "variant payload");
+        expression.kind = Expr::Kind::EnumConstruct;
+        expression.value = concrete.name;
+        expression.enum_variant = variant_name;
+        expression.type_arguments.clear();
+        return concrete;
+    }
+
+    void bind_pattern(Pattern &pattern, Type subject, std::unordered_set<std::string> &bindings) {
+        if (pattern.kind == Pattern::Kind::Wildcard) return;
+        if (pattern.kind == Pattern::Kind::Binding) {
+            if (!bindings.insert(pattern.value).second) fail(pattern.token, "duplicate binding '" + pattern.value + "' in pattern", {}, "E1710");
+            scopes_.back()[pattern.value] = {subject, false, pattern.token, false, scopes_.size() - 1};
+            return;
+        }
+        if (pattern.kind == Pattern::Kind::Integer) { require(subject, Type::Int, pattern.token, "integer pattern"); return; }
+        if (pattern.kind == Pattern::Kind::String) { require(subject, Type::Str, pattern.token, "string pattern"); return; }
+        if (pattern.kind == Pattern::Kind::Boolean) { require(subject, Type::Bool, pattern.token, "boolean pattern"); return; }
+        auto shape_it = shapes_.find(subject.name);
+        if (shape_it == shapes_.end() || !shape_it->second->enum_type)
+            fail(pattern.token, "variant pattern requires an enum value, got " + subject.name, {}, "E1711");
+        const Shape &shape = *shape_it->second;
+        std::string variant_name = pattern.value;
+        const std::size_t separator = variant_name.rfind("::");
+        if (separator != std::string::npos) {
+            const std::string qualifier = variant_name.substr(0, separator);
+            if (split_type(Type{qualifier}).base != split_type(subject).base)
+                fail(pattern.token, "variant pattern '" + pattern.value + "' does not belong to " + subject.name, {}, "E1712");
+            variant_name = variant_name.substr(separator + 2);
+        }
+        const EnumVariant *variant = nullptr;
+        for (std::size_t i = 0; i < shape.enum_variants.size(); ++i) if (shape.enum_variants[i].name == variant_name) {
+            variant = &shape.enum_variants[i]; pattern.variant_index = i; break;
+        }
+        if (!variant) fail(pattern.token, "enum '" + subject.name + "' has no variant '" + variant_name + "'", {}, "E1700");
+        if (variant->payload.size() != pattern.children.size())
+            fail(pattern.token, "variant pattern '" + variant_name + "' expects " + std::to_string(variant->payload.size()) +
+                 " payload pattern(s)", {}, "E1713");
+        pattern.value = variant_name;
+        pattern.payload_types = variant->payload;
+        for (std::size_t i = 0; i < pattern.children.size(); ++i) bind_pattern(pattern.children[i], variant->payload[i], bindings);
+    }
+
+    static std::string pattern_key(const Pattern &pattern) {
+        std::string result = std::to_string(static_cast<int>(pattern.kind)) + ":" + pattern.value + "(";
+        for (const Pattern &child : pattern.children) result += pattern_key(child) + ",";
+        return result + ")";
+    }
+
+    bool patterns_exhaustive(const std::vector<const Pattern *> &patterns, Type subject,
+                             std::vector<std::string> *missing = nullptr) const {
+        for (const Pattern *pattern : patterns)
+            if (pattern->kind == Pattern::Kind::Wildcard || pattern->kind == Pattern::Kind::Binding) return true;
+        if (subject == Type::Bool) {
+            bool yes = false, no = false;
+            for (const Pattern *pattern : patterns) if (pattern->kind == Pattern::Kind::Boolean)
+                (pattern->value == "yes" ? yes : no) = true;
+            return yes && no;
+        }
+        auto shape_it = shapes_.find(subject.name);
+        if (shape_it == shapes_.end() || !shape_it->second->enum_type) return false;
+        const Shape &shape = *shape_it->second;
+        bool complete = true;
+        for (std::size_t variant_index = 0; variant_index < shape.enum_variants.size(); ++variant_index) {
+            std::vector<const Pattern *> variant_patterns;
+            for (const Pattern *pattern : patterns)
+                if (pattern->kind == Pattern::Kind::Variant && pattern->variant_index == variant_index)
+                    variant_patterns.push_back(pattern);
+            bool covered = !variant_patterns.empty() && shape.enum_variants[variant_index].payload.empty();
+            if (!covered && !variant_patterns.empty()) {
+                for (const Pattern *pattern : variant_patterns) {
+                    bool irrefutable = true;
+                    for (const Pattern &child : pattern->children)
+                        irrefutable = irrefutable && (child.kind == Pattern::Kind::Wildcard || child.kind == Pattern::Kind::Binding);
+                    if (irrefutable) { covered = true; break; }
+                }
+                if (!covered && shape.enum_variants[variant_index].payload.size() == 1) {
+                    std::vector<const Pattern *> children;
+                    for (const Pattern *pattern : variant_patterns) children.push_back(&pattern->children[0]);
+                    covered = patterns_exhaustive(children, shape.enum_variants[variant_index].payload[0]);
+                }
+            }
+            if (!covered) {
+                complete = false;
+                if (missing) missing->push_back(shape.enum_variants[variant_index].name);
+            }
+        }
+        return complete;
+    }
+
+    Type match_type(Expr &expression) {
+        const Type subject = expression_type(*expression.children[0]);
+        const Shape *enum_shape = nullptr;
+        if (auto found = shapes_.find(subject.name); found != shapes_.end() && found->second->enum_type) enum_shape = found->second;
+        if (!enum_shape && subject != Type::Bool && subject != Type::Int && subject != Type::Str)
+            fail(expression.token, "match supports enums, bool, int, and str, got " + subject.name, {}, "E1714");
+        std::unordered_set<std::string> covered;
+        std::vector<const Pattern *> all_patterns;
+        bool catch_all = false;
+        Type result = Type::Infer;
+        for (std::size_t i = 0; i < expression.match_patterns.size(); ++i) {
+            Pattern &pattern = expression.match_patterns[i];
+            if (catch_all) fail(pattern.token, "unreachable match arm after wildcard/binding arm", {}, "E1715");
+            scopes_.push_back({});
+            std::unordered_set<std::string> bindings;
+            bind_pattern(pattern, subject, bindings);
+            if (pattern.kind == Pattern::Kind::Wildcard || pattern.kind == Pattern::Kind::Binding) catch_all = true;
+            else {
+                const std::string key = pattern_key(pattern);
+                if (!covered.insert(key).second) fail(pattern.token, "unreachable duplicate match arm", {}, "E1715");
+            }
+            all_patterns.push_back(&pattern);
+            const Type arm = expression_type_as(*expression.children[i + 1], expected_type_);
+            scopes_.pop_back();
+            if (result == Type::Infer) result = arm;
+            else require(arm, result, expression.children[i + 1]->token, "match arm");
+        }
+        if (!catch_all) {
+            std::vector<std::string> missing;
+            if (!patterns_exhaustive(all_patterns, subject, &missing)) {
+                if (enum_shape) {
+                    std::string names;
+                    for (std::size_t i = 0; i < missing.size(); ++i) names += (i ? ", " : "") + missing[i];
+                    fail(expression.token, "non-exhaustive match; missing " + names, "add the missing arm(s) or a wildcard `_`", "E1716");
+                }
+                if (subject == Type::Bool) fail(expression.token, "non-exhaustive boolean match", "cover true and false or add `_`", "E1716");
+                fail(expression.token, "open-ended match requires a wildcard arm", {}, "E1716");
+            }
+        }
+        return result;
+    }
+
+    Type propagate_type(Expr &expression) {
+        const Type source = expression_type(*expression.children[0]);
+        auto source_it = shapes_.find(source.name);
+        auto result_it = shapes_.find(current_result_.name);
+        if (source_it == shapes_.end() || result_it == shapes_.end() || !source_it->second->enum_type || !result_it->second->enum_type)
+            fail(expression.token, "postfix ? requires Option or Result in a function returning the same enum family", {}, "E1720");
+        const TypeParts source_parts = split_type(source), result_parts = split_type(current_result_);
+        if (source_parts.base != result_parts.base || (source_parts.base != "Option" && source_parts.base != "Result"))
+            fail(expression.token, "postfix ? cannot convert " + source.name + " into " + current_result_.name, {}, "E1721");
+        if (source_parts.base == "Result" && (source_parts.arguments.size() != 2 || result_parts.arguments.size() != 2 ||
+            source_parts.arguments[1] != result_parts.arguments[1]))
+            fail(expression.token, "Result propagation requires the same error type", {}, "E1722");
+        expression.value = source.name;
+        expression.enum_variant = source_parts.base == "Option" ? "Some" : "Ok";
+        return source_parts.arguments.at(0);
+    }
+
     Type call_type(Expr &expression) {
+        if (const std::size_t separator = expression.value.rfind("::"); separator != std::string::npos) {
+            const std::string owner = expression.value.substr(0, separator);
+            const std::string variant = expression.value.substr(separator + 2);
+            if (enum_templates_.count(split_type(Type{owner}).base))
+                return enum_constructor_type(expression, owner, variant);
+        }
+        if (auto generic = generic_functions_.find(expression.value); generic != generic_functions_.end())
+            return specialize_generic_call(expression, *generic->second, 0);
+        if (auto generic_shape = generic_shapes_.find(expression.value); generic_shape != generic_shapes_.end()) {
+            const Shape &definition = *generic_shape->second;
+            std::unordered_map<std::string, Type> bindings;
+            if (!expression.type_arguments.empty())
+                bindings = type_bindings(definition.generic_parameters, expression.type_arguments, expression.token);
+            if (definition.fields.size() != expression.children.size())
+                fail(expression.token, "generic struct constructor expects " + std::to_string(definition.fields.size()) + " field value(s)", {}, "E1601");
+            Function inference;
+            inference.generic_parameters = definition.generic_parameters;
+            for (std::size_t i = 0; i < definition.fields.size(); ++i)
+                if (!infer_binding(definition.fields[i].type, expression_type(*expression.children[i]), inference, bindings))
+                    fail(expression.children[i]->token, "generic struct field conflicts with inferred type arguments", {}, "E1602");
+            std::vector<Type> arguments;
+            for (const GenericParameter &parameter : definition.generic_parameters) {
+                auto found = bindings.find(parameter.name);
+                if (found == bindings.end()) fail(expression.token, "cannot infer generic type parameter '" + parameter.name + "'", {}, "E1603");
+                arguments.push_back(found->second);
+            }
+            expression.value = constructed_name(definition.name, arguments);
+            expression.type_arguments.clear();
+            ensure_concrete_type(Type{expression.value});
+        }
         if (expression.value == "cancel" || expression.value == "task_done") {
             if (expression.children.size() != 1)
                 fail(expression.token, expression.value + " expects exactly one Task value");
@@ -732,13 +1423,13 @@ class SemanticAnalyzer {
                 const SemanticSignature &init = signatures_.at(definition.initializer_name);
                 normalize_call_arguments(expression, init, 1, 0);
                 for (std::size_t i = 0; i < expression.children.size(); ++i)
-                    require(expression_type(*expression.children[i]), init.parameters[i + 1],
+                    require(expression_type_as(*expression.children[i], init.parameters[i + 1]), init.parameters[i + 1],
                             expression.children[i]->token, "constructor argument");
                 return Type{definition.name};
             }
             normalize_struct_arguments(expression, definition);
             for (size_t i = 0; i < definition.fields.size(); ++i)
-                require(expression_type(*expression.children[i]), definition.fields[i].type,
+                require(expression_type_as(*expression.children[i], definition.fields[i].type), definition.fields[i].type,
                         expression.children[i]->token, "field '" + definition.fields[i].name + "'");
             return Type{definition.name};
         }
@@ -756,6 +1447,8 @@ class SemanticAnalyzer {
         if (is_reference_type(base)) base = pointee_type(base);
         if (!shapes_.count(base.name)) fail(expression.token, "method call requires struct/object receiver, got " + base.name);
         const std::string lowered = base.name + "::" + expression.value;
+        if (auto generic = generic_functions_.find(lowered); generic != generic_functions_.end())
+            return specialize_generic_call(expression, *generic->second, 1);
         auto found = signatures_.find(lowered);
         if (found == signatures_.end()) {
             std::vector<std::string> candidates;
@@ -788,9 +1481,9 @@ class SemanticAnalyzer {
             fail(expression.token, "call expects " + std::to_string(expected_count) + " argument(s), got " + std::to_string(actual_count));
         for (std::size_t i = 0; i < actual_count; ++i) {
             Expr &argument = *expression.children[i + self_count];
-            const Type actual = expression_type(argument);
-            if (actual == Type::Void) fail(argument.token, "void cannot be passed as an argument");
             const Type expected = signature.parameters[i + self_count];
+            const Type actual = expression_type_as(argument, expected);
+            if (actual == Type::Void) fail(argument.token, "void cannot be passed as an argument");
             if (expected != Type::Infer) require(actual, expected, argument.token, "argument");
             else if (expression.value == "print" || expression.value == "println") {
                 if (actual != Type::Int && actual != Type::Float && actual != Type::Bool && actual != Type::Str)
@@ -805,6 +1498,9 @@ class SemanticAnalyzer {
         result->token = source.token;
         result->value = source.value;
         result->argument_names = source.argument_names;
+        result->type_arguments = source.type_arguments;
+        result->match_patterns = source.match_patterns;
+        result->enum_variant = source.enum_variant;
         result->inferred_type = Type::Infer;
         for (const auto &child : source.children) result->children.push_back(clone_expression(*child));
         return result;

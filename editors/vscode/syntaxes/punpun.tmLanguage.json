@@ -73,7 +73,7 @@
       }
     },
     "type-definitions": {
-      "match": "\\b(sealed\\s+)?(object|struct|contract)\\s+([A-Za-z_][A-Za-z0-9_]*)",
+      "match": "\\b(sealed\\s+)?(object|struct|contract|enum)\\s+([A-Za-z_][A-Za-z0-9_]*)",
       "captures": {
         "1": { "name": "storage.modifier.punpun" },
         "2": { "name": "keyword.declaration.type.punpun" },
@@ -100,7 +100,7 @@
     "keywords": {
       "patterns": [
         { "name": "keyword.control.entry.punpun", "match": "\\b(launch|say)\\b" },
-        { "name": "keyword.control.conditional.punpun", "match": "\\b(if|else)\\b" },
+        { "name": "keyword.control.conditional.punpun", "match": "\\b(if|else|match|case)\\b" },
         { "name": "keyword.control.loop.punpun", "match": "\\b(while|for|in|break|continue)\\b" },
         { "name": "keyword.control.flow.punpun", "match": "\\b(return)\\b" },
         { "name": "keyword.control.safety.punpun", "match": "\\b(unsafe|raw)\\b" },
@@ -119,7 +119,7 @@
     "constants": {
       "patterns": [
         { "name": "constant.language.boolean.punpun", "match": "\\b(true|false)\\b" },
-        { "name": "constant.language.null.punpun", "match": "\\b(null)\\b" }
+        { "name": "support.type.sum.punpun", "match": "\\b(Option|Result)\\b" }
       ]
     },
     "numbers": {
@@ -144,7 +144,7 @@
         { "name": "keyword.operator.arithmetic.punpun", "match": "(\\+|-|\\*|/|%)" },
         { "name": "keyword.operator.range.punpun", "match": "\\.\\." },
         { "name": "keyword.operator.namespace.punpun", "match": "::" },
-        { "name": "keyword.operator.arrow.punpun", "match": "->" }
+        { "name": "keyword.operator.arrow.punpun", "match": "(->|=>|\\?)" }
       ]
     },
     "punctuation": {

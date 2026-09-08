@@ -71,6 +71,9 @@ inline const char *expr_kind_name(Expr::Kind kind) {
         case Expr::Kind::List: return "List";
         case Expr::Kind::SizeOf: return "SizeOf";
         case Expr::Kind::AlignOf: return "AlignOf";
+        case Expr::Kind::EnumConstruct: return "EnumConstruct";
+        case Expr::Kind::Match: return "Match";
+        case Expr::Kind::Propagate: return "Propagate";
     }
     return "UnknownExpr";
 }
@@ -100,6 +103,7 @@ inline void dump_expr(std::ostringstream &out, const Expr &expr, int depth) {
     indent(out, depth);
     out << expr_kind_name(expr.kind);
     if (!expr.value.empty()) out << " value=\"" << escaped(expr.value) << '"';
+    if (!expr.enum_variant.empty()) out << " variant=" << expr.enum_variant;
     out << " @" << expr.token.line << ':' << expr.token.column
         << " [" << expr.token.offset << ".." << (expr.token.offset + expr.token.length) << ")\n";
     for (const auto &child : expr.children) dump_expr(out, *child, depth + 1);
@@ -139,6 +143,30 @@ inline std::string dump_modules(const std::vector<Module> &modules) {
     for (const Module &module : modules) {
         out << "Module \"" << module.file.string() << "\"\n";
         for (const std::string &name : module.imports) out << "  Import " << name << '\n';
+        for (const EnumDecl &declaration : module.enums) {
+            out << "  Enum " << declaration.name;
+            if (!declaration.generic_parameters.empty()) {
+                out << '<';
+                for (std::size_t i = 0; i < declaration.generic_parameters.size(); ++i) {
+                    if (i) out << ", ";
+                    out << declaration.generic_parameters[i].name;
+                }
+                out << '>';
+            }
+            out << " @" << declaration.token.line << ':' << declaration.token.column << '\n';
+            for (const EnumVariant &variant : declaration.variants) {
+                out << "    Variant " << variant.name;
+                if (!variant.payload.empty()) {
+                    out << '(';
+                    for (std::size_t i = 0; i < variant.payload.size(); ++i) {
+                        if (i) out << ", ";
+                        out << type_name(variant.payload[i]);
+                    }
+                    out << ')';
+                }
+                out << '\n';
+            }
+        }
         for (const Shape &shape : module.shapes) {
             out << "  Shape " << shape.name;
             if (!shape.generic_parameters.empty()) {

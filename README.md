@@ -31,16 +31,18 @@ PunPun 0.6 development is an ahead-of-time native language focused on fast edit/
 
 Ordinary builds use no interpreter or virtual machine. Linux x86-64 has a direct backend; the portable C backend supports additional toolchains and Windows-oriented builds. Foreign source runs only through explicit `@inject` blocks.
 
-> **Development releases keep honest boundaries.** The compiler, package client, editor tooling, native builds and self-hosting seed are usable and tested. The frozen 0.6 generic, enum and ownership rules are specifications—not claims that every feature is already executable. See [ROADMAP.md](ROADMAP.md) and [COMPLETION_REPORT.md](COMPLETION_REPORT.md).
+> **Development releases keep honest boundaries.** Generics, deterministic monomorphization, algebraic enums, exhaustive matching, `Option`, `Result`, and `?` are executable in this checkpoint. The remaining ownership and backend milestones are still specifications, not completion claims. See [ROADMAP.md](ROADMAP.md) and [COMPLETION_REPORT.md](COMPLETION_REPORT.md).
 
-## 0.6 Step 1 foundation
+## 0.6 Steps 1–3
 
 The first 0.6 milestone removes version drift and turns major language choices into testable contracts:
 
 - one canonical [`VERSION`](VERSION) drives the compiler, runtime, PPX, editor, sites, packages and installers;
 - [`spec/0.6/`](spec/0.6/) freezes generics, constraints, monomorphization, enums, `Option`, `Result`, matching, nullability, moves, borrows and deterministic destruction;
-- the frontend parses generic declaration headers and nested generic type spellings for tooling;
-- future `enum`, `match` and propagation syntax is reserved with `E0900` until its implementation milestone;
+- generic functions, structs, objects and methods are inferred or explicitly specialized into one deterministic concrete implementation per type tuple;
+- inline `Copy`, `Comparable<T>`, and contract constraints are checked before specialization;
+- algebraic enums support tuple payloads, nested destructuring and compile-time exhaustiveness/reachability checks;
+- prelude `Option<T>` and `Result<T,E>` types plus postfix `?` execute on both native backends;
 - compatibility fixtures keep valid 0.5 modern and migration syntax working;
 - CI paths derive their artifact names from `VERSION` instead of an old release string.
 
@@ -108,6 +110,36 @@ launch {
 
 `object` is identity-oriented; `struct` is the inline value-oriented choice. Concrete methods are statically dispatched, while contracts currently provide compile-time conformance.
 
+### Generics, enums, and reliable errors
+
+```punpun
+struct Box<T> {
+    value: T,
+    fn get() -> T { return self.value; }
+}
+
+fn checked(flag: bool) -> Result<int, str> {
+    if flag { return Result::Ok(42); }
+    return Result::Error("not ready");
+}
+
+fn use_checked(flag: bool) -> Result<int, str> {
+    let value = checked(flag)?;
+    return Result::Ok(value + 1);
+}
+
+launch {
+    let box = Box("native and typed");
+    say(box.get());
+    say(match use_checked(true) {
+        Result::Ok(value) => value,
+        Result::Error(message) => 0,
+    });
+}
+```
+
+Generic type arguments are inferred when unambiguous and may be explicit as `identity<int>(value)`. Monomorphization is cached and deduplicated by canonical concrete type tuple.
+
 ### References, pointers and `unsafe`
 
 ```punpun
@@ -154,7 +186,7 @@ C, C++, Rust and assembly injections are content-addressed and cached. `pp check
 | Area | Available now |
 | --- | --- |
 | Compilation | Direct Linux x86-64 backend, portable C backend, assembler/linker integration |
-| Language | Functions, objects, structs, contracts, references, pointers, async tasks, named/default arguments |
+| Language | Functions, generic functions/types/methods, enums, exhaustive matching, `Option`/`Result`, objects, structs, contracts, references, pointers, async tasks, named/default arguments |
 | Correctness | Structured diagnostics, content-hash builds, atomic executable replacement, regression suite |
 | Developer tools | `pp` project CLI, compiler-backed LSP, VS Code extension, formatter and migration helper |
 | Ecosystem | PPX client, local/path graphs, lockfiles, seven bundled first-party packages |

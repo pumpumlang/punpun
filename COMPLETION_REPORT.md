@@ -1,9 +1,9 @@
-# PunPun 0.6 Step 1 engineering report
+# PunPun 0.6 Steps 2 and 3 engineering report
 
 Date: 2026-09-08  
-Version source: repository `VERSION`
+Version: `0.6.0-dev.3` (from repository `VERSION`)
 
-This report is the release gate for the 0.6 Step 1 development archive. It distinguishes
+This report is the release gate for the 0.6 Steps 2 and 3 development archive. It distinguishes
 implemented and tested code from platform work that cannot honestly be certified
 on the Linux build host. No placeholder MSI, setup EXE, Arch package-manager
 result, signature, or native binary is represented as a real artifact.
@@ -19,6 +19,17 @@ result, signature, or native binary is represented as a real artifact.
 - Added checked-in release-truthfulness, privacy and compatibility rules in `AGENTS.md` and the staged release plan in `ROADMAP.md`.
 
 ## Implemented in this continuation
+
+- Added inferred and explicit generic calls, generic structs/objects/methods,
+  recursive type substitution, checked constraints, deterministic mangling,
+  deduplicated monomorphization, and bounded specialization work.
+- Added algebraic enums with unit/tuple payloads, generic construction, nested
+  destructuring, literal/binding/wildcard patterns, exhaustiveness and
+  reachability diagnostics.
+- Added prelude `Option<T>` and `Result<T,E>`, postfix `?` with compatible
+  cross-success-type propagation, standard helpers, and a runnable example.
+- Lowered every new construct through typed HIR, direct Linux x86-64, and the
+  portable C17 backend with parity regressions.
 
 - Added `selfhost/ppc_self.pp`, a compiler written entirely in PunPun with its
   own lexer, recursive-descent parser, C type/call lowering, deterministic C17
@@ -61,7 +72,8 @@ result, signature, or native binary is represented as a real artifact.
 ## Verified on this host
 
 - Clean C17/C++17 warnings-as-errors build.
-- Full compiler/runtime/tooling test suite.
+- Full compiler/runtime/tooling test suite: 164 tests passed; the Rust-injection
+  capability test was skipped because `rustc` is not installed on this host.
 - Direct x86-64 and portable C execution for the new language/runtime features.
 - C, C++, and assembly injection execution; Rust injection remains conditional
   because `rustc` is unavailable on this host.
@@ -78,8 +90,9 @@ different native host and are deliberately not mislabeled as finished:
 - Real Windows MSI/setup output, installation/upgrade/uninstallation, PATH/file
   association checks, Windows native compilation, and real Arch/CachyOS package
   installation/removal. CI now defines these gates but has not run them here.
-- Production generics/monomorphization, generic constraints, `Option`/`Result`,
-  algebraic enums, exhaustive matching/destructuring, and final nullable values.
+- User-defined overload sets and more advanced generic-body contract checking
+  remain later compiler refinements; 0.6 safe optional values are finalized as
+  `Option<T>` with no safe-language `null` literal.
 - Contract-typed dynamic dispatch/vtables, properties/static members, automatic
   destruction, devirtualization, and a final inheritance model.
 - Full move/lifetime/escape analysis, lexical `Drop`, slices, allocators/arenas,
