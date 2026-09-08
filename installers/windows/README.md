@@ -15,3 +15,10 @@ On Windows x64:
 
 `wix/Payload.wxs` uses WiX's recursive `Files` element, so the current SDK
 payload is included without relying on the removed legacy harvesting command.
+
+## `.pp` file icon association
+
+The MSI registers `.pp` as `PunPun.Source` and sets its `DefaultIcon` to
+`[INSTALLFOLDER]assets\punpun-source.ico`. The ICO is a multi-resolution asset
+built from the canonical PunPun icon (16 through 256 px). The association is
+owned by the MSI component so uninstall and upgrade can reverse/update it.

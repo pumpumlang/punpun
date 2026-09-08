@@ -5,18 +5,24 @@ pkgdesc="PunPun native programming language SDK"
 arch=('x86_64')
 url="https://example.invalid/punpun"
 license=('MIT')
-depends=('glibc' 'gcc-libs' 'python' 'nodejs')
+depends=('glibc' 'gcc-libs' 'python' 'nodejs' 'shared-mime-info' 'hicolor-icon-theme')
 optdepends=('base-devel: rebuild compiler and use C injection' 'libcurl: requests package' 'libx11: PunUI Linux backend')
 source=('PunPun-0.6.0-beta-linux-x86_64.tar.zst')
-sha256sums=('27723f2d3385d0312db88f5e20539c254408df64577150ffecdcc29c725b00fc')
+sha256sums=('085efbb3aa78befe13cee0b4ca9df0c8212af3a48f23920911407d78fd98e03f')
 
 package() {
   mkdir -p "$pkgdir/usr/lib/punpun" "$pkgdir/usr/bin" "$pkgdir/usr/share/licenses/punpun" "$pkgdir/usr/share/doc/punpun"
   cp -a "$srcdir/PunPun-0.6.0-beta-linux-x86_64/." "$pkgdir/usr/lib/punpun/"
   for name in pp ppc ppx punpun punpun-lsp; do
-    printf '#!/bin/sh\nexec /usr/lib/punpun/bin/%s "$@"\n' "$name" > "$pkgdir/usr/bin/$name"
+    printf '#!/bin/sh
+exec /usr/lib/punpun/bin/%s "$@"
+' "$name" > "$pkgdir/usr/bin/$name"
     chmod 755 "$pkgdir/usr/bin/$name"
   done
   cp "$pkgdir/usr/lib/punpun/LICENSE" "$pkgdir/usr/share/licenses/punpun/LICENSE"
   cp "$pkgdir/usr/lib/punpun/README.md" "$pkgdir/usr/share/doc/punpun/README.md"
+  install -Dm644 "$pkgdir/usr/lib/punpun/packaging/linux/application-x-punpun.xml" "$pkgdir/usr/share/mime/packages/punpun.xml"
+  for size in 16 32 64 128 256 512; do
+    install -Dm644 "$pkgdir/usr/lib/punpun/assets/punpun-icon-$size.png" "$pkgdir/usr/share/icons/hicolor/${size}x${size}/mimetypes/application-x-punpun.png"
+  done
 }

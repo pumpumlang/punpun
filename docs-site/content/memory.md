@@ -1,6 +1,29 @@
 # Native Memory
 
-Safe references and raw pointers are different types. Raw pointer creation/dereference/arithmetic requires `unsafe`.
+PunPun keeps safe references separate from raw pointers and makes unsafe operations visibly opt-in.
+
+## Overview
+
+Use `&T` for a shared safe reference and `&mut T` when mutation through the reference is allowed. Raw pointers require an `unsafe` region. The ownership pass also tracks explicit moves, borrows, and checked slices.
+
+## Syntax
+
+```punpun
+fn bump(value: &mut i64) {
+    *value = *value + 1;
+}
+```
+
+Raw-pointer work is explicit:
+
+```punpun
+unsafe {
+    let pointer: *i64 = &raw value;
+    *pointer = 42;
+}
+```
+
+## Runnable example
 
 ```punpun
 fn bump(value: &mut i64) {
@@ -8,14 +31,22 @@ fn bump(value: &mut i64) {
 }
 
 launch {
-    let mut value = 41;
+    let mut value = 40;
     bump(&mut value);
-
-    unsafe {
-        let raw: *i64 = &raw value;
-        *raw = 43;
-    }
+    bump(&mut value);
+    say(value);
 }
 ```
 
-The semantic analyzer rejects mutable references to immutable bindings and simple escaping-local-reference cases. The lifetime/move analysis is a beta foundation, not yet a complete Rust-style borrow checker.
+Save as `references.pp` and run `pp run references.pp`.
+
+## Common mistakes
+
+- Taking a mutable reference to an immutable binding.
+- Using a value after an explicit `move(...)` without reinitializing it.
+- Dereferencing or doing raw-pointer arithmetic outside `unsafe`.
+- Mutating a list while a live checked slice borrows it.
+
+## Next steps
+
+Read [Compiler Errors](errors.html) to understand move/borrow diagnostics, then [Foreign Injection](injection.html) if you need native ABI integration.

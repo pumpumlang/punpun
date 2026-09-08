@@ -1,34 +1,49 @@
-# PunPun
+# Learn PunPun
 
-PunPun 0.6 development is an ahead-of-time native programming language project focused on fast development builds, object/value types, explicit low-level access, and compiler-powered editor tooling.
+PunPun is an ahead-of-time native language with a small everyday workflow: write `.pp`, check it, then build or run a native executable.
 
-Steps 2 and 3 add executable generics, deterministic monomorphization, algebraic enums, exhaustive patterns, `Option`, `Result`, and `?` on both Linux backends.
+## Overview
 
-## First program
+Start here if this is your first PunPun program. The learning path is ordered so each page uses only ideas introduced earlier.
+
+- Beginner: Getting Started → Language Basics → Functions → Control Flow.
+- Intermediate: Objects and Structs → Generics and Results → Packages and PPX → Native Memory.
+- Advanced: Async, Toolchains, Foreign Injection, Performance, and Self-hosting.
+
+## Syntax
+
+A PunPun program normally begins in a `launch` block. Statements end with semicolons and blocks use braces.
 
 ```punpun
-bring std::io;
-
 launch {
     say("Hello from PunPun!");
 }
 ```
 
-```sh
-pp new hello
-cd hello
-pp run
+## Runnable example
+
+Save this as `hello.pp`:
+
+```punpun
+launch {
+    say("Hello from PunPun!");
+}
 ```
 
-## What works in this beta
+Then run:
 
-- Native Linux x86-64 code generation with a portable C backend for supported cross-builds.
-- Content-hash build reuse and atomic executable replacement.
-- Objects, structs, methods, constructors, visibility and compile-time contracts.
-- Safe references, raw pointers behind `unsafe`, `sizeof` and `alignof` foundations.
-- Live VS Code diagnostics through the same compiler semantic engine used by `pp check`.
-- Local/path dependencies and the PPX beta package client.
-- Explicit `@inject->c` native interoperability with cached foreign objects.
-- A PunPun-written compiler with verified stage-one/stage-two fixed-point output.
+```sh
+pp run hello.pp
+```
 
-Full move/drop analysis, async state-machine lowering, dynamic contract dispatch, and the remote PPX service remain beta work rather than claimed finished features.
+You should see `Hello from PunPun!`.
+
+## Common mistakes
+
+- Writing `launch:` / `done` from old syntax. Current PunPun uses braces.
+- Forgetting the semicolon after an ordinary statement.
+- Running `pp build` from the wrong folder when you meant to run one file. Use `pp run hello.pp` for a standalone file.
+
+## Next steps
+
+Continue to [Getting Started](getting-started.html) to install the SDK, create a project, and learn the three commands you will use most.

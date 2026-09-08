@@ -1,44 +1,55 @@
 # Language Basics
 
-PunPun 0.6 development uses structured braces and semicolons while retaining distinctive entry/import vocabulary.
+Learn the smallest pieces of PunPun source: imports, bindings, mutability, types, calls, and the program entry block.
+
+## Overview
+
+`bring` imports a module. `let` creates a binding. Bindings are immutable unless you add `mut`. `launch` is the executable entry block.
+
+## Syntax
 
 ```punpun
-bring std::math;
-
-fn twice(value: i64) -> i64 {
-    return value * 2;
-}
+bring std::io;
 
 launch {
-    let mut total = 0;
-    for i in 0..5 {
-        total += twice(i);
-    }
-    say(total);
+    let name = "PunPun";
+    let mut count = 1;
+    count += 1;
+    say(name);
+    say(count);
 }
 ```
 
-`let` is immutable by default. Add `mut` when reassignment is required. The 0.5 beta compiler still accepts selected legacy syntax for migration; `pp migrate` converts common 0.4 forms.
-
-## Generics and algebraic enums
+Use an explicit type when it improves clarity:
 
 ```punpun
-fn identity<T: Copy>(value: T) -> T { return value; }
+let attempts: i64 = 3;
+let enabled: bool = true;
+let title: String = "demo";
+```
 
-enum Message<T> {
-    Empty,
-    Value(T),
-}
+## Runnable example
 
-fn read(message: Message<int>) -> int {
-    return match message {
-        Message::Empty => 0,
-        Message::Value(value) => identity(value),
-    };
+Save this as `basics.pp`:
+
+```punpun
+launch {
+    let language = "PunPun";
+    let mut score: i64 = 40;
+    score += 2;
+    say(language);
+    say(score);
 }
 ```
 
-Generic calls are specialized to concrete native implementations. Matches must
-cover every enum variant; bindings and nested variant patterns destructure
-payloads. `Option<T>` and `Result<T,E>` are prelude enums, and postfix `?`
-propagates their failure variant from a compatible function.
+Run it with `pp run basics.pp`.
+
+## Common mistakes
+
+- Reassigning an immutable binding. Use `let mut value = ...` only when reassignment is needed.
+- Mixing old migration syntax into new code. Use `pp migrate` on older files instead of learning both forms at once.
+- Guessing a type name. Let local inference work first, then add an explicit type when you actually need one.
+
+## Next steps
+
+Continue to [Functions](functions.html) to move repeated work into named, typed operations.

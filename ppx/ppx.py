@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import argparse
 import base64
+import getpass
 import hashlib
 import json
 import os
@@ -19,6 +20,7 @@ import shutil
 import subprocess
 import sys
 import tempfile
+import tomllib
 import urllib.error
 import urllib.parse
 import urllib.request
@@ -175,28 +177,114 @@ def load_token(required: bool = False) -> str | None:
     return None
 
 
-def manifest_name_version(root: Path) -> tuple[str, str, str]:
+def valid_requirement(requirement: str) -> bool:
+    req = requirement.strip()
+    if req in ("", "*", "latest"):
+        return True
+    if SEMVER_RE.fullmatch(req):
+        return True
+    if req.startswith(("^", "~")):
+        return bool(SEMVER_RE.fullmatch(req[1:]))
+    pieces = [piece.strip() for piece in req.split(",") if piece.strip()]
+    if not pieces:
+        return False
+    for piece in pieces:
+        op = next((candidate for candidate in (">=", "<=", ">", "<", "=") if piece.startswith(candidate)), None)
+        if not op or not SEMVER_RE.fullmatch(piece[len(op):].strip()):
+            return False
+    return True
+
+
+def _safe_relative_file(root: Path, value: str, field: str) -> str:
+    rel = Path(value)
+    if rel.is_absolute() or ".." in rel.parts:
+        raise SystemExit(f"ppx: package {field} must stay inside the package directory")
+    target = (root / rel).resolve()
+    if root.resolve() != target and root.resolve() not in target.parents:
+        raise SystemExit(f"ppx: package {field} escapes the package directory")
+    if not target.is_file():
+        raise SystemExit(f"ppx: package {field} file does not exist: {value}")
+    return rel.as_posix()
+
+
+def manifest_publish_metadata(root: Path) -> dict:
     path = root / "Punpun.toml"
     if not path.is_file():
         raise SystemExit("ppx: current directory has no Punpun.toml")
-    name = version = description = ""
-    section = ""
-    for raw in path.read_text(encoding="utf-8").splitlines():
-        line = raw.strip()
-        if line.startswith("[") and line.endswith("]"):
-            section = line[1:-1].strip()
-        elif section == "package" and "=" in line:
-            key, value = map(str.strip, line.split("=", 1))
-            value = value.strip('"')
-            if key == "name": name = value
-            elif key == "version": version = value
-            elif key == "description": description = value
+    try:
+        document = tomllib.loads(path.read_text(encoding="utf-8"))
+    except (tomllib.TOMLDecodeError, OSError) as exc:
+        raise SystemExit(f"ppx: invalid Punpun.toml: {exc}")
+    package = document.get("package")
+    if not isinstance(package, dict):
+        raise SystemExit("ppx: manifest requires a [package] table")
+    name = str(package.get("name", "")).strip()
+    version = str(package.get("version", "")).strip()
+    description = str(package.get("description", "")).strip()
     if not NAME_RE.fullmatch(name):
-        raise SystemExit("ppx: manifest has no valid package name")
-    try: parse_semver(version)
-    except ValueError as exc: raise SystemExit(f"ppx: {exc}")
-    return name, version, description
+        raise SystemExit("ppx: package name must start with a letter and contain only letters, digits, _ or -")
+    try:
+        parse_semver(version)
+    except ValueError as exc:
+        raise SystemExit(f"ppx: {exc}")
+    if len(description) > 1000:
+        raise SystemExit("ppx: package description exceeds 1000 characters")
 
+    metadata = {"name": name, "version": version, "description": description}
+    license_name = str(package.get("license", "")).strip()
+    if license_name:
+        if len(license_name) > 128:
+            raise SystemExit("ppx: package license metadata is too long")
+        metadata["license"] = license_name
+    for field in ("repository", "homepage"):
+        value = str(package.get(field, "")).strip()
+        if value:
+            parsed = urllib.parse.urlparse(value)
+            if parsed.scheme not in {"http", "https"} or not parsed.netloc:
+                raise SystemExit(f"ppx: package {field} must be an http(s) URL")
+            metadata[field] = value
+    readme = str(package.get("readme", "")).strip()
+    if readme:
+        metadata["readme"] = _safe_relative_file(root, readme, "readme")
+    keywords = package.get("keywords", [])
+    if keywords:
+        if not isinstance(keywords, list) or len(keywords) > 16:
+            raise SystemExit("ppx: package keywords must be a list with at most 16 entries")
+        normalized = []
+        for keyword in keywords:
+            text = str(keyword).strip()
+            if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_+.-]{0,31}", text):
+                raise SystemExit(f"ppx: invalid package keyword: {text!r}")
+            normalized.append(text)
+        metadata["keywords"] = normalized
+
+    dependencies = {}
+    raw_dependencies = document.get("dependencies") or {}
+    if not isinstance(raw_dependencies, dict):
+        raise SystemExit("ppx: [dependencies] must be a table")
+    if len(raw_dependencies) > 128:
+        raise SystemExit("ppx: package declares too many dependencies")
+    for dep_name, spec in raw_dependencies.items():
+        if not NAME_RE.fullmatch(str(dep_name)):
+            raise SystemExit(f"ppx: invalid dependency name: {dep_name!r}")
+        if isinstance(spec, str):
+            requirement = spec.strip()
+        elif isinstance(spec, dict):
+            if "path" in spec:
+                raise SystemExit(f"ppx: dependency {dep_name!r} uses a local path; publishable packages require a registry version")
+            requirement = str(spec.get("version", "")).strip()
+        else:
+            raise SystemExit(f"ppx: dependency {dep_name!r} must be a version string or {{ version = ... }}")
+        if not valid_requirement(requirement):
+            raise SystemExit(f"ppx: invalid version requirement for {dep_name}: {requirement!r}")
+        dependencies[str(dep_name)] = requirement or "*"
+    metadata["dependencies"] = dependencies
+    return metadata
+
+
+def manifest_name_version(root: Path) -> tuple[str, str, str]:
+    metadata = manifest_publish_metadata(root)
+    return metadata["name"], metadata["version"], metadata.get("description", "")
 
 def create_package_archive(root: Path) -> tuple[bytes, str]:
     with tempfile.NamedTemporaryFile(suffix=".zip", delete=False) as temp:
@@ -206,7 +294,8 @@ def create_package_archive(root: Path) -> tuple[bytes, str]:
             for path in sorted(root.rglob("*")):
                 if not path.is_file(): continue
                 rel = path.relative_to(root)
-                if any(part in {".git", ".punpun", "node_modules", "__pycache__"} for part in rel.parts): continue
+                if any(part in {".git", ".punpun", "node_modules", "__pycache__", ".pytest_cache", ".mypy_cache", ".ruff_cache", "build", "dist"} for part in rel.parts): continue
+                if rel.name in {".DS_Store", "Thumbs.db", "desktop.ini"} or rel.suffix in {".pyc", ".tmp"}: continue
                 if path.stat().st_size > 16 * 1024 * 1024:
                     raise SystemExit(f"ppx: refusing unusually large package file: {rel}")
                 zf.write(path, rel.as_posix())
@@ -334,21 +423,56 @@ def cmd_add(args):
     print(f"PPX added {args.name} from {root}")
 
 
+def print_publish_plan(metadata: dict, content: bytes, checksum: str) -> None:
+    print(f"package:      {metadata['name']} {metadata['version']}")
+    print(f"description:  {metadata.get('description') or '(none)'}")
+    print(f"archive:      {len(content)} bytes")
+    print(f"sha256:       {checksum}")
+    deps = metadata.get("dependencies") or {}
+    print(f"dependencies: {len(deps)}")
+    for name in sorted(deps):
+        print(f"  {name} {deps[name]}")
+
+
 def cmd_publish(args):
     root = Path.cwd()
-    name, version, description = manifest_name_version(root)
+    metadata = manifest_publish_metadata(root)
     content, checksum = create_package_archive(root)
-    payload = {
-        "name": name, "version": version, "description": description,
-        "checksum": checksum, "archive_b64": base64.b64encode(content).decode("ascii"),
-        "dependencies": {},
-    }
+    print_publish_plan(metadata, content, checksum)
+    if args.dry_run:
+        print("dry run: package validated; nothing uploaded")
+        return
+    payload = dict(metadata)
+    payload.update({
+        "checksum": checksum,
+        "archive_b64": base64.b64encode(content).decode("ascii"),
+    })
     response = api_json("/api/v1/packages", method="POST", payload=payload, token=load_token(True), timeout=30)
-    print(f"published {name} {version} ({response.get('checksum', checksum)})")
+    print(f"published {metadata['name']} {metadata['version']} ({response.get('checksum', checksum)})")
+
+
+def _password(args, prompt: str) -> str:
+    explicit = getattr(args, "password", None)
+    if explicit:
+        return explicit
+    env = os.environ.get("PPX_PASSWORD")
+    if env:
+        return env
+    return getpass.getpass(prompt)
+
+
+def cmd_register(args):
+    password = _password(args, "New PPX password: ")
+    confirmation = password if getattr(args, "password", None) or os.environ.get("PPX_PASSWORD") else getpass.getpass("Confirm password: ")
+    if password != confirmation:
+        raise SystemExit("ppx: passwords do not match")
+    api_json("/api/v1/register", method="POST", payload={"username": args.username, "password": password})
+    print(f"registered {args.username}; run `ppx login {args.username}`")
 
 
 def cmd_login(args):
-    payload = {"username": args.username, "password": args.password}
+    password = _password(args, "PPX password: ")
+    payload = {"username": args.username, "password": password}
     response = api_json("/api/v1/login", method="POST", payload=payload)
     state_root().mkdir(parents=True, exist_ok=True)
     token_file().write_text(response["token"] + "\n", encoding="utf-8")
@@ -356,6 +480,27 @@ def cmd_login(args):
     except OSError: pass
     print(f"logged in as {args.username}")
 
+
+def cmd_download(args):
+    if not NAME_RE.fullmatch(args.name):
+        raise SystemExit("ppx: invalid package name")
+    metadata = api_json("/api/v1/packages/" + urllib.parse.quote(args.name))
+    selected = choose_version(metadata, args.version)
+    version = selected["version"]
+    content = api("/api/v1/packages/%s/%s/download" % (urllib.parse.quote(args.name), urllib.parse.quote(version)))
+    checksum = hashlib.sha256(content).hexdigest()
+    if checksum != selected["checksum"]:
+        raise SystemExit(f"ppx: checksum mismatch for {args.name} {version}")
+    output = Path(args.output) if args.output else Path(f"{args.name}-{version}.zip")
+    output.parent.mkdir(parents=True, exist_ok=True)
+    output.write_bytes(content)
+    print(f"downloaded {args.name} {version} -> {output} ({checksum})")
+
+
+def cmd_install(args):
+    if not args.name:
+        return run_pp("update")
+    return cmd_add(args)
 
 def cmd_logout(_args):
     token = load_token(False)
@@ -390,16 +535,22 @@ def parser() -> argparse.ArgumentParser:
     sub = p.add_subparsers(dest="command", required=True)
     sub.add_parser("init").set_defaults(func=lambda a: run_pp("init"))
     add = sub.add_parser("add"); add.add_argument("name"); add.add_argument("version", nargs="?"); add.add_argument("--path"); add.set_defaults(func=cmd_add)
+    install = sub.add_parser("install", help="install a registry package, or update the current graph when no name is supplied")
+    install.add_argument("name", nargs="?"); install.add_argument("version", nargs="?"); install.add_argument("--path"); install.set_defaults(func=cmd_install)
     rem = sub.add_parser("remove"); rem.add_argument("name"); rem.set_defaults(func=lambda a: run_pp("remove", a.name))
-    sub.add_parser("install").set_defaults(func=lambda a: run_pp("update"))
     sub.add_parser("update").set_defaults(func=lambda a: run_pp("update"))
     search = sub.add_parser("search"); search.add_argument("query", nargs="?", default=""); search.set_defaults(func=cmd_search)
     info = sub.add_parser("info"); info.add_argument("name"); info.set_defaults(func=cmd_info)
+    download = sub.add_parser("download"); download.add_argument("name"); download.add_argument("version", nargs="?"); download.add_argument("-o", "--output"); download.set_defaults(func=cmd_download)
     sub.add_parser("tree").set_defaults(func=lambda a: run_pp("tree"))
     sub.add_parser("outdated").set_defaults(func=lambda a: print("ppx: registry-installed dependency version tracking is beta; use `ppx info <name>`"))
-    pub = sub.add_parser("publish"); pub.set_defaults(func=cmd_publish)
+    for command in ("publish", "upload"):
+        pub = sub.add_parser(command, help="validate and publish the current package")
+        pub.add_argument("--dry-run", action="store_true", help="build and validate the package archive without uploading")
+        pub.set_defaults(func=cmd_publish)
     yank = sub.add_parser("yank"); yank.add_argument("name"); yank.add_argument("version"); yank.set_defaults(func=cmd_yank)
-    login = sub.add_parser("login"); login.add_argument("username"); login.add_argument("password"); login.set_defaults(func=cmd_login)
+    register = sub.add_parser("register"); register.add_argument("username"); register.add_argument("--password", help=argparse.SUPPRESS); register.set_defaults(func=cmd_register)
+    login = sub.add_parser("login"); login.add_argument("username"); login.add_argument("--password", help=argparse.SUPPRESS); login.set_defaults(func=cmd_login)
     sub.add_parser("logout").set_defaults(func=cmd_logout)
     cache = sub.add_parser("cache"); cache.add_argument("action", choices=["path", "clean"], nargs="?", default="path"); cache.set_defaults(func=lambda a: (shutil.rmtree(cache_root(), ignore_errors=True), print("PPX cache cleared")) if a.action == "clean" else print(cache_root()))
     sub.add_parser("doctor").set_defaults(func=cmd_doctor)

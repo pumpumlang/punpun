@@ -27,6 +27,57 @@ need() {
     command -v "$1" >/dev/null 2>&1 || die "missing '$1' (install it, then rerun this script)"
 }
 
+
+print_cleanup_policy() {
+    cat <<'EOF'
+Publish cleanup policy:
+  stale repository files: removed because each publish replaces the remote checkout
+  generated/cache dirs:   .punpun build dist __pycache__ .pytest_cache .mypy_cache .ruff_cache node_modules .idea __MACOSX .ppx-registry htmlcov
+  generated files:        *.pyc *.tmp *.swp *.swo *.o *.a *.so *.dll *.exe *~ .DS_Store Thumbs.db desktop.ini .coverage
+  release assets:          uploaded assets not present in this publisher bundle are removed from this release tag only
+  intentionally retained: .github .vscode docs/spec/tests/source files, LICENSE, manifests and lock/reproducibility metadata
+EOF
+}
+
+sanitize_publish_tree() {
+    local tree=$1 mode=${2:-source}
+    [[ -d "$tree" ]] || die "cleanup target is not a directory: $tree"
+
+    # Never follow symlinks and never delete outside the temporary publish tree.
+    find -P "$tree" -depth \
+        \( -type d \( -name .punpun -o -name build -o -name __pycache__ -o -name .pytest_cache -o -name .mypy_cache -o -name .ruff_cache -o -name node_modules -o -name .idea -o -name __MACOSX -o -name .ppx-registry -o -name htmlcov \) \
+        -o -type f \( -name '*.pyc' -o -name '*.tmp' -o -name '*.swp' -o -name '*.swo' -o -name '*~' -o -name .DS_Store -o -name Thumbs.db -o -name desktop.ini -o -name .coverage \) \) \
+        -exec rm -rf -- {} +
+
+    if [[ "$mode" == source ]]; then
+        # Source publication must never inherit compiled host artifacts. Keep
+        # source/runtime code; rebuild binaries through CI/release automation.
+        find -P "$tree" -type f \
+            \( -name '*.o' -o -name '*.a' -o -name '*.so' -o -name '*.dll' -o -name '*.exe' \) \
+            -delete
+        find -P "$tree" -depth -type d -name dist -exec rm -rf -- {} +
+    fi
+}
+
+prune_release_assets() {
+    local repo=$1 tag=$2
+    shift 2
+    local desired_name current keep candidate
+    declare -A desired=()
+    for candidate in "$@"; do
+        desired_name=$(basename -- "$candidate")
+        desired["$desired_name"]=1
+    done
+    while IFS= read -r current; do
+        [[ -n "$current" ]] || continue
+        keep=${desired["$current"]:-}
+        if [[ -z "$keep" ]]; then
+            gh release delete-asset "$tag" "$current" --repo "$repo" -y >/dev/null
+            ok "removed stale release asset $current"
+        fi
+    done < <(gh release view "$tag" --repo "$repo" --json assets --jq '.assets[].name' 2>/dev/null || true)
+}
+
 find_publisher() {
     local script_dir candidate old_bundle=''
     script_dir=$SCRIPT_DIR
@@ -126,6 +177,7 @@ gh auth status >/dev/null 2>&1 || die "GitHub CLI is not logged in; run 'gh auth
 GH_ACCOUNT=$(gh api user --jq .login)
 printf '%bPunPun %s publisher%b\n' "$green" "$VERSION" "$reset"
 printf 'Account:   %s\nBundle:    %s\n' "$GH_ACCOUNT" "$ROOT"
+print_cleanup_policy
 
 step "Verifying every release file"
 (cd "$ROOT" && sha256sum -c SHA256SUMS)
@@ -136,6 +188,7 @@ mkdir -p "$WORK/source"
 unzip -q "$ROOT/source/PunPun-${VERSION}-source.zip" -d "$WORK/source"
 SOURCE_TREE="$WORK/source/PunPun-${VERSION}-source"
 [[ -d "$SOURCE_TREE" ]] || die "source archive has an unexpected layout"
+sanitize_publish_tree "$SOURCE_TREE" source
 sync_repository "$SOURCE_REPO" "$SOURCE_TREE" "Publish PunPun $VERSION"
 
 if gh workflow run platform-release.yml --repo "$GH_ACCOUNT/$SOURCE_REPO" --ref main >/dev/null 2>&1; then
@@ -160,6 +213,7 @@ assets=(
 )
 (( ${#assets[@]} > 1 )) || die "release assets are missing"
 if gh release view "$TAG" --repo "$GH_ACCOUNT/$SOURCE_REPO" >/dev/null 2>&1; then
+    prune_release_assets "$GH_ACCOUNT/$SOURCE_REPO" "$TAG" "${assets[@]}"
     gh release edit "$TAG" --repo "$GH_ACCOUNT/$SOURCE_REPO" \
         --title "PunPun $VERSION" --notes-file "$ROOT/RELEASE_NOTES.md" --prerelease >/dev/null
     gh release upload "$TAG" "${assets[@]}" --repo "$GH_ACCOUNT/$SOURCE_REPO" --clobber
@@ -173,12 +227,14 @@ fi
 step "Publishing the documentation website"
 mkdir -p "$WORK/docs"
 unzip -q "$ROOT/websites/PunPun-${VERSION}-docs-site.zip" -d "$WORK/docs"
+sanitize_publish_tree "$WORK/docs" website
 sync_repository "$DOCS_REPO" "$WORK/docs" "Publish PunPun $VERSION documentation" yes
 enable_pages "$DOCS_REPO"
 
 step "Publishing the PPX package website"
 mkdir -p "$WORK/ppx"
 unzip -q "$ROOT/websites/PunPun-${VERSION}-ppx-site.zip" -d "$WORK/ppx"
+sanitize_publish_tree "$WORK/ppx" website
 sync_repository "$PPX_REPO" "$WORK/ppx" "Publish PunPunXPac $VERSION catalog" yes
 enable_pages "$PPX_REPO"
 

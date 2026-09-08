@@ -1,84 +1,167 @@
 <p align="center">
-  <img src="assets/punpun-logo.svg" alt="PunPun programming language" width="700">
+  <img src="assets/punpun-logo.svg" alt="PunPun programming language" width="720">
 </p>
 
 <p align="center">
-  <strong>A fast, native programming language with personality.</strong><br>
-  Write concise <code>.pp</code>. Build real machine-code executables. Keep the low-level controls explicit.
+  <strong>Native by default. Fast to iterate. Explicit when you need the metal.</strong><br>
+  PunPun is an ahead-of-time programming language with compiler-backed tooling, deterministic ownership foundations, modern algebraic types, and an optional LLVM code-generation path.
 </p>
 
 <p align="center">
-  <img alt="Version 0.6.0-beta" src="https://img.shields.io/badge/version-0.6.0--beta-b9ff4a?style=for-the-badge&labelColor=11151e">
-  <img alt="Linux x86-64" src="https://img.shields.io/badge/Linux-x86--64-66e3ff?style=for-the-badge&labelColor=11151e">
+  <img alt="PunPun 0.6.0-beta" src="https://img.shields.io/badge/version-0.6.0--beta-b9ff4a?style=for-the-badge&labelColor=11151e">
+  <img alt="Linux x86-64 qualified" src="https://img.shields.io/badge/qualified-Linux%20x86--64-66e3ff?style=for-the-badge&labelColor=11151e">
   <img alt="MIT license" src="https://img.shields.io/badge/license-MIT-f6f7fa?style=for-the-badge&labelColor=11151e">
 </p>
 
 <p align="center">
-  <a href="#quick-start">Quick start</a> ·
-  <a href="#language-tour">Language tour</a> ·
-  <a href="#toolchain">Toolchain</a> ·
-  <a href="#punpunxpac-ppx">PPX</a> ·
-  <a href="COMPLETION_REPORT.md">Project status</a>
+  <a href="#install">Install</a> ·
+  <a href="#quickstart">Quickstart</a> ·
+  <a href="#language-at-a-glance">Language</a> ·
+  <a href="#ppx-packages">PPX</a> ·
+  <a href="#documentation">Docs</a> ·
+  <a href="#contributing">Contributing</a>
 </p>
 
 ---
 
-PunPun 0.6.0-beta is an ahead-of-time native language focused on fast edit/check/run cycles, concrete object-oriented programming, value-oriented systems work and clear escape hatches for native interoperability.
+## What PunPun is
+
+PunPun compiles `.pp` source through one semantic pipeline and produces native executables. The normal Linux x86-64 path does not require an interpreter or VM.
 
 ```text
-.pp source → parser + semantics + ownership → typed HIR → verified MIR → x86-64 / C / optional LLVM → native executable
+.pp source
+   ↓
+parser + semantic analysis
+   ↓
+ownership / borrow analysis
+   ↓
+typed HIR
+   ↓
+verified MIR
+   ↓
+┌─────────────────────────────┐
+│ direct PunPun x86-64 backend│
+│ portable C backend          │
+│ optional LLVM/Clang backend │
+└─────────────────────────────┘
+   ↓
+native executable
 ```
 
-Ordinary builds use no interpreter or virtual machine. Linux x86-64 has a direct PunPun backend; the portable C backend supports additional toolchains and Windows-oriented builds; `--llvm-backend` optionally uses Clang/LLVM after the same PunPun frontend and MIR pipeline. Foreign source runs only through explicit `@inject` blocks.
+The project values measurable compiler/runtime behavior over benchmark folklore. If a number is not measured for a named workload, it is not presented as a universal performance claim.
 
-> **Beta boundaries stay explicit.** The host-qualified 0.6 language/compiler steps are complete, while Windows installer execution, real Arch/CachyOS package-manager qualification, custom destructors, Machine IR and broader targets remain later/platform-specific work. See [ROADMAP.md](ROADMAP.md) and [COMPLETION_REPORT.md](COMPLETION_REPORT.md).
+### 0.6 beta highlights
 
-## 0.6 language/compiler foundation
+- Generic functions, structs, objects, and methods with deterministic specialization.
+- Algebraic enums with payloads, exhaustive `match`, `Option<T>`, `Result<T,E>`, and postfix `?`.
+- Objects, value-oriented structs, constructors, visibility, and compile-time contracts.
+- Move-state analysis, safe-reference rules, explicit raw pointers/`unsafe`, and checked slice foundations.
+- Mandatory typed HIR → verified MIR pipeline for successful compilation.
+- Direct Linux x86-64 native code generation plus portable C and optional LLVM/Clang backends.
+- Compiler-backed LSP and VS Code diagnostics, completion, navigation, rename, formatting, and semantic highlighting.
+- `.pp` language/file icons for VS Code, Linux MIME-aware file managers, and Windows MSI file association.
+- PPX package search, install, authenticated publishing/upload, immutable downloads, checksums, and yanking.
+- A PunPun-written bootstrap compiler with fixed-point verification for its documented self-hosting subset.
 
-The 0.6 cycle removes version drift and turns major language choices into executable, regression-tested compiler stages:
+> **Beta means boundaries are explicit.** Linux x86-64 is the host-qualified release target here. Windows WiX installer source is included, while actual MSI/Setup qualification belongs to Windows CI/VM execution. Broader targets, Machine IR, richer dynamic dispatch, and deeper optimizer work remain on the roadmap.
 
-- one canonical [`VERSION`](VERSION) drives the compiler, runtime, PPX, editor, sites, packages and installers;
-- [`spec/0.6/`](spec/0.6/) freezes generics, constraints, monomorphization, enums, `Option`, `Result`, matching, nullability, moves, borrows and deterministic destruction;
-- generic functions, structs, objects and methods are inferred or explicitly specialized into one deterministic concrete implementation per type tuple;
-- inline `Copy`, `Comparable<T>`, and contract constraints are checked before specialization;
-- algebraic enums support tuple payloads, nested destructuring and compile-time exhaustiveness/reachability checks;
-- prelude `Option<T>` and `Result<T,E>` types plus postfix `?` execute on both native backends;
-- compatibility fixtures keep valid 0.5 modern and migration syntax working;
-- a dedicated ownership pass tracks moved/maybe-moved state, safe borrow conflicts, explicit move/drop and reinitialization;
-- checked `Slice<int>` views borrow legacy `nums` handles and prevent conflicting mutation while live;
-- every successful compile builds and verifies typed HIR and MIR, with deterministic function/body fingerprints;
-- `--llvm-backend` and `emit-llvm` provide an optional Clang/LLVM code-generation path without duplicating PunPun semantics;
-- CI paths derive their artifact names from `VERSION` instead of an old release string.
+## Install
 
-## Quick start
+### Linux x86-64 installer
 
-Install the Linux x86-64 release without root:
+Use the self-extracting release installer:
 
 ```sh
-bash PunPun-*-Linux-x86_64-Installer.run
+bash PunPun-0.6.0-beta-Linux-x86_64-Installer.run
 ```
 
-Open a new terminal, then create and run a project:
+It installs the SDK under `~/.local/share/punpun`, command wrappers under `~/.local/bin`, VS Code support when an editor CLI is available, and the `.pp` Linux MIME/file icon association.
+
+Verify the installation:
 
 ```sh
+pp --version
 pp doctor
+```
+
+### Arch / CachyOS
+
+Install the generated package with pacman:
+
+```sh
+sudo pacman -U punpun-0.6.0_beta-1-x86_64.pkg.tar.zst
+```
+
+The package includes the PunPun MIME definition and hicolor file icons for `.pp` source files.
+
+### Portable SDK
+
+Extract `PunPun-0.6.0-beta-linux-x86_64-SDK.zip` or the `.tar.zst` release and invoke the commands from its `bin/` directory.
+
+### Windows
+
+The repository includes a WiX v4 MSI/Burn installer project under [`installers/windows/`](installers/windows/). It owns PATH and `.pp` file-type/icon registration so upgrade/uninstall remain reversible. This Linux-built beta does not pretend an untested Windows binary exists.
+
+## Quickstart
+
+Create and run a project:
+
+```sh
 pp new hello
 cd hello
 pp run
 ```
 
-The installer places the SDK in `~/.local/share/punpun` and commands in `~/.local/bin`. Remove it later with `punpun-uninstall`.
-
-## Language tour
-
-### Hello, native world
+Replace `src/main.pp` with:
 
 ```punpun
 bring std::io;
 
+fn greet(name: String) -> String {
+    return "Hello, " + name;
+}
+
 launch {
-    let language = "PunPun";
-    say("Hello from " + language + "!");
+    say(greet("PunPun"));
+}
+```
+
+Your normal edit loop is intentionally small:
+
+```sh
+pp check
+pp run
+pp build --release
+```
+
+Single-file programs work too:
+
+```sh
+pp run examples/showcase.pp
+```
+
+## Language at a glance
+
+### Generics + algebraic results
+
+```punpun
+fn checked(flag: bool) -> Result<int, str> {
+    if flag {
+        return Result::Ok(42);
+    }
+    return Result::Error("not ready");
+}
+
+fn use_checked(flag: bool) -> Result<int, str> {
+    let value = checked(flag)?;
+    return Result::Ok(value + 1);
+}
+
+launch {
+    say(match use_checked(true) {
+        Result::Ok(value) => value,
+        Result::Error(message) => 0,
+    });
 }
 ```
 
@@ -112,39 +195,7 @@ launch {
 }
 ```
 
-`object` is identity-oriented; `struct` is the inline value-oriented choice. Concrete methods are statically dispatched, while contracts currently provide compile-time conformance.
-
-### Generics, enums, and reliable errors
-
-```punpun
-struct Box<T> {
-    value: T,
-    fn get() -> T { return self.value; }
-}
-
-fn checked(flag: bool) -> Result<int, str> {
-    if flag { return Result::Ok(42); }
-    return Result::Error("not ready");
-}
-
-fn use_checked(flag: bool) -> Result<int, str> {
-    let value = checked(flag)?;
-    return Result::Ok(value + 1);
-}
-
-launch {
-    let box = Box("native and typed");
-    say(box.get());
-    say(match use_checked(true) {
-        Result::Ok(value) => value,
-        Result::Error(message) => 0,
-    });
-}
-```
-
-Generic type arguments are inferred when unambiguous and may be explicit as `identity<int>(value)`. Monomorphization is cached and deduplicated by canonical concrete type tuple.
-
-### References, pointers and `unsafe`
+### Safe references and explicit unsafe code
 
 ```punpun
 fn bump(value: &mut i64) {
@@ -157,185 +208,179 @@ launch {
 
     unsafe {
         let pointer: *i64 = &raw value;
-        *pointer = *pointer + 1;
+        *pointer = 43;
     }
 
     say(value);
 }
 ```
 
-Safe references live in ordinary code. Raw-pointer creation, dereference and arithmetic require an explicit `unsafe` region.
+### Optional LLVM backend
 
-### Native interoperability
-
-```punpun
-@inject->c("""
-#include <stdint.h>
-int64_t fast_native_add(int64_t a, int64_t b) {
-    return a + b;
-}
-""");
-
-extern native fn fast_native_add(a: i64, b: i64) -> i64;
-
-launch {
-    say(fast_native_add(10, 20));
-}
-```
-
-C, C++, Rust and assembly injections are content-addressed and cached. `pp check` and editor analysis never compile or execute injected source.
-
-## What ships today
-
-| Area | Available now |
-| --- | --- |
-| Compilation | Direct Linux x86-64 backend, portable C backend, optional Clang/LLVM backend, assembler/linker integration |
-| Language | Functions, generic functions/types/methods, enums, exhaustive matching, `Option`/`Result`, objects, structs, contracts, references, pointers, async tasks, named/default arguments |
-| Correctness | Structured diagnostics, content-hash builds, atomic executable replacement, regression suite |
-| Developer tools | `pp` project CLI, compiler-backed LSP, VS Code extension, formatter and migration helper |
-| Ecosystem | PPX client, local/path graphs, lockfiles, seven bundled first-party packages |
-| Interop | Cached C/C++/Rust/assembly injection and native ABI foundation |
-| Self-hosting | PunPun-written bootstrap compiler with verified fixed-point output |
-
-## Toolchain
-
-The everyday loop is intentionally small:
+PunPun semantics do not change when LLVM is selected:
 
 ```sh
-pp check
-pp run
-pp build --release
+ppc build main.pp --llvm-backend
+ppc run main.pp --llvm-backend
+ppc emit-llvm main.pp
 ```
+
+Set `PUNPUN_LLVM_CC` to select a particular Clang executable.
+
+## Developer tooling
 
 Useful commands:
 
 ```text
-pp new <name>                 create a package
-pp init [name]                initialize this directory
-pp add <name> <path>          add a local dependency
-pp remove <name>
-pp update | fetch | tree
+pp check [file.pp]              parse + type/ownership check
+pp build [file.pp]              compile a native executable
+pp run [file.pp]                build and run
+pp test                         run project tests
+pp fmt [file.pp]                format PunPun source
+pp clean                        clear project build cache
 
-pp check [file.pp]            parse and type-check
-pp build [file.pp]            build a native executable
-pp run [file.pp]              build and run
-pp test                       run tests/*.pp
-pp fmt [file.pp]              format source
-pp clean                      clear this project's cache
-
-pp doctor                     inspect SDK dependencies
-pp explain E0201              explain a diagnostic
-pp migrate [file.pp]          migrate common 0.4 syntax
-pp ast | ir | asm             inspect compiler stages
-pp emit-c | emit-asm | emit-llvm  emit backend source/IR
-pp toolchain detect           probe installed toolchains
-pp editor install-vscode      install editor support
+pp doctor                       inspect the installed SDK/toolchains
+pp explain E0201                explain a compiler diagnostic
+pp migrate [file.pp]            migrate common legacy syntax
+pp ast | ir | asm               inspect compiler stages
+pp emit-c | emit-asm | emit-llvm
+pp toolchain detect             probe available native toolchains
+pp editor install-vscode        install bundled VS Code support
 ```
 
-Single files work without a manifest. Projects use `Punpun.toml` and a deterministic `Punpun.lock`.
+Projects use `Punpun.toml` and deterministic `Punpun.lock` resolution. The compiler, editor, runtime, package manager, sites, and release artifacts derive the product version from the repository [`VERSION`](VERSION).
 
-Backend selection for direct compiler use:
+## PPX packages
 
-```sh
-ppc build main.pp                 # direct x86-64 on supported Linux hosts
-ppc build main.pp --cc-backend    # portable C lowering
-ppc build main.pp --llvm-backend  # optional Clang/LLVM path
-ppc emit-llvm main.pp -o main.ll
-```
+PPX is PunPun's package tool. It materializes packages into the same build graph consumed by `pp`.
 
-Set `PUNPUN_LLVM_CC` when `clang` is not the desired executable.
-
-## PunPunXPac (PPX)
-
-PPX shares the compiler's manifest and lockfile model:
+### Find and install
 
 ```sh
 ppx search requests
-ppx add requests
+ppx info requests
+ppx install requests
 ppx tree
-ppx doctor
 ```
 
-The SDK includes `requests`, `json`, `gui`, `logging`, `filesystem`, `cli` and `testing`. The public PPX website contains a built-in searchable catalog, so it works even before the production registry backend is hosted. See [ppx/README.md](ppx/README.md) and [ppx-site/README.md](ppx-site/README.md).
+### Publish your own package
 
-## Editor experience
-
-The VS Code extension launches the real PunPun language server. Unsaved buffers go through the same parser and semantic analyzer used by `pp check`, providing diagnostics, semantic tokens, completion, signature help, hover, definition, references, rename, symbols, formatting, inlay hints and supported quick fixes.
+Validate first:
 
 ```sh
-pp editor install-vscode
+ppx publish --dry-run
+```
+
+Authenticate and publish:
+
+```sh
+ppx register developer
+ppx login developer
+ppx publish
+```
+
+`ppx upload` runs the same upload flow. Registry versions are immutable. Package identity/dependency metadata is checked against the uploaded `Punpun.toml`, and downloaded archives are SHA-256 verified before installation.
+
+Download without changing a project:
+
+```sh
+ppx download my_package 1.2.0 -o my_package-1.2.0.zip
+```
+
+See [`ppx/README.md`](ppx/README.md) and the [PPX publishing lesson](docs-site/content/ppx-publishing.md).
+
+## Documentation
+
+The documentation site is built from `docs-site/content/` and now follows a beginner → intermediate → advanced learning path.
+
+Start with:
+
+1. [Learn PunPun](docs-site/content/index.md)
+2. [Getting Started](docs-site/content/getting-started.md)
+3. [Language Basics](docs-site/content/language.md)
+4. [Functions](docs-site/content/functions.md)
+5. [Control Flow](docs-site/content/control-flow.md)
+6. [Objects, Structs, and Contracts](docs-site/content/objects.md)
+7. [Generics, Option, Result, and Match](docs-site/content/generics-results.md)
+8. [Packages and PPX](docs-site/content/packages.md)
+9. [Native Memory](docs-site/content/memory.md)
+
+Other useful references:
+
+- [Compiler architecture](docs/compiler-architecture.md)
+- [0.6 language specification](spec/0.6/)
+- [Editor and file icons](docs-site/content/editor-icons.md)
+- [PPX publishing](docs-site/content/ppx-publishing.md)
+- [Release status](PROJECT_STATUS.txt)
+- [Roadmap](ROADMAP.md)
+- [Release notes](RELEASE_NOTES.md)
+
+Build the static docs locally:
+
+```sh
+python3 docs-site/build.py
+python3 -m http.server 8000 --directory docs-site/dist
+```
+
+## Repository layout
+
+```text
+compiler/         parser, semantics, ownership, HIR, MIR, backends
+runtime/          native runtime pieces
+stdlib/           standard-library source
+packages/         first-party PPX packages
+ppx/              PPX client
+ppx-registry/     reference registry service
+editors/vscode/   VS Code extension + bundled language server
+packaging/        Linux/Arch desktop + package integration
+installers/       platform installer projects
+spec/             language/version specifications
+docs-site/        learning/reference documentation website
+ppx-site/         package catalog website
+tests/            language, tooling, release, ecosystem regressions
+scripts/          build/release/version/validation automation
+selfhost/         PunPun-written bootstrap compiler
 ```
 
 ## Build from source
 
-Requirements: a C17 compiler, C++17 compiler, Make, `ar`, Python 3, Node.js and a normal linker toolchain.
+On Linux with a C/C++ toolchain:
 
 ```sh
-make clean all
+make compiler
+./build/ppc --version
 ./tests/run.sh
+```
+
+Useful qualification checks:
+
+```sh
 make selfhost
-```
-
-Build the complete release bundle with:
-
-```sh
-python3 scripts/release.py
-```
-
-Version and policy checks can also be run directly:
-
-```sh
-python3 scripts/sync_version.py
-make version-check
+python3 scripts/check_version.py
 python3 scripts/privacy_audit.py .
+python3 docs-site/build.py
+python3 ppx-site/build.py
+python3 scripts/package_vsix.py
 ```
-
-## Self-hosting
-
-`selfhost/ppc_self.pp` contains a compiler written in PunPun. The bootstrap builds it, recompiles the same source and requires stage-one and stage-two generated C to be byte-identical.
-
-```sh
-make selfhost
-pp selfhost selfhost/examples/hello.pp build/selfhost/hello.c
-```
-
-It is a genuine deterministic compiler seed for a documented subset, not yet a complete replacement for the production C++ compiler. Details live in [selfhost/README.md](selfhost/README.md).
-
-## Repository map
-
-```text
-compiler/          frontend, semantics, HIR/MIR, optimizers and backends
-runtime/           native runtime and target-facing C ABI
-stdlib/            core PunPun modules
-packages/          first-party PPX packages
-ppx/               package-manager client
-ppx-registry/      development registry API
-ppx-site/          deployable package-catalog website
-docs-site/         deployable documentation website
-tooling/lsp/       compiler-backed language server
-editors/vscode/    VS Code extension
-selfhost/          compiler written in .pp
-tests/             compiler, runtime, tooling and packaging regressions
-scripts/           release, validation, benchmark and publishing tools
-spec/              normative language and compatibility decisions
-```
-
-## Performance
-
-The repository contains reproducible compiler, incremental-build, startup and editor-latency measurements—not universal claims against other languages. Read [docs/performance/PERFORMANCE.md](docs/performance/PERFORMANCE.md) for the environment, commands and complete results.
-
-## Documentation and publishing
-
-- Language documentation: [docs/](docs/)
-- Deployable docs project: [docs-site/](docs-site/)
-- Release status: [PROJECT_STATUS.txt](PROJECT_STATUS.txt)
-- Exact completion boundary: [COMPLETION_REPORT.md](COMPLETION_REPORT.md)
-- One-command publication: [publish-punpun.sh](publish-punpun.sh)
 
 ## Contributing
 
-Build the compiler, run the entire suite and add a regression test for every compiler bug. Validate native-code changes through direct x86-64 and portable C paths where applicable. Measure performance changes before documenting them.
+Changes should preserve the basic rule that a feature is not complete merely because the parser recognizes it. Language changes should consider syntax, semantics, ownership/types, IR lowering, code generation, diagnostics, tests, documentation, and editor support where applicable.
+
+Before opening a change:
+
+```sh
+make test
+```
+
+For package-manager changes also run:
+
+```sh
+python3 -m unittest tests.test_ecosystem -v
+```
+
+For release/publisher changes run the release-hygiene tests and inspect the generated artifact list rather than checking build junk into source.
 
 ## License
 
-PunPun is distributed under the [MIT License](LICENSE).
+PunPun is released under the [MIT License](LICENSE). Third-party dependency and license notes are documented in [`docs/THIRD_PARTY.md`](docs/THIRD_PARTY.md).

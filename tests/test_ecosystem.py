@@ -98,6 +98,39 @@ class PpxUnitTests(unittest.TestCase):
             zf.writestr('../escape','bad')
         with self.assertRaises(ValueError): self.registry_mod.Registry.validate_archive(buf.getvalue())
 
+    def test_publish_manifest_metadata_and_path_dependency_policy(self):
+        with tempfile.TemporaryDirectory() as td:
+            root=Path(td)
+            (root/'README.md').write_text('# Demo\n')
+            (root/'Punpun.toml').write_text(
+                '[package]\nname="demo_pkg"\nversion="1.2.3"\ndescription="demo"\n'
+                'license="MIT"\nrepository="https://example.invalid/demo"\nreadme="README.md"\n'
+                'keywords=["demo","math"]\n\n[dependencies]\njson="^0.1.0"\n'
+            )
+            metadata=self.ppx.manifest_publish_metadata(root)
+            self.assertEqual(metadata['name'],'demo_pkg')
+            self.assertEqual(metadata['dependencies'],{'json':'^0.1.0'})
+            self.assertEqual(metadata['license'],'MIT')
+            self.assertEqual(metadata['keywords'],['demo','math'])
+            (root/'Punpun.toml').write_text(
+                '[package]\nname="demo_pkg"\nversion="1.2.3"\n\n[dependencies]\nlocal={ path="../local" }\n'
+            )
+            with self.assertRaises(SystemExit): self.ppx.manifest_publish_metadata(root)
+
+    def test_registry_uses_manifest_identity_not_spoofed_payload(self):
+        with tempfile.TemporaryDirectory() as td:
+            registry=self.registry_mod.Registry(Path(td))
+            registry.register('tester','abcdefgh')
+            user=registry.authenticate(registry.login('tester','abcdefgh'))
+            buf=io.BytesIO()
+            with zipfile.ZipFile(buf,'w',zipfile.ZIP_DEFLATED) as zf:
+                zf.writestr('Punpun.toml','[package]\nname="real_name"\nversion="1.0.0"\n')
+                zf.writestr('src/main.pp','launch {}\n')
+            raw=buf.getvalue()
+            with self.assertRaises(ValueError):
+                registry.publish(user,{'name':'spoofed','version':'1.0.0','dependencies':{},
+                                       'checksum':hashlib.sha256(raw).hexdigest(),'archive_b64':base64.b64encode(raw).decode()})
+
 
 class PpxRegistryIntegrationTests(unittest.TestCase):
     def test_search_add_and_build_from_local_registry(self):
@@ -142,6 +175,42 @@ class PpxRegistryIntegrationTests(unittest.TestCase):
             self.assertRegex(run.stdout.strip(),r'^(yes|no)$')
             cached=list((Path(cache_td)/'ppx'/'packages'/'requests'/'0.1.0').rglob('.ppx-checksum'))
             self.assertEqual(len(cached),1)
+
+    def test_cli_register_publish_download_and_install(self):
+        registry_mod=load_module(ROOT/'ppx-registry'/'server.py', 'punpun_registry_publish_http_test')
+        with tempfile.TemporaryDirectory() as td, tempfile.TemporaryDirectory() as state_td, tempfile.TemporaryDirectory() as cache_td, tempfile.TemporaryDirectory() as package_td, tempfile.TemporaryDirectory() as project_td:
+            registry=registry_mod.Registry(Path(td)/'registry')
+            registry_mod.Handler.registry=registry
+            server=registry_mod.ThreadingHTTPServer(('127.0.0.1',0),registry_mod.Handler)
+            thread=threading.Thread(target=server.serve_forever,daemon=True); thread.start()
+            self.addCleanup(server.shutdown); self.addCleanup(server.server_close)
+            url=f'http://127.0.0.1:{server.server_address[1]}'
+            env=os.environ.copy(); env.update({
+                'PPX_REGISTRY':url,'XDG_CONFIG_HOME':state_td,'XDG_CACHE_HOME':cache_td,
+                'PUNPUN_PP':str(PP),'PUNPUN_PACKAGES':str(Path(td)/'no-bundled')
+            })
+            package=Path(package_td); (package/'src').mkdir(); (package/'README.md').write_text('# Demo package\n')
+            (package/'Punpun.toml').write_text(
+                '[package]\nname="upload_demo"\nversion="1.0.0"\ndescription="upload integration"\n'
+                'license="MIT"\nreadme="README.md"\nkeywords=["demo"]\nentry="src/main.pp"\n\n[dependencies]\n'
+            )
+            (package/'src/main.pp').write_text('fn answer() -> i64 { return 42; }\n')
+            run_checked(['python3',str(PPX),'register','publisher','--password','abcdefgh'],cwd=package,env=env)
+            run_checked(['python3',str(PPX),'login','publisher','--password','abcdefgh'],cwd=package,env=env)
+            dry=run_checked(['python3',str(PPX),'publish','--dry-run'],cwd=package,env=env)
+            self.assertIn('nothing uploaded',dry.stdout)
+            published=run_checked(['python3',str(PPX),'upload'],cwd=package,env=env)
+            self.assertIn('published upload_demo 1.0.0',published.stdout)
+            metadata=run_checked(['python3',str(PPX),'info','upload_demo'],cwd=package,env=env)
+            self.assertIn('"license": "MIT"',metadata.stdout)
+            archive=Path(td)/'downloaded.zip'
+            run_checked(['python3',str(PPX),'download','upload_demo','1.0.0','-o',str(archive)],cwd=package,env=env)
+            self.assertTrue(archive.is_file())
+            with zipfile.ZipFile(archive) as zf: self.assertIn('Punpun.toml',zf.namelist())
+            project=Path(project_td); run_checked([str(PP),'init','consumer'],cwd=project,env=env)
+            installed=run_checked(['python3',str(PPX),'install','upload_demo','1.0.0'],cwd=project,env=env)
+            self.assertIn('PPX added upload_demo',installed.stdout)
+            self.assertIn('upload_demo', (project/'Punpun.toml').read_text())
 
 class FirstPartyPackageTests(unittest.TestCase):
     def make_project(self, td):

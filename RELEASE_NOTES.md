@@ -4,6 +4,10 @@ PunPun 0.6 completes the language-foundation cycle: generics and algebraic data 
 
 ## Highlights
 
+- Learning documentation now follows a beginner → intermediate progression with consistent Overview / Syntax / Runnable example / Common mistakes / Next steps sections and compiler-checked examples.
+- `.pp` source icons are integrated with VS Code language contributions, Linux shared MIME/hicolor conventions, and the Windows MSI file-type ProgID.
+- PPX now supports a complete author-to-consumer flow: register/login, dry-run validation, publish/upload, immutable metadata, checksum-verified download, and install.
+- Publisher synchronization now removes stale repository/site files by replacement and prunes outdated uploaded assets from the current release tag only.
 - Generic functions, structs, objects and methods with deterministic monomorphization and checked constraints.
 - Algebraic enums, nested destructuring, exhaustive/reachability diagnostics, `Option<T>`, `Result<T,E>` and postfix `?`.
 - Control-flow move-state analysis (`initialized`, `moved`, `maybe moved`) with explicit `move`/`drop`, reinitialization and use-after-move diagnostics.

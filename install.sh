@@ -146,6 +146,11 @@ write_wrapper ppc "$INSTALL_DIR/build/ppc"
 write_wrapper ppx "$INSTALL_DIR/ppx/ppx"
 write_wrapper punpun-uninstall "$INSTALL_DIR/uninstall.sh"
 
+if [ -x "$INSTALL_DIR/packaging/linux/install-file-icons.sh" ]; then
+    say "Registering .pp MIME type and PunPun file icons..."
+    "$INSTALL_DIR/packaging/linux/install-file-icons.sh" >/dev/null 2>&1 || warn "file icon registration could not refresh the desktop cache"
+fi
+
 # Make ~/.local/bin persistent for terminals. The VS Code extension additionally
 # probes ~/.local/bin/pp directly, so GUI-launched Code works even before the next
 # login session refreshes PATH.

@@ -1,1 +1,10 @@
-const root=document.documentElement;const saved=localStorage.getItem('punpun-theme');if(saved)root.dataset.theme=saved;document.querySelector('#theme').onclick=()=>{const next=root.dataset.theme==='dark'?'light':'dark';root.dataset.theme=next;localStorage.setItem('punpun-theme',next)};document.querySelectorAll('.copy').forEach(b=>b.onclick=async()=>{await navigator.clipboard.writeText(b.parentElement.querySelector('code').innerText);b.textContent='Copied';setTimeout(()=>b.textContent='Copy',900)});let index=[];fetch('search.json').then(r=>r.json()).then(x=>index=x).catch(()=>{});const q=document.querySelector('#search'),results=document.querySelector('#results');q.addEventListener('input',()=>{const term=q.value.trim().toLowerCase();results.innerHTML='';if(term.length<2)return;index.filter(p=>(p.title+' '+p.body).toLowerCase().includes(term)).slice(0,8).forEach(p=>{const a=document.createElement('a');a.href=p.slug+'.html';a.textContent=p.title;results.appendChild(a)})});
+const root=document.documentElement;
+const saved=localStorage.getItem('punpun-theme');
+if(saved)root.dataset.theme=saved;
+document.querySelector('#theme').onclick=()=>{const next=root.dataset.theme==='dark'?'light':'dark';root.dataset.theme=next;localStorage.setItem('punpun-theme',next)};
+document.querySelectorAll('.copy').forEach(button=>button.onclick=async()=>{await navigator.clipboard.writeText(button.closest('.code-wrap').querySelector('code').innerText);button.textContent='Copied';setTimeout(()=>button.textContent='Copy',900)});
+let index=[];
+fetch('search.json').then(r=>r.json()).then(x=>index=x).catch(()=>{});
+const q=document.querySelector('#search'),results=document.querySelector('#results');
+q.addEventListener('input',()=>{const term=q.value.trim().toLowerCase();results.innerHTML='';if(term.length<2)return;index.filter(p=>(p.title+' '+p.body).toLowerCase().includes(term)).slice(0,8).forEach(p=>{const a=document.createElement('a');a.href=p.slug+'.html';a.textContent=p.title;results.appendChild(a)})});
+document.addEventListener('keydown',event=>{if(event.key==='/'&&document.activeElement!==q){event.preventDefault();q.focus()}});

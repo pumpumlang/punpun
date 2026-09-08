@@ -1,5 +1,10 @@
 ## 0.6.0-beta — 2026-09-08
 
+- Reworked the documentation site into a staged beginner → intermediate learning path with compiler-checked runnable examples, common-mistake guidance, grouped navigation, and next-page progression.
+- Added `.pp` file icon integration for VS Code language icons, Linux `application/x-punpun` MIME/hicolor icons, and a real Windows multi-resolution ICO association.
+- Extended PPX with account registration, hidden-password login, `publish`/`upload --dry-run`, validated publish metadata/dependencies, checksum-verified `download`, and named `install`.
+- Rebuilt the main README around installation, quickstart, language/tooling examples, PPX authoring, documentation, and contribution workflow.
+- Hardened source/repository publishing cleanup and stale release-asset pruning with explicit, bounded cleanup rules.
 - Completed Steps 4–6: move-state/borrow analysis, checked slices, lexical object destruction, mandatory verified HIR/MIR, deterministic compiler fingerprints, release qualification and compatibility gates.
 - Added optional `--llvm-backend` and `emit-llvm` using Clang/LLVM after the shared PunPun frontend/MIR pipeline.
 - Preserved 0.5 `nums` shared-handle behavior while keeping explicit `move(nums)` available for binding-lifetime transfer.

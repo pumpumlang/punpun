@@ -2,87 +2,130 @@
 
 # PunPunXPac · PPX
 
-<p align="center"><strong>Packages for PunPun, without a second build system.</strong></p>
+<p align="center"><strong>Find, validate, publish, download, and install PunPun packages without creating a second build system.</strong></p>
 
-PPX discovers, resolves and caches PunPun packages using the same `Punpun.toml` and `Punpun.lock` files consumed by `pp`.
+PPX uses the same `Punpun.toml` and `Punpun.lock` graph consumed by `pp`. Registry packages are checksum-verified, extracted into the PPX cache, and then handed to the normal PunPun compiler as ordinary dependencies.
 
-> **Works offline by default.** The seven first-party packages and the public catalog snapshot require no local registry process. Network publishing remains an explicitly configured development/hosted-registry operation.
-
-## Start here
+## Install a package
 
 ```sh
 ppx search requests
-ppx add requests
+ppx info requests
+ppx install requests
 ppx tree
 pp run
 ```
 
-The SDK already includes these first-party packages:
+`ppx add` remains an alias-style dependency workflow for local/path and registry packages. `ppx install <name> [requirement]` is the clearer consumer command; `ppx install` with no name refreshes the current graph.
 
-| Package | Purpose |
-| --- | --- |
-| `requests` | Native HTTP requests through the system libcurl runtime |
-| `json` | JSON validation and field extraction |
-| `gui` | PunUI native GUI foundation |
-| `filesystem` | Filesystem and path conveniences |
-| `logging` | Small structured logging helpers |
-| `cli` | Command-line argument helpers |
-| `testing` | Lightweight test assertions |
+## Publish your own package
 
-Bundled packages work offline. PPX first checks the configured package source and keeps downloaded artifacts in a checksum-verified cache.
+A publishable `Punpun.toml` can contain:
 
-## Resolution pipeline
+```toml
+[package]
+name = "my_math"
+version = "1.2.0"
+description = "Small math helpers"
+license = "MIT"
+repository = "https://example.invalid/my_math"
+homepage = "https://example.invalid/my_math/docs"
+readme = "README.md"
+keywords = ["math", "helpers"]
+entry = "src/main.pp"
 
-```text
-Punpun.toml → version selection → checksum cache → path graph → normal PunPun compiler
+[dependencies]
+json = "^0.1.0"
 ```
 
-PPX does not introduce a second compiler or hidden package build format. The exact resolved graph is recorded in `Punpun.lock`.
+Validate the exact archive without uploading anything:
+
+```sh
+ppx publish --dry-run
+```
+
+Create an account and authenticate. Passwords are prompted without echo by default:
+
+```sh
+ppx register developer
+ppx login developer
+```
+
+Publish the immutable version:
+
+```sh
+ppx publish
+# `ppx upload` is an equivalent spelling.
+```
+
+A registry independently re-reads `Punpun.toml`, verifies package name/version/dependencies, rejects unsafe ZIP paths and symlinks, enforces size/file-count limits, computes SHA-256, and refuses replacement of an existing version.
+
+Path dependencies are intentionally rejected for public publication because `../something-local` cannot be reproduced on another user's machine. Replace them with registry version requirements before publishing.
+
+## Download without installing
+
+```sh
+ppx download my_math 1.2.0
+ppx download my_math '^1.2.0' -o vendor/my_math.zip
+```
+
+The downloaded ZIP is checked against the registry checksum before it is written.
 
 ## Commands
 
 ```text
-ppx search <query>             find packages
-ppx info <name>               show package metadata
-ppx add <name> [requirement]  resolve and add a dependency
-ppx remove <name>             remove a dependency
-ppx tree                      print the dependency graph
-ppx fetch                     materialize locked dependencies
-ppx update                    refresh resolution and lock data
-ppx publish                   publish the current package
-ppx yank <name> <version>     hide a version from new resolution
-ppx login <user> <password>   authenticate to a registry
-ppx logout                    remove the saved token
-ppx doctor                    inspect configuration and cache state
+ppx search <query>                search bundled + registry packages
+ppx info <name>                   show owner, metadata, versions, checksums
+ppx install [name] [requirement]  install a package, or refresh current graph
+ppx add <name> [requirement]      add a registry/local dependency
+ppx add <name> --path <dir>       add a local development dependency
+ppx download <name> [requirement] download and verify an immutable ZIP
+ppx remove <name>                 remove a dependency
+ppx update                        refresh resolution and lock data
+ppx tree                          print the dependency graph
+ppx register <user>               create a registry account
+ppx login <user>                  save a short-lived registry token
+ppx logout                        revoke/remove the saved token
+ppx publish [--dry-run]           validate and publish this package
+ppx upload [--dry-run]            same publish flow, upload-oriented spelling
+ppx yank <name> <version>         hide a version from new resolution
+ppx cache [path|clean]            inspect or clear the cache
+ppx doctor                        inspect PPX configuration/connectivity
 ```
+
+## Package archive policy
+
+PPX excludes known local/build junk while creating an upload:
+
+```text
+.git/  .punpun/  build/  dist/  node_modules/
+__pycache__/  .pytest_cache/  .mypy_cache/  .ruff_cache/
+*.pyc  *.tmp  .DS_Store  Thumbs.db  desktop.ini
+```
+
+Individual files over 16 MiB and archives over 32 MiB are rejected by the client. The reference registry also limits expanded size to 128 MiB and package file count to 4096.
 
 ## Registry selection
 
-Set `PPX_REGISTRY` when you want network-backed search, download or publishing:
+Set `PPX_REGISTRY` for network-backed operations:
 
 ```sh
-export PPX_REGISTRY="https://registry.example/api"
-ppx search json
+export PPX_REGISTRY="http://127.0.0.1:8765"
 ```
 
-The reference API in `../ppx-registry/` is intended for development and acceptance tests. There is no false claim that it is already a production public service.
+Run the included reference registry locally:
+
+```sh
+python3 ppx-registry/server.py --host 127.0.0.1 --port 8765 --data .ppx-registry
+```
+
+The bundled server is a development/reference implementation, not falsely advertised as a production public service. A public deployment still needs production identity, TLS, durable object storage/database operations, moderation, backups, monitoring, and provenance/signing policy.
 
 ## Integrity model
 
-- downloaded archives must match the registry's SHA-256 checksum;
-- paths are validated before extraction;
-- immutable versions prevent replacement after publication;
-- yanking changes resolution visibility without deleting history;
-- credentials are stored in the user's configuration directory, never in a project manifest.
-
-PPX is beta software. Production provenance signing, organizational accounts, full conflict solving and hosted service operations remain tracked work.
-
-## Development checks
-
-```sh
-ppx doctor
-python3 -m unittest tests.test_ecosystem -v
-python3 ppx-site/build.py
-```
-
-The product version is read from the repository-root `VERSION`; package versions remain independently declared in each package's `Punpun.toml`.
+- uploaded identity and dependency metadata come from the archive's own `Punpun.toml`;
+- package versions are immutable;
+- downloaded bytes must match the registry SHA-256;
+- archive traversal, duplicate paths, symlinks, excessive expansion, and oversized archives are rejected;
+- tokens live in the user's PPX config directory, never in project manifests;
+- publication never executes uploaded PunPun source.

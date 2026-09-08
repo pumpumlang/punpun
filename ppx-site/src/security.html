@@ -10,7 +10,7 @@
 <body>
   <header>
     <a class="brand" href="./"><img src="static/ppx-mark.svg" alt=""><span>PPX</span><small>PunPunXPac</small></a>
-    <nav><a href="./">Packages</a><a href="../punpun-docs/">Documentation</a></nav>
+    <nav><a href="publish.html">Publish</a><a href="./">Packages</a><a href="../punpun-docs/">Documentation</a></nav>
   </header>
   <main class="detail-main">
     <a class="back" href="./">← Package catalog</a>
@@ -23,11 +23,12 @@
         <li>SHA-256 verification before downloaded packages enter the local cache.</li>
         <li>Archive traversal rejection and upload/expanded-size limits.</li>
         <li>Immutable published versions with explicit, reversible yanking.</li>
-        <li>Hashed API tokens and authenticated publication endpoints.</li>
+        <li>Hashed, expiring API tokens and authenticated publication endpoints.</li>
+        <li>Basic per-client request rate limiting in the reference server.</li>
         <li>No execution of uploaded package source during publication.</li>
       </ul>
       <h2>Honest beta boundary</h2>
-      <p>The server bundled in the source tree is a development reference implementation. Public hosting, provenance signing, abuse moderation, organizational accounts, rate limiting and disaster-recovery operations remain production work.</p>
+      <p>The server bundled in the source tree is a development reference implementation. Public hosting, provenance signing, abuse moderation, organizational accounts, distributed rate limiting, durable storage operations and disaster recovery remain production work.</p>
     </article>
   </main>
   <footer><span>PPX {{VERSION}}</span><span>Report security issues privately through the repository security policy.</span></footer>

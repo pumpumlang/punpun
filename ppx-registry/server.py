@@ -19,11 +19,14 @@ from pathlib import Path
 import re
 import secrets
 import sqlite3
+import stat
 import time
 import urllib.parse
 import zipfile
 import io
 import threading
+import tomllib
+from contextlib import contextmanager
 from collections import defaultdict, deque
 
 NAME_RE = re.compile(r"^[A-Za-z][A-Za-z0-9_-]{0,63}$")
@@ -49,11 +52,19 @@ class Registry:
         self.db_path = self.root / "registry.sqlite3"
         self.initialize()
 
+    @contextmanager
     def connect(self):
         con = sqlite3.connect(self.db_path, timeout=10)
         con.row_factory = sqlite3.Row
         con.execute("PRAGMA foreign_keys=ON")
-        return con
+        try:
+            yield con
+            con.commit()
+        except Exception:
+            con.rollback()
+            raise
+        finally:
+            con.close()
 
     def initialize(self):
         with self.connect() as db:
@@ -74,6 +85,7 @@ class Registry:
               id INTEGER PRIMARY KEY,
               name TEXT NOT NULL UNIQUE,
               description TEXT NOT NULL DEFAULT '',
+              metadata_json TEXT NOT NULL DEFAULT '{}',
               owner_user_id INTEGER NOT NULL REFERENCES users(id),
               created_at INTEGER NOT NULL
             );
@@ -93,6 +105,9 @@ class Registry:
             token_columns = {row[1] for row in db.execute("PRAGMA table_info(tokens)")}
             if "expires_at" not in token_columns:
                 db.execute("ALTER TABLE tokens ADD COLUMN expires_at INTEGER NOT NULL DEFAULT 0")
+            package_columns = {row[1] for row in db.execute("PRAGMA table_info(packages)")}
+            if "metadata_json" not in package_columns:
+                db.execute("ALTER TABLE packages ADD COLUMN metadata_json TEXT NOT NULL DEFAULT '{}'")
 
     @staticmethod
     def password_hash(password: str, salt: bytes) -> bytes:
@@ -140,38 +155,132 @@ class Registry:
             db.execute("DELETE FROM tokens WHERE token_hash=?", (digest,))
 
     @staticmethod
-    def validate_archive(content: bytes):
+    def valid_requirement(requirement: str) -> bool:
+        req = requirement.strip()
+        if req in ("", "*", "latest") or SEMVER_RE.fullmatch(req):
+            return True
+        if req.startswith(("^", "~")):
+            return bool(SEMVER_RE.fullmatch(req[1:]))
+        pieces = [piece.strip() for piece in req.split(",") if piece.strip()]
+        if not pieces:
+            return False
+        for piece in pieces:
+            op = next((candidate for candidate in (">=", "<=", ">", "<", "=") if piece.startswith(candidate)), None)
+            if not op or not SEMVER_RE.fullmatch(piece[len(op):].strip()):
+                return False
+        return True
+
+    @classmethod
+    def normalize_manifest(cls, document: dict) -> dict:
+        package = document.get("package")
+        if not isinstance(package, dict):
+            raise ValueError("Punpun.toml requires a [package] table")
+        name = str(package.get("name", "")).strip()
+        version = str(package.get("version", "")).strip()
+        description = str(package.get("description", "")).strip()
+        if not NAME_RE.fullmatch(name): raise ValueError("manifest contains an invalid package name")
+        if not SEMVER_RE.fullmatch(version): raise ValueError("manifest contains an invalid semantic version")
+        if len(description) > 1000: raise ValueError("package description exceeds 1000 characters")
+        metadata = {"description": description}
+        license_name = str(package.get("license", "")).strip()
+        if license_name:
+            if len(license_name) > 128: raise ValueError("package license metadata is too long")
+            metadata["license"] = license_name
+        for field in ("repository", "homepage"):
+            value = str(package.get(field, "")).strip()
+            if value:
+                parsed = urllib.parse.urlparse(value)
+                if parsed.scheme not in {"http", "https"} or not parsed.netloc:
+                    raise ValueError(f"package {field} must be an http(s) URL")
+                metadata[field] = value
+        readme = str(package.get("readme", "")).strip()
+        if readme:
+            rel = Path(readme)
+            if rel.is_absolute() or ".." in rel.parts: raise ValueError("package readme path must stay inside the archive")
+            metadata["readme"] = rel.as_posix()
+        keywords = package.get("keywords", [])
+        if keywords:
+            if not isinstance(keywords, list) or len(keywords) > 16:
+                raise ValueError("package keywords must be a list with at most 16 entries")
+            normalized=[]
+            for keyword in keywords:
+                text=str(keyword).strip()
+                if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_+.-]{0,31}", text):
+                    raise ValueError(f"invalid package keyword: {text!r}")
+                normalized.append(text)
+            metadata["keywords"] = normalized
+        dependencies = {}
+        raw_dependencies = document.get("dependencies") or {}
+        if not isinstance(raw_dependencies, dict) or len(raw_dependencies) > 128:
+            raise ValueError("invalid dependency metadata")
+        for dep_name, spec in raw_dependencies.items():
+            dep_name = str(dep_name)
+            if not NAME_RE.fullmatch(dep_name): raise ValueError(f"invalid dependency name: {dep_name!r}")
+            if isinstance(spec, str):
+                requirement = spec.strip()
+            elif isinstance(spec, dict):
+                if "path" in spec: raise ValueError(f"published dependency {dep_name!r} may not use a local path")
+                requirement = str(spec.get("version", "")).strip()
+            else:
+                raise ValueError(f"dependency {dep_name!r} has invalid metadata")
+            if not cls.valid_requirement(requirement): raise ValueError(f"invalid version requirement for {dep_name}: {requirement!r}")
+            dependencies[dep_name] = requirement or "*"
+        return {"name": name, "version": version, "description": description, "metadata": metadata, "dependencies": dependencies}
+
+    @classmethod
+    def validate_archive(cls, content: bytes):
         if len(content) > MAX_ARCHIVE: raise ValueError("archive exceeds 32 MiB limit")
         try:
             zf = zipfile.ZipFile(io.BytesIO(content))
         except zipfile.BadZipFile:
             raise ValueError("archive is not a valid ZIP")
         total = 0
-        has_manifest = False
+        file_count = 0
+        manifest_bytes = None
+        names = set()
         for info in zf.infolist():
             name = info.filename.replace("\\", "/")
             parts = Path(name).parts
             if name.startswith("/") or ".." in parts or "\x00" in name:
                 raise ValueError(f"unsafe archive path: {name!r}")
+            if name in names: raise ValueError(f"duplicate archive path: {name!r}")
+            names.add(name)
+            mode = info.external_attr >> 16
+            if mode and stat.S_ISLNK(mode): raise ValueError(f"symbolic links are not allowed in package archives: {name!r}")
+            if info.is_dir():
+                continue
+            file_count += 1
+            if file_count > 4096: raise ValueError("package archive contains too many files")
             total += info.file_size
             if total > 128 * 1024 * 1024:
                 raise ValueError("expanded archive exceeds 128 MiB limit")
-            if name == "Punpun.toml": has_manifest = True
-        if not has_manifest: raise ValueError("package archive must contain Punpun.toml at its root")
+            if name == "Punpun.toml":
+                manifest_bytes = zf.read(info)
+        if manifest_bytes is None: raise ValueError("package archive must contain Punpun.toml at its root")
+        try:
+            document = tomllib.loads(manifest_bytes.decode("utf-8"))
+        except (UnicodeDecodeError, tomllib.TOMLDecodeError) as exc:
+            raise ValueError(f"package Punpun.toml is invalid: {exc}")
+        normalized = cls.normalize_manifest(document)
+        readme = normalized["metadata"].get("readme")
+        if readme and readme not in names: raise ValueError(f"package readme is missing from archive: {readme}")
+        return normalized
 
     def publish(self, user, payload: dict):
-        name = str(payload.get("name", ""))
-        version = str(payload.get("version", ""))
-        description = str(payload.get("description", ""))[:1000]
-        dependencies = payload.get("dependencies") or {}
-        if not NAME_RE.fullmatch(name): raise ValueError("invalid package name")
-        if not SEMVER_RE.fullmatch(version): raise ValueError("invalid semantic version")
-        if not isinstance(dependencies, dict) or len(dependencies) > 128: raise ValueError("invalid dependency metadata")
         try:
             content = base64.b64decode(payload.get("archive_b64", ""), validate=True)
         except Exception:
             raise ValueError("archive_b64 is invalid")
-        self.validate_archive(content)
+        manifest = self.validate_archive(content)
+        name = manifest["name"]
+        version = manifest["version"]
+        description = manifest["description"]
+        dependencies = manifest["dependencies"]
+        metadata = manifest["metadata"]
+        if payload.get("name") not in (None, name): raise ValueError("uploaded package name does not match Punpun.toml")
+        if payload.get("version") not in (None, version): raise ValueError("uploaded package version does not match Punpun.toml")
+        if "dependencies" in payload and payload.get("dependencies") != dependencies:
+            raise ValueError("uploaded dependency metadata does not match Punpun.toml")
         checksum = hashlib.sha256(content).hexdigest()
         supplied = str(payload.get("checksum", ""))
         if supplied and supplied != checksum: raise ValueError("archive checksum mismatch")
@@ -179,13 +288,14 @@ class Registry:
             package = db.execute("SELECT * FROM packages WHERE name=?", (name,)).fetchone()
             if package and package["owner_user_id"] != user["id"]:
                 raise PermissionError("package is owned by another user")
+            metadata_json = json.dumps(metadata, sort_keys=True, separators=(",", ":"))
             if not package:
-                cur = db.execute("INSERT INTO packages(name,description,owner_user_id,created_at) VALUES(?,?,?,?)",
-                                 (name, description, user["id"], int(time.time())))
+                cur = db.execute("INSERT INTO packages(name,description,metadata_json,owner_user_id,created_at) VALUES(?,?,?,?,?)",
+                                 (name, description, metadata_json, user["id"], int(time.time())))
                 package_id = cur.lastrowid
             else:
                 package_id = package["id"]
-                db.execute("UPDATE packages SET description=? WHERE id=?", (description, package_id))
+                db.execute("UPDATE packages SET description=?,metadata_json=? WHERE id=?", (description, metadata_json, package_id))
             if db.execute("SELECT 1 FROM versions WHERE package_id=? AND version=?", (package_id, version)).fetchone():
                 raise FileExistsError("published package versions are immutable")
             package_dir = self.storage / name / version
@@ -204,6 +314,7 @@ class Registry:
             versions = db.execute("SELECT version,checksum,dependencies_json,yanked,downloads,created_at FROM versions WHERE package_id=?", (package["id"],)).fetchall()
             return {
                 "name": package["name"], "description": package["description"], "owner": package["owner"],
+                "metadata": json.loads(package["metadata_json"] or "{}"),
                 "versions": sorted([{"version": r["version"], "checksum": r["checksum"], "dependencies": json.loads(r["dependencies_json"]),
                               "yanked": bool(r["yanked"]), "downloads": r["downloads"], "created_at": r["created_at"]} for r in versions],
                               key=lambda item: semver_key(item["version"]), reverse=True)

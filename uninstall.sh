@@ -60,5 +60,9 @@ remove_path_block "$HOME/.bashrc"
 remove_path_block "$HOME/.zshrc"
 remove_path_block "$HOME/.config/fish/config.fish"
 
+if [ -x "$ROOT/packaging/linux/uninstall-file-icons.sh" ]; then
+    "$ROOT/packaging/linux/uninstall-file-icons.sh" >/dev/null 2>&1 || true
+fi
+
 rm -rf "$ROOT"
 printf '%s\n' "Punpun $VERSION was removed. Reload VS Code and open a new terminal to refresh the environment."

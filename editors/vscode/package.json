@@ -38,7 +38,11 @@
         "extensions": [
           ".pp"
         ],
-        "configuration": "./language-configuration.json"
+        "configuration": "./language-configuration.json",
+        "icon": {
+          "light": "./assets/punpun-file-light.png",
+          "dark": "./assets/punpun-file-dark.png"
+        }
       }
     ],
     "grammars": [

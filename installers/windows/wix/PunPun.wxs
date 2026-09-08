@@ -19,7 +19,7 @@
     <Component Id="FileAssociation" Directory="INSTALLFOLDER" Guid="34F8BA81-D888-4B79-949E-3E4B9DCE9912">
       <RegistryValue Root="HKLM" Key="Software\Classes\.pp" Value="PunPun.Source" Type="string" />
       <RegistryValue Root="HKLM" Key="Software\Classes\PunPun.Source" Value="PunPun Source File" Type="string" />
-      <RegistryValue Root="HKLM" Key="Software\Classes\PunPun.Source\DefaultIcon" Value="[INSTALLFOLDER]assets\punpun-icon-256.png" Type="string" />
+      <RegistryValue Root="HKLM" Key="Software\Classes\PunPun.Source\DefaultIcon" Value="[INSTALLFOLDER]assets\punpun-source.ico" Type="string" />
     </Component>
   </Package>
 </Wix>

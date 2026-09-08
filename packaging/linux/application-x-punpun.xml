@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<mime-info xmlns="http://www.freedesktop.org/standards/shared-mime-info">
+  <mime-type type="application/x-punpun">
+    <comment>PunPun source file</comment>
+    <comment xml:lang="en">PunPun source file</comment>
+    <glob pattern="*.pp" weight="80"/>
+    <icon name="application-x-punpun"/>
+    <generic-icon name="text-x-script"/>
+  </mime-type>
+</mime-info>

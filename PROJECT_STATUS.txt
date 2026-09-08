@@ -12,6 +12,10 @@ Implemented in 0.6:
 - optional Clang/LLVM backend plus emit-llvm
 - existing 0.5 syntax/behavior compatibility fixtures, including legacy shared nums handles
 - compiler-backed LSP/editor, PPX, self-host bootstrap seed and release packaging
+- staged learning documentation with compiler-checked runnable examples
+- `.pp` file icon/association integration for VS Code, Linux MIME/hicolor desktops, and Windows MSI
+- PPX user publishing/upload, metadata validation, immutable download and named install workflows
+- deterministic publish cleanup and stale release-asset pruning
 
 Local beta release verification requires:
 - clean C17/C++17 warnings-as-errors build

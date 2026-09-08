@@ -46,7 +46,7 @@ def main() -> None:
     if OUT.exists():
         shutil.rmtree(OUT)
     OUT.mkdir()
-    for name in ('index.html','package.html','security.html'):
+    for name in ('index.html','package.html','security.html','publish.html'):
         rendered=(ROOT/'src'/name).read_text(encoding='utf-8').replace('{{VERSION}}',VERSION)
         (OUT/name).write_text(rendered,encoding='utf-8')
     shutil.copytree(ROOT/'static', OUT/'static')

@@ -33,11 +33,20 @@ def zip_tree(source:Path,dest:Path,arcroot:str|None=None):
                 z.writestr(info,p.read_bytes(),compress_type=zipfile.ZIP_DEFLATED,compresslevel=9)
 
 def copy_clean_source(dst:Path):
-    ignored={'.git','.punpun','build','dist','__pycache__','.pytest_cache','.idea','node_modules'}
+    # Source/publication copies are rebuilt from an allow-source tree rather than
+    # inheriting whatever a developer happened to generate locally.
+    ignored_dirs={
+        '.git','.punpun','build','dist','__pycache__','.pytest_cache','.mypy_cache',
+        '.ruff_cache','.idea','node_modules','__MACOSX','.ppx-registry','htmlcov'
+    }
+    ignored_names={'.DS_Store','Thumbs.db','desktop.ini','.coverage'}
+    ignored_suffixes={'.pyc','.tmp','.swp','.swo','.o','.a','.so','.dll','.exe'}
     def ignore(path,names):
         out=[]
         for n in names:
-            if n in ignored or n.endswith('.pyc') or n.endswith('.tmp'): out.append(n)
+            candidate=Path(n)
+            if n in ignored_dirs or n in ignored_names or n.endswith('~') or candidate.suffix.lower() in ignored_suffixes:
+                out.append(n)
         return out
     shutil.copytree(ROOT,dst,ignore=ignore)
 
@@ -52,7 +61,7 @@ def make_sdk(stage:Path):
     sdk.mkdir(parents=True)
     for f in ('VERSION','punpun','pp','README.md','LICENSE','CHANGELOG.md','ROADMAP.md','PROJECT_STATUS.txt','COMPLETION_REPORT.md','PUBLISHING.md','RELEASE_NOTES.md','publish-punpun.sh'):
         copy_part(ROOT/f,sdk/f)
-    for d in ('runtime','stdlib','packages','ppx','tooling','editors','docs','spec','assets','gui-maker','selfhost'):
+    for d in ('runtime','stdlib','packages','ppx','tooling','editors','docs','spec','assets','packaging','gui-maker','selfhost'):
         copy_part(ROOT/d,sdk/d)
     # Built docs are consumer-facing; source stays in source/full bundle.
     copy_part(ROOT/'docs-site'/'dist',sdk/'docs-site'/'dist')
@@ -108,6 +117,7 @@ done
 cat > "$BIN/punpun-uninstall" <<EOF
 #!/usr/bin/env sh
 set -eu
+[ ! -x "$DEST/packaging/linux/uninstall-file-icons.sh" ] || "$DEST/packaging/linux/uninstall-file-icons.sh" >/dev/null 2>&1 || true
 rm -rf "$DEST"
 for n in pp ppc ppx punpun punpun-lsp punpun-uninstall; do rm -f "$BIN/\$n"; done
 echo "PunPun $VERSION removed; user projects and PPX cache were kept."
@@ -116,6 +126,9 @@ chmod 755 "$BIN/punpun-uninstall"
 if ! printf '%s' ":$PATH:" | grep -Fq ":$BIN:"; then
   touch "$HOME/.profile"
   grep -Fq '# >>> PunPun PATH >>>' "$HOME/.profile" || printf '\n# >>> PunPun PATH >>>\nexport PATH="%s:$PATH"\n# <<< PunPun PATH <<<\n' "$BIN" >> "$HOME/.profile"
+fi
+if [ -x "$DEST/packaging/linux/install-file-icons.sh" ]; then
+  "$DEST/packaging/linux/install-file-icons.sh" >/dev/null 2>&1 || true
 fi
 vsix="$DEST/dist/punpun-vscode-{VERSION}.vsix"
 for cli in code code-insiders codium code-oss; do command -v "$cli" >/dev/null 2>&1 || continue; "$cli" --install-extension "$vsix" --force >/dev/null 2>&1 || true; break; done
@@ -136,7 +149,33 @@ __PUNPUN_PAYLOAD_BELOW__
 
 def make_pkgbuild(release:Path,sdk_tar_name:str,sdk_sha:str):
     d=ROOT/'packaging'/'arch'; d.mkdir(parents=True,exist_ok=True)
-    text=f'''pkgname=punpun\npkgver={PKGVER}\npkgrel=1\npkgdesc="PunPun native programming language SDK"\narch=('x86_64')\nurl="https://example.invalid/punpun"\nlicense=('MIT')\ndepends=('glibc' 'gcc-libs' 'python' 'nodejs')\noptdepends=('base-devel: rebuild compiler and use C injection' 'libcurl: requests package' 'libx11: PunUI Linux backend')\nsource=('{sdk_tar_name}')\nsha256sums=('{sdk_sha}')\n\npackage() {{\n  mkdir -p "$pkgdir/usr/lib/punpun" "$pkgdir/usr/bin" "$pkgdir/usr/share/licenses/punpun" "$pkgdir/usr/share/doc/punpun"\n  cp -a "$srcdir/PunPun-{VERSION}-{TARGET}/." "$pkgdir/usr/lib/punpun/"\n  for name in pp ppc ppx punpun punpun-lsp; do\n    printf '#!/bin/sh\\nexec /usr/lib/punpun/bin/%s "$@"\\n' "$name" > "$pkgdir/usr/bin/$name"\n    chmod 755 "$pkgdir/usr/bin/$name"\n  done\n  cp "$pkgdir/usr/lib/punpun/LICENSE" "$pkgdir/usr/share/licenses/punpun/LICENSE"\n  cp "$pkgdir/usr/lib/punpun/README.md" "$pkgdir/usr/share/doc/punpun/README.md"\n}}\n'''
+    text=f'''pkgname=punpun
+pkgver={PKGVER}
+pkgrel=1
+pkgdesc="PunPun native programming language SDK"
+arch=('x86_64')
+url="https://example.invalid/punpun"
+license=('MIT')
+depends=('glibc' 'gcc-libs' 'python' 'nodejs' 'shared-mime-info' 'hicolor-icon-theme')
+optdepends=('base-devel: rebuild compiler and use C injection' 'libcurl: requests package' 'libx11: PunUI Linux backend')
+source=('{sdk_tar_name}')
+sha256sums=('{sdk_sha}')
+
+package() {{
+  mkdir -p "$pkgdir/usr/lib/punpun" "$pkgdir/usr/bin" "$pkgdir/usr/share/licenses/punpun" "$pkgdir/usr/share/doc/punpun"
+  cp -a "$srcdir/PunPun-{VERSION}-{TARGET}/." "$pkgdir/usr/lib/punpun/"
+  for name in pp ppc ppx punpun punpun-lsp; do
+    printf '#!/bin/sh\nexec /usr/lib/punpun/bin/%s "$@"\n' "$name" > "$pkgdir/usr/bin/$name"
+    chmod 755 "$pkgdir/usr/bin/$name"
+  done
+  cp "$pkgdir/usr/lib/punpun/LICENSE" "$pkgdir/usr/share/licenses/punpun/LICENSE"
+  cp "$pkgdir/usr/lib/punpun/README.md" "$pkgdir/usr/share/doc/punpun/README.md"
+  install -Dm644 "$pkgdir/usr/lib/punpun/packaging/linux/application-x-punpun.xml" "$pkgdir/usr/share/mime/packages/punpun.xml"
+  for size in 16 32 64 128 256 512; do
+    install -Dm644 "$pkgdir/usr/lib/punpun/assets/punpun-icon-$size.png" "$pkgdir/usr/share/icons/hicolor/${{size}}x${{size}}/mimetypes/application-x-punpun.png"
+  done
+}}
+'''
     (d/'PKGBUILD').write_text(text)
     shutil.copy2(d/'PKGBUILD',release/'PKGBUILD')
 
@@ -149,8 +188,12 @@ def make_arch_package(sdk:Path,out:Path):
             p=root/'usr/bin'/name; p.write_text(f'#!/bin/sh\nexec /usr/lib/punpun/bin/{name} "$@"\n'); executable(p)
         lic=root/'usr/share/licenses/punpun'; lic.mkdir(parents=True); shutil.copy2(sdk/'LICENSE',lic/'LICENSE')
         doc=root/'usr/share/doc/punpun'; doc.mkdir(parents=True); shutil.copy2(sdk/'README.md',doc/'README.md')
+        mime=root/'usr/share/mime/packages'; mime.mkdir(parents=True); shutil.copy2(sdk/'packaging/linux/application-x-punpun.xml',mime/'punpun.xml')
+        for icon_size in (16,32,64,128,256,512):
+            icon_dir=root/f'usr/share/icons/hicolor/{icon_size}x{icon_size}/mimetypes'; icon_dir.mkdir(parents=True)
+            shutil.copy2(sdk/f'assets/punpun-icon-{icon_size}.png',icon_dir/'application-x-punpun.png')
         size=sum(p.stat().st_size for p in root.rglob('*') if p.is_file())
-        (root/'.PKGINFO').write_text(f'pkgname = punpun\npkgbase = punpun\npkgver = {PKGVER}-1\npkgdesc = PunPun native programming language SDK\nurl = https://example.invalid/punpun\nbuilddate = {SOURCE_DATE_EPOCH}\npackager = PunPun Project\nsize = {size}\narch = x86_64\nlicense = MIT\ndepend = glibc\ndepend = gcc-libs\ndepend = python\ndepend = nodejs\n')
+        (root/'.PKGINFO').write_text(f'pkgname = punpun\npkgbase = punpun\npkgver = {PKGVER}-1\npkgdesc = PunPun native programming language SDK\nurl = https://example.invalid/punpun\nbuilddate = {SOURCE_DATE_EPOCH}\npackager = PunPun Project\nsize = {size}\narch = x86_64\nlicense = MIT\ndepend = glibc\ndepend = gcc-libs\ndepend = python\ndepend = nodejs\ndepend = shared-mime-info\ndepend = hicolor-icon-theme\n')
         # GNU tar + zstd produces the package payload format; .MTREE is omitted on this host because libarchive/makepkg are unavailable.
         subprocess.run(['tar','--zstd','-cf',str(out),'-C',str(root),'.'],check=True)
 

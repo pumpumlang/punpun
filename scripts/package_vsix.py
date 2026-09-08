@@ -43,7 +43,7 @@ with zipfile.ZipFile(OUT,'w',zipfile.ZIP_DEFLATED) as z:
 # Validate critical files that were missing from an earlier beta VSIX.
 with zipfile.ZipFile(OUT) as z:
     names=set(z.namelist())
-    required={'extension/package.json','extension/extension.js','extension/server/server.js','extension/assets/punpun-icon-128.png','extension/syntaxes/punpun.tmLanguage.json'}
+    required={'extension/package.json','extension/extension.js','extension/server/server.js','extension/assets/punpun-icon-128.png','extension/assets/punpun-file-light.png','extension/assets/punpun-file-dark.png','extension/syntaxes/punpun.tmLanguage.json'}
     missing=required-names
     if missing: raise SystemExit('VSIX missing: '+', '.join(sorted(missing)))
 print(OUT)
