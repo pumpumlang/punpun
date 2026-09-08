@@ -16,6 +16,18 @@ PP = ROOT / 'pp'
 PPX = ROOT / 'ppx' / 'ppx.py'
 
 
+def run_checked(args, **kwargs):
+    """Run a test subprocess while preserving useful diagnostics in CI."""
+    result = subprocess.run(args, check=False, text=True, capture_output=True, **kwargs)
+    if result.returncode != 0:
+        command = ' '.join(map(str, args))
+        raise AssertionError(
+            f"command failed ({result.returncode}): {command}\n"
+            f"--- stdout ---\n{result.stdout}\n--- stderr ---\n{result.stderr}"
+        )
+    return result
+
+
 def load_module(path, name):
     spec = importlib.util.spec_from_file_location(name, path)
     mod = importlib.util.module_from_spec(spec)
@@ -114,34 +126,34 @@ class PpxRegistryIntegrationTests(unittest.TestCase):
             url=f'http://127.0.0.1:{server.server_address[1]}'
 
             root=Path(project_td)
-            subprocess.run([str(PP),'init','registry_app'],cwd=root,check=True,text=True,capture_output=True)
+            run_checked([str(PP),'init','registry_app'],cwd=root)
             env=os.environ.copy()
             env['PPX_REGISTRY']=url
             env['PUNPUN_PP']=str(PP)
             env['PUNPUN_PACKAGES']=str(Path(td)/'no-bundled-packages')
             env['XDG_CACHE_HOME']=cache_td
-            search=subprocess.run(['python3',str(PPX),'search','requests'],cwd=root,env=env,check=True,text=True,capture_output=True)
+            search=run_checked(['python3',str(PPX),'search','requests'],cwd=root,env=env)
             self.assertIn('requests',search.stdout)
             self.assertIn('registry',search.stdout)
-            added=subprocess.run(['python3',str(PPX),'add','requests'],cwd=root,env=env,check=True,text=True,capture_output=True)
+            added=run_checked(['python3',str(PPX),'add','requests'],cwd=root,env=env)
             self.assertIn('PPX added requests',added.stdout)
             (root/'src/main.pp').write_text('bring requests;\nlaunch { say(requests_available()); }\n')
-            run=subprocess.run([str(PP),'run'],cwd=root,env=env,check=True,text=True,capture_output=True)
+            run=run_checked([str(PP),'run'],cwd=root,env=env)
             self.assertRegex(run.stdout.strip(),r'^(yes|no)$')
             cached=list((Path(cache_td)/'ppx'/'packages'/'requests'/'0.1.0').rglob('.ppx-checksum'))
             self.assertEqual(len(cached),1)
 
 class FirstPartyPackageTests(unittest.TestCase):
     def make_project(self, td):
-        subprocess.run([str(PP),'init','ecosystem_test'],cwd=td,check=True,text=True,capture_output=True)
+        run_checked([str(PP),'init','ecosystem_test'],cwd=td)
         return Path(td)
 
     def add(self, root, name):
         env=os.environ.copy(); env['PUNPUN_PP']=str(PP); env['PUNPUN_PACKAGES']=str(ROOT/'packages')
-        return subprocess.run(['python3',str(PPX),'add',name],cwd=root,env=env,check=True,text=True,capture_output=True)
+        return run_checked(['python3',str(PPX),'add',name],cwd=root,env=env)
 
     def run_project(self, root):
-        return subprocess.run([str(PP),'run'],cwd=root,check=True,text=True,capture_output=True).stdout
+        return run_checked([str(PP),'run'],cwd=root).stdout
 
     def test_logging_package_compiles_and_runs(self):
         with tempfile.TemporaryDirectory() as td:
@@ -226,6 +238,18 @@ class WebsiteBuildTests(unittest.TestCase):
             proc=subprocess.run(['python3','build.py'],cwd=ROOT/site,text=True,capture_output=True)
             self.assertEqual(proc.returncode,0,proc.stderr)
             self.assertTrue((ROOT/site/'dist'/'index.html').is_file())
+
+    def test_ppx_public_site_has_offline_catalog(self):
+        subprocess.run(['python3','build.py'],cwd=ROOT/'ppx-site',check=True,text=True,capture_output=True)
+        catalog=(ROOT/'ppx-site'/'dist'/'static'/'catalog.json').read_text()
+        site_js=(ROOT/'ppx-site'/'dist'/'static'/'site.js').read_text()
+        index=(ROOT/'ppx-site'/'dist'/'index.html').read_text()
+        self.assertIn('"requests"',catalog)
+        self.assertIn('"json"',catalog)
+        self.assertNotIn('127.0.0.1',site_js)
+        self.assertNotIn('Local registry not running',site_js)
+        self.assertIn('../punpun-docs/',index)
+        self.assertTrue((ROOT/'ppx-site'/'dist'/'README.md').is_file())
 
     def test_gui_designer_is_self_contained(self):
         self.assertTrue((ROOT/'gui-maker'/'index.html').is_file())

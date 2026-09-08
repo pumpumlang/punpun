@@ -51,7 +51,7 @@ def copy_part(src:Path,dst:Path):
 def make_sdk(stage:Path):
     sdk=stage/f'PunPun-{VERSION}-{TARGET}'
     sdk.mkdir(parents=True)
-    for f in ('punpun','pp','README.md','LICENSE','CHANGELOG.md','PROJECT_STATUS.txt','COMPLETION_REPORT.md','PUBLISHING.md','RELEASE_NOTES.md'):
+    for f in ('punpun','pp','README.md','LICENSE','CHANGELOG.md','PROJECT_STATUS.txt','COMPLETION_REPORT.md','PUBLISHING.md','RELEASE_NOTES.md','publish-punpun.sh'):
         copy_part(ROOT/f,sdk/f)
     for d in ('runtime','stdlib','packages','ppx','tooling','editors','docs','assets','gui-maker','selfhost'):
         copy_part(ROOT/d,sdk/d)
@@ -164,6 +164,7 @@ def make_publisher_bundle():
         copies={
             ROOT/'PUBLISHING.md':bundle/'PUBLISHING.md',
             ROOT/'RELEASE_NOTES.md':bundle/'RELEASE_NOTES.md',
+            ROOT/'publish-punpun.sh':bundle/'publish-punpun.sh',
             RELEASE/f'PunPun-{VERSION}-source.zip':groups['source']/f'PunPun-{VERSION}-source.zip',
             RELEASE/f'PunPun-{VERSION}-{TARGET}-SDK.zip':groups['linux']/f'PunPun-{VERSION}-{TARGET}-SDK.zip',
             RELEASE/f'PunPun-{VERSION}-{TARGET}.tar.zst':groups['linux']/f'PunPun-{VERSION}-{TARGET}.tar.zst',

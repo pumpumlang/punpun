@@ -1,4 +1,53 @@
-<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>PPX · PunPunXPac</title><link rel="stylesheet" href="static/site.css"></head><body>
-<header><a class="brand" href="./"><img src="static/ppx-mark.svg" alt=""><span>PPX</span><small>PunPunXPac</small></a><nav><a href="security.html">Security</a><a href="../docs-site/">Docs</a></nav></header>
-<main><section class="hero"><p class="eyebrow">PunPun package registry</p><h1>Find packages without turning your build into a scavenger hunt.</h1><p>PPX is the package ecosystem for PunPun. This beta site connects to the local PPX registry API and is intentionally honest about being pre-production.</p><form id="search"><input id="q" autocomplete="off" placeholder="Search packages" aria-label="Search packages"><button>Search</button></form></section><section><div class="section-head"><h2>Packages</h2><span id="status">Connect a registry to begin.</span></div><div id="results" class="grid"></div></section></main>
-<footer>PPX 0.5.0-beta · Registry URL can be changed in localStorage key <code>ppxRegistry</code>.</footer><script src="static/site.js"></script></body></html>
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="description" content="Browse the first-party PunPunXPac package catalog.">
+  <title>PPX · Packages for PunPun</title>
+  <link rel="stylesheet" href="static/site.css">
+</head>
+<body>
+  <header>
+    <a class="brand" href="./">
+      <img src="static/ppx-mark.svg" alt="">
+      <span>PPX</span>
+      <small>PunPunXPac</small>
+    </a>
+    <nav>
+      <a href="security.html">Security</a>
+      <a href="../punpun-docs/">Documentation</a>
+    </nav>
+  </header>
+
+  <main>
+    <section class="hero">
+      <p class="eyebrow">The PunPun package ecosystem</p>
+      <h1>Useful packages.<br><span>Zero scavenger hunts.</span></h1>
+      <p class="hero-copy">Discover the packages bundled with PunPun 0.5.0-beta. The public catalog works on its own today and can switch to a hosted PPX registry later without changing the interface.</p>
+      <form id="search" role="search">
+        <input id="q" autocomplete="off" placeholder="Search requests, JSON, GUI…" aria-label="Search packages">
+        <button>Search packages</button>
+      </form>
+      <div class="quick-command"><span>Start here</span><code>ppx add requests</code></div>
+    </section>
+
+    <section class="catalog">
+      <div class="section-head">
+        <div><p class="eyebrow">0.5 beta catalog</p><h2>First-party packages</h2></div>
+        <span id="status" aria-live="polite">Loading bundled catalog…</span>
+      </div>
+      <div id="results" class="grid"></div>
+    </section>
+
+    <section class="feature-row">
+      <article><strong>One manifest</strong><p><code>Punpun.toml</code> drives both compilation and package resolution.</p></article>
+      <article><strong>Offline friendly</strong><p>Bundled packages remain usable without a hosted registry connection.</p></article>
+      <article><strong>Integrity checked</strong><p>Downloaded registry archives are verified before they enter the cache.</p></article>
+    </section>
+  </main>
+
+  <footer><span>PPX 0.5.0-beta</span><span>Built for the PunPun language.</span></footer>
+  <script src="static/site.js"></script>
+</body>
+</html>

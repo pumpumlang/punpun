@@ -10,6 +10,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - name: Install runtime test dependencies
+        run: sudo apt-get update && sudo apt-get install -y libcurl4-openssl-dev
       - name: Build and test
         run: make -j2 test
       - name: Probe installed compiler/linker capabilities
@@ -40,7 +42,7 @@ jobs:
           cp dist/release-0.5.0-beta/PunPun-0.5.0-beta-linux-x86_64.tar.zst packaging/arch/
           useradd -m builder
           chown -R builder:builder .
-          sudo -u builder bash -lc 'cd "$GITHUB_WORKSPACE/packaging/arch" && makepkg --noconfirm --cleanbuild --force'
+          sudo -u builder bash -lc "cd '$GITHUB_WORKSPACE/packaging/arch' && makepkg --noconfirm --cleanbuild --force"
       - name: Install, compile, upgrade, and uninstall
         run: |
           pacman -U --noconfirm packaging/arch/punpun-*.pkg.tar.zst
@@ -50,6 +52,7 @@ jobs:
           (cd "$tmp" && pp build main.pp -o smoke && ./smoke | grep -Fx arch-ok)
           pacman -U --noconfirm packaging/arch/punpun-*.pkg.tar.zst
           pacman -R --noconfirm punpun
+          hash -r
           ! command -v ppc
       - uses: actions/upload-artifact@v4
         with:

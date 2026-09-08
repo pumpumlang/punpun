@@ -52,6 +52,7 @@ def main():
     shutil.rmtree(DIST,ignore_errors=True); (DIST/'assets').mkdir(parents=True)
     shutil.copy(STATIC/'site.css',DIST/'assets/site.css'); shutil.copy(STATIC/'site.js',DIST/'assets/site.js')
     shutil.copy(ROOT.parent/'assets/punpun-mark.svg',DIST/'assets/punpun-mark.svg')
+    shutil.copy(ROOT/'README.md',DIST/'README.md')
     pages=[]
     for path in sorted(CONTENT.glob('*.md')):
         body,title=markdown(path.read_text(encoding='utf-8')); slug=path.stem

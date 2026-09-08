@@ -1,7 +1,7 @@
 [package]
 name = "requests"
 version = "0.1.0"
-description = "Native HTTP GET/POST for PunPun, backed by system libcurl"
+description = "Native HTTP requests for PunPun, loaded from the system libcurl runtime"
 entry = "src/main.pp"
 
 [dependencies]

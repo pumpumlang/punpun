@@ -1,120 +1,55 @@
-# Publishing PunPun from CachyOS/Arch Linux
+# Publish PunPun
 
-The publisher bundle contains sanitized source, Linux binaries, the installer,
-Arch packaging, deploy-ready websites, the VS Code extension, Windows installer
-source, validation reports, and SHA-256 checksums. It contains no account name,
-email address, home-directory path, access token, or signing key.
+The publisher bundle contains sanitized source, Linux binaries, an Arch package, the VS Code extension, deploy-ready websites, Windows installer source, reports and SHA-256 checksums.
 
-## 1. Install publishing tools
+## One-command publication
+
+On CachyOS/Arch, install the required tools once:
 
 ```sh
-sudo pacman -S --needed base-devel git github-cli python nodejs npm unzip zstd
+sudo pacman -S --needed git github-cli unzip coreutils
 gh auth login
-export GH_ACCOUNT="$(gh api user --jq .login)"
 ```
 
-`GH_ACCOUNT` is obtained from the account you authenticate with; no username is
-hardcoded in the project.
-
-## 2. Verify and unpack
-
-From the directory containing the publisher ZIP:
+Open the extracted `PunPun-0.5.0-beta-publisher` folder in the terminal and run:
 
 ```sh
-unzip PunPun-0.5.0-beta-publisher.zip
-cd PunPun-0.5.0-beta-publisher
-sha256sum -c SHA256SUMS
+chmod +x publish-punpun.sh
+./publish-punpun.sh
 ```
 
-## 3. Publish the source repository
+Even when Fish is your interactive shell, run this file exactly as shown; its Bash interpreter is selected automatically.
 
-```sh
-mkdir -p /tmp/punpun-publish-source
-unzip source/PunPun-0.5.0-beta-source.zip -d /tmp/punpun-publish-source
-cd /tmp/punpun-publish-source/PunPun-0.5.0-beta-source
-git init -b main
-git add .
-git commit -m "PunPun 0.5.0-beta"
-gh repo create "$GH_ACCOUNT/punpun" --public --source=. --remote=origin --push
-```
+The script safely:
 
-If the repository already exists, use its normal clone and copy the new source
-into it instead of creating it again.
+1. derives the account from your authenticated `gh` session;
+2. verifies every bundled checksum;
+3. creates or updates the `punpun` source repository;
+4. creates or updates the `v0.5.0-beta` release and its downloads;
+5. creates or updates the `punpun-docs` GitHub Pages site;
+6. creates or updates the `punpun-ppx` GitHub Pages site;
+7. prints the exact URLs at the end.
 
-## 4. Create the downloadable GitHub release
+It stages repository updates in a temporary directory, leaves your extracted bundle unchanged and stores no access token or account name in project files.
 
-Return to the unpacked publisher directory, then run:
-
-```sh
-gh release create v0.5.0-beta \
-  linux/* arch/* editor/* windows/* websites/*.zip reports/* SHA256SUMS \
-  --repo "$GH_ACCOUNT/punpun" \
-  --title "PunPun 0.5.0-beta" \
-  --notes-file RELEASE_NOTES.md \
-  --prerelease
-```
-
-This uploads real Linux artifacts and the Windows installer **source**. It does
-not claim that a Windows MSI/EXE was built on Linux.
-
-## 5. Publish documentation with GitHub Pages
-
-```sh
-rm -rf /tmp/punpun-docs-publish
-mkdir -p /tmp/punpun-docs-publish
-unzip websites/PunPun-0.5.0-beta-docs-site.zip -d /tmp/punpun-docs-publish
-cd /tmp/punpun-docs-publish
-touch .nojekyll
-git init -b main
-git add .
-git commit -m "Publish PunPun documentation"
-gh repo create "$GH_ACCOUNT/punpun-docs" --public --source=. --remote=origin --push
-gh api --method POST "repos/$GH_ACCOUNT/punpun-docs/pages" \
-  -f 'source[branch]=main' -f 'source[path]=/'
-```
-
-The documentation URL will be:
+Expected public URLs:
 
 ```text
-https://YOUR_GITHUB_USERNAME.github.io/punpun-docs/
+https://YOUR_ACCOUNT.github.io/punpun-docs/
+https://YOUR_ACCOUNT.github.io/punpun-ppx/
 ```
 
-For later documentation updates, replace the files in the repository, commit,
-and push. Do not run `gh repo create` again.
+Do not use `/docs-site/`; that is a source-directory name, not the published repository name. GitHub Pages can take a minute or two to replace an earlier 404 page after its first deployment.
 
-## 6. Publish the PPX website
+## If the script is outside the publisher folder
+
+The script automatically checks the current directory, its own directory, Desktop and Downloads. You can also provide the folder explicitly:
 
 ```sh
-rm -rf /tmp/punpun-ppx-publish
-mkdir -p /tmp/punpun-ppx-publish
-unzip websites/PunPun-0.5.0-beta-ppx-site.zip -d /tmp/punpun-ppx-publish
-cd /tmp/punpun-ppx-publish
-touch .nojekyll
-git init -b main
-git add .
-git commit -m "Publish PunPunXPac website"
-gh repo create "$GH_ACCOUNT/punpun-ppx" --public --source=. --remote=origin --push
-gh api --method POST "repos/$GH_ACCOUNT/punpun-ppx/pages" \
-  -f 'source[branch]=main' -f 'source[path]=/'
+env PUNPUN_PUBLISHER_DIR="$HOME/Desktop/PunPun-0.5.0-beta-publisher" bash publish-punpun.sh
 ```
 
-The PPX frontend needs a separately hosted registry API. Until that backend is
-deployed, it will honestly display that the registry is unavailable. Never put
-registry tokens in the website repository or browser JavaScript.
-
-## Optional: Cloudflare Pages instead
-
-After `npm` is installed and you have logged into Cloudflare:
-
-```sh
-npx wrangler@latest login
-npx wrangler@latest pages deploy /tmp/punpun-docs-publish --project-name punpun-docs
-npx wrangler@latest pages deploy /tmp/punpun-ppx-publish --project-name punpun-ppx
-```
-
-## Local verification before publishing
-
-From the source tree:
+## Local verification from source
 
 ```sh
 make clean all
@@ -124,7 +59,26 @@ python3 scripts/release.py
 python3 -m http.server 8000 --directory docs-site/dist
 ```
 
-Open `http://localhost:8000`. Stop the server with `Ctrl+C`.
+Open <http://localhost:8000> and stop the server with `Ctrl+C`.
 
-Do not publish `.punpun/`, `build/`, `__pycache__/`, local databases, shell
-history, environment files, access tokens, or private signing keys.
+## Optional Cloudflare Pages mirror
+
+From the extracted publisher folder:
+
+```sh
+rm -rf /tmp/punpun-docs-publish /tmp/punpun-ppx-publish
+mkdir -p /tmp/punpun-docs-publish /tmp/punpun-ppx-publish
+unzip "$PWD/websites/PunPun-0.5.0-beta-docs-site.zip" -d /tmp/punpun-docs-publish
+unzip "$PWD/websites/PunPun-0.5.0-beta-ppx-site.zip" -d /tmp/punpun-ppx-publish
+npx wrangler@latest login
+npx wrangler@latest pages deploy /tmp/punpun-docs-publish --project-name punpun-docs
+npx wrangler@latest pages deploy /tmp/punpun-ppx-publish --project-name punpun-ppx
+```
+
+The public PPX site uses its built-in package catalog. A local registry is no longer required for the website to render and search first-party packages.
+
+## Release honesty
+
+Linux and Arch payloads are real build artifacts. The bundle contains Windows WiX installer **source** until the Windows CI job successfully builds and validates the MSI and setup EXE. Never rename an archive to imitate a native installer.
+
+Do not publish `.punpun/`, `build/`, `__pycache__/`, local databases, shell history, environment files, access tokens or private signing keys.

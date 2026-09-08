@@ -1,11 +1,40 @@
 @inject->c("""
-#include <curl/curl.h>
 #include <dlfcn.h>
 #include "punpun.h"
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+
+/*
+ * The requests package loads libcurl at runtime, so requiring libcurl's
+ * development headers made the otherwise portable package fail on clean CI
+ * runners. These public ABI constants have been stable since the respective
+ * options were introduced. Keeping the tiny ABI surface here means users need
+ * the libcurl runtime, not a compiler-specific -dev package.
+ */
+typedef void CURL;
+typedef int CURLcode;
+typedef int CURLoption;
+typedef int CURLINFO;
+struct curl_slist;
+
+#define CURLE_OK 0
+#define CURL_GLOBAL_DEFAULT 3L
+#define CURLOPT_WRITEDATA 10001
+#define CURLOPT_URL 10002
+#define CURLOPT_WRITEFUNCTION 20011
+#define CURLOPT_POSTFIELDS 10015
+#define CURLOPT_USERAGENT 10018
+#define CURLOPT_HTTPHEADER 10023
+#define CURLOPT_CUSTOMREQUEST 10036
+#define CURLOPT_NOBODY 44
+#define CURLOPT_POST 47
+#define CURLOPT_FOLLOWLOCATION 52
+#define CURLOPT_MAXREDIRS 68
+#define CURLOPT_TIMEOUT_MS 155
+#define CURLOPT_CONNECTTIMEOUT_MS 156
+#define CURLINFO_RESPONSE_CODE 0x200002
 
 typedef CURL *(*pp_curl_easy_init_t)(void);
 typedef CURLcode (*pp_curl_easy_setopt_t)(CURL *, CURLoption, ...);

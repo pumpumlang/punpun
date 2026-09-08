@@ -8,7 +8,7 @@ license=('MIT')
 depends=('glibc' 'gcc-libs' 'python' 'nodejs')
 optdepends=('base-devel: rebuild compiler and use C injection' 'libcurl: requests package' 'libx11: PunUI Linux backend')
 source=('PunPun-0.5.0-beta-linux-x86_64.tar.zst')
-sha256sums=('12d56a93f5116529a5a24956b54226c7c2b01948fe365d4ffe680042976ad154')
+sha256sums=('0e1e6e6b576ce0fd0a0c2dd743d1456f0b53888c5a8686906330f7ef5d5d999f')
 
 package() {
   mkdir -p "$pkgdir/usr/lib/punpun" "$pkgdir/usr/bin" "$pkgdir/usr/share/licenses/punpun" "$pkgdir/usr/share/doc/punpun"

@@ -1,1 +1,35 @@
-<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Security · PPX</title><link rel="stylesheet" href="static/site.css"></head><body><header><a class="brand" href="./"><img src="static/ppx-mark.svg" alt=""><span>PPX</span><small>PunPunXPac</small></a></header><main><article class="package-page"><h1>Registry security</h1><p>The beta backend validates package names, authenticates publication, rejects archive traversal, enforces upload and expanded-size limits, stores token hashes rather than raw API tokens, verifies SHA-256 package integrity, and never executes uploaded package source during publication.</p><h2>Beta limitations</h2><p>The bundled registry is a local-development reference server. It does not claim production deployment hardening, federation, provenance signing, abuse moderation, or hosted availability.</p></article></main></body></html>
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="description" content="PPX package and registry security model.">
+  <title>Security · PPX</title>
+  <link rel="stylesheet" href="static/site.css">
+</head>
+<body>
+  <header>
+    <a class="brand" href="./"><img src="static/ppx-mark.svg" alt=""><span>PPX</span><small>PunPunXPac</small></a>
+    <nav><a href="./">Packages</a><a href="../punpun-docs/">Documentation</a></nav>
+  </header>
+  <main class="detail-main">
+    <a class="back" href="./">← Package catalog</a>
+    <article class="package-page prose">
+      <p class="eyebrow">Trust the package, not the network</p>
+      <h1>Registry security</h1>
+      <p class="lede">PPX treats package contents and network responses as untrusted input.</p>
+      <h2>Protections in this beta</h2>
+      <ul>
+        <li>SHA-256 verification before downloaded packages enter the local cache.</li>
+        <li>Archive traversal rejection and upload/expanded-size limits.</li>
+        <li>Immutable published versions with explicit, reversible yanking.</li>
+        <li>Hashed API tokens and authenticated publication endpoints.</li>
+        <li>No execution of uploaded package source during publication.</li>
+      </ul>
+      <h2>Honest beta boundary</h2>
+      <p>The server bundled in the source tree is a development reference implementation. Public hosting, provenance signing, abuse moderation, organizational accounts, rate limiting and disaster-recovery operations remain production work.</p>
+    </article>
+  </main>
+  <footer><span>PPX 0.5.0-beta</span><span>Report security issues privately to the project owner.</span></footer>
+</body>
+</html>
