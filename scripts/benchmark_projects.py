@@ -10,6 +10,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import re
 from pathlib import Path
 import statistics
 import subprocess
@@ -63,6 +64,14 @@ def summarize(values: list[float]) -> dict:
     }
 
 
+def incremental_function_counts(lines: list[str]) -> tuple[int, int] | None:
+    for line in lines:
+        match = re.match(r"stats functions\s+(\d+) reused, (\d+) rebuilt", line)
+        if match:
+            return int(match.group(1)), int(match.group(2))
+    return None
+
+
 def benchmark(project: Path, count: int, rounds: int) -> dict:
     check = samples([str(PP), "check"], project, rounds)
     subprocess.run([str(PP), "clean"], cwd=project, check=True, stdout=subprocess.DEVNULL)
@@ -78,6 +87,8 @@ def benchmark(project: Path, count: int, rounds: int) -> dict:
     expected = str(count + 1)
     if executed.returncode != 0 or executed.stdout.strip() != expected:
         raise RuntimeError(f"benchmark executable returned {executed.stdout!r}, expected {expected!r}")
+    stats_lines = incremental["stderr"].splitlines()
+    counts = incremental_function_counts(stats_lines)
     return {
         "module_count": count,
         "check": summarize(check),
@@ -85,7 +96,9 @@ def benchmark(project: Path, count: int, rounds: int) -> dict:
         "warm_release_build": summarize(warm),
         "one_function_edit_build": {
             "milliseconds": incremental["milliseconds"],
-            "compiler_stats": incremental["stderr"].splitlines(),
+            "compiler_stats": stats_lines,
+            "functions_reused": counts[0] if counts else None,
+            "functions_rebuilt": counts[1] if counts else None,
         },
         "verified_output": expected,
     }
@@ -96,12 +109,26 @@ def main() -> None:
     parser.add_argument("--modules", nargs="+", type=int, default=[10, 100, 500, 1000])
     parser.add_argument("--rounds", type=int, default=5)
     parser.add_argument("--output", type=Path, default=ROOT / "benchmarks" / "latest.json")
+    parser.add_argument("--gate", action="store_true",
+                        help="fail unless one-function edits rebuild exactly one function object")
     args = parser.parse_args()
     if args.rounds < 1 or any(value < 1 for value in args.modules):
         parser.error("module counts and rounds must be positive")
     with tempfile.TemporaryDirectory(prefix="punpun-large-project-") as temporary:
         workspace = Path(temporary)
         results = [benchmark(generate(workspace, count), count, args.rounds) for count in args.modules]
+    if args.gate:
+        failures = []
+        for result in results:
+            edit = result["one_function_edit_build"]
+            expected_reused = result["module_count"]  # N generated functions + main, one rebuilt.
+            if edit["functions_rebuilt"] != 1 or edit["functions_reused"] != expected_reused:
+                failures.append(
+                    f"{result['module_count']} modules: expected {expected_reused} reused/1 rebuilt, "
+                    f"got {edit['functions_reused']} reused/{edit['functions_rebuilt']} rebuilt"
+                )
+        if failures:
+            raise SystemExit("incremental compilation gate failed:\n  " + "\n  ".join(failures))
     payload = {
         "schema": 1,
         "compiler": subprocess.run([str(PP), "--version"], text=True, capture_output=True,

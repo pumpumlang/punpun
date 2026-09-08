@@ -21,6 +21,8 @@ python3 docs-site/build.py
 python3 ppx-site/build.py
 python3 scripts/package_vsix.py
 ./build/ppc emit-machine-ir main.pp
+./build/ppc emit-abi main.pp
+python3 scripts/benchmark_projects.py --modules 10 --rounds 1 --gate
 ```
 
 Release assembly additionally requires Pillow because `scripts/build_brand.py` regenerates all PP raster/ICO assets from the canonical geometry before packaging.

@@ -159,9 +159,10 @@ class SemanticAnalyzer {
     bool generic_owner(const std::string &owner) const { return !owner.empty() && generic_shapes_.count(owner); }
 
     [[noreturn]] static void fail(const Token &token, const std::string &message,
-                                  const std::string &help = {}, const std::string &code = "E1000") {
+                                  const std::string &help = {}, const std::string &code = "E1000",
+                                  const std::string &fix_replacement = {}) {
         throw Error(ppdiag::format(token.file, token.line, token.column, token.length,
-                                   code, message, message, help));
+                                   code, message, message, help, ppdiag::Severity::Error, fix_replacement));
     }
 
     static std::size_t edit_distance(const std::string &a, const std::string &b) {
@@ -199,6 +200,14 @@ class SemanticAnalyzer {
         for (const auto &[candidate, shape] : shapes_) { (void)shape; candidates.push_back(candidate); }
         const std::string closest = closest_name(name, candidates);
         return closest.empty() ? std::string{} : "did you mean `" + closest + "`?";
+    }
+
+    std::string name_suggestion(const std::string &name) const {
+        std::vector<std::string> candidates;
+        for (const auto &scope : scopes_) for (const auto &[candidate, variable] : scope) { (void)variable; candidates.push_back(candidate); }
+        for (const auto &[candidate, signature] : signatures_) { (void)signature; candidates.push_back(candidate); }
+        for (const auto &[candidate, shape] : shapes_) { (void)shape; candidates.push_back(candidate); }
+        return closest_name(name, candidates);
     }
 
     static Token builtin_token() { return {TokenKind::Word, "builtin", "<builtin>", 1, 1, 0, 7}; }
@@ -856,7 +865,12 @@ class SemanticAnalyzer {
                         return enum_constructor_type(expression, owner, expression.value.substr(separator + 2));
                 }
                 const auto variable = lookup(expression.value);
-                if (!variable) fail(expression.token, "unknown name '" + expression.value + "'", name_help(expression.value), "E0201");
+                if (!variable) {
+                    const std::string suggestion = name_suggestion(expression.value);
+                    fail(expression.token, "unknown name '" + expression.value + "'",
+                         suggestion.empty() ? std::string{} : "did you mean `" + suggestion + "`?",
+                         "E0201", suggestion);
+                }
                 return variable->type;
             }
             case Expr::Kind::Member:
@@ -978,7 +992,12 @@ class SemanticAnalyzer {
     Type lvalue_type(Expr &expression) {
         if (expression.kind == Expr::Kind::Variable) {
             auto variable = lookup(expression.value);
-            if (!variable) fail(expression.token, "unknown name '" + expression.value + "'", name_help(expression.value), "E0201");
+            if (!variable) {
+                    const std::string suggestion = name_suggestion(expression.value);
+                    fail(expression.token, "unknown name '" + expression.value + "'",
+                         suggestion.empty() ? std::string{} : "did you mean `" + suggestion + "`?",
+                         "E0201", suggestion);
+                }
             expression.inferred_type = variable->type;
             return variable->type;
         }
@@ -1402,7 +1421,12 @@ class SemanticAnalyzer {
                 fail(argument.token, expression.value + " requires a named owning binding",
                      "bind the value to a local variable first", "E0704");
             SemanticVariable *variable = lookup_mut(argument.value);
-            if (!variable) fail(argument.token, "unknown name '" + argument.value + "'", name_help(argument.value), "E0201");
+            if (!variable) {
+                const std::string suggestion = name_suggestion(argument.value);
+                fail(argument.token, "unknown name '" + argument.value + "'",
+                     suggestion.empty() ? std::string{} : "did you mean `" + suggestion + "`?",
+                     "E0201", suggestion);
+            }
             const bool owning = variable->type == Type::Nums || is_object(variable->type);
             if (!owning)
                 fail(argument.token, expression.value + " requires an owning object or nums value, got " +
@@ -1432,8 +1456,19 @@ class SemanticAnalyzer {
         }
 
         auto signature = signatures_.find(expression.value);
-        if (signature == signatures_.end()) fail(expression.token, "unknown function '" + expression.value + "'", name_help(expression.value), "E0201");
+        if (signature == signatures_.end()) {
+            const std::string suggestion = name_suggestion(expression.value);
+            fail(expression.token, "unknown function '" + expression.value + "'",
+                 suggestion.empty() ? std::string{} : "did you mean `" + suggestion + "`?",
+                 "E0201", suggestion);
+        }
         if (!signature->second.owner_type.empty()) fail(expression.token, "method must be called through an instance");
+        if (signature->second.visibility == Visibility::Private && current_function_ &&
+            fs::absolute(signature->second.token.file).lexically_normal() !=
+                fs::absolute(current_function_->token.file).lexically_normal())
+            fail(expression.token, "function '" + expression.value + "' is private to module '" +
+                 signature->second.token.file.filename().string() + "'",
+                 "mark it `public fn` to export it across module boundaries", "E1304");
         check_call_arguments(expression, signature->second, 0);
         return signature->second.is_async ? task_type(signature->second.result) : signature->second.result;
     }

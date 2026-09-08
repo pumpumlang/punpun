@@ -1,35 +1,32 @@
-# PunPun 0.7.0-dev.1
+# PunPun 0.7.0-dev.5 — Step 7 complete
 
-`0.7.0-dev.1` starts Step 7, the compiler-scalability/backend-maturity cycle. This is a development snapshot, not a promoted stable/beta release.
+`0.7.0-dev.5` completes the planned Step 7 / PunPun 0.7 compiler-scalability and backend-maturity milestone on the Linux x86-64 development host. It is intentionally still a development snapshot: platform promotion remains gated separately.
 
-## Step 7 Phase 7.1 highlights
+## Backend architecture
 
-- Added verified target-aware **Machine IR** below MIR.
-- Added explicit PunPun argument-block and SysV AMD64 ABI metadata.
-- Added byte-accurate parameter offsets and hidden destination pointers for by-value record returns.
-- Added call-barrier-aware liveness and a stronger physical allocator.
-- Call-live integer/pointer values prefer preserved registers; call-live floating values spill rather than silently surviving in volatile XMM registers.
-- Added farthest-end linear-scan eviction and verified stack spill slots.
-- Added Machine IR verification for control flow, definition/use order, allocation overlap, call-clobber safety and frame alignment.
-- Added `ppc emit-machine-ir` for inspectable machine-level compiler state.
-- Direct x86-64 code generation now consumes Machine IR function/ABI authority.
-- Portable C code generation is scheduled from the Machine IR function set.
-- Function fingerprints now include Machine IR ABI/allocation identity.
-- Added regression tests for ABI layout, call-live register safety and register pressure.
-- Corrected the Arch Actions setup package name from `libcurl` to `curl`.
+The direct x86-64 backend is now driven exclusively by verified Machine IR for PunPun function bodies. Machine IR explicitly carries the operations and storage identities required for aggregates, enums/match, moves/drops, addresses, members, indexed mutation, lists, short-circuit CFG and async/await lowering. The prior typed-source body emitter has been removed.
 
-## What is not complete yet
+Machine IR also owns target ABI facts, call barriers, physical register/stack locations, spill ranges and callee-save requirements. The native emitter consumes those allocations directly. Values that cross helper calls use call-safe locations; CFG-crossing values currently use conservative dedicated spill ranges rather than unsafe lifetime coalescing.
 
-The direct x86 emitter still uses typed AST nodes for detailed expression instruction selection. Phase 7.2 moves that remaining lowering behind Machine IR. Function/module object-level incremental reuse, deeper Machine IR optimization, and diagnostics/tooling hardening are later Step 7 phases.
+## Incremental compilation
 
-## Release qualification status
+Direct-native builds cache independently assemblable function objects. A function object key contains target/toolchain/optimization configuration plus the function's own interface, body/debug mapping and direct dependency ABI/layout hash. Editing an unrelated function no longer invalidates the entire native object set.
 
-The previous `0.6.0-beta.1` publisher correctly stopped after an Arch qualification failure. This 0.7 development snapshot does not overwrite that fact or claim the failed job passed. Platform release promotion remains gated independently from source development.
+`--cache-info` reports function-level hits/misses with reasons, `--stats` reports reused/rebuilt function/module counts, and the generated large-project benchmark has an exact incremental gate: a one-function edit must rebuild exactly one function.
 
-## Inspecting Machine IR
+## Optimizer/allocation
 
-```sh
-ppc emit-machine-ir main.pp
-```
+Machine IR now performs verified local copy/load propagation, redundant store/dead-move cleanup, constant branch simplification and unreachable block pruning. Allocation includes call-aware register constraints, explicit callee-save emission, allocator-owned register homes, spill ranges and safe stack-slot reuse for non-overlapping straight-line lifetimes.
 
-The output includes the target, function calling convention, argument/result placement, frame/spill requirements, call barriers and allocation intervals. Its text form is a compiler-development aid and is not yet a stable serialization format.
+## Developer experience and ecosystem
+
+- Unknown-name suggestions can expose machine-applicable fix-it replacements.
+- Cross-module calls to `private fn` are rejected with a stable diagnostic.
+- `pp lint` detects formatting drift and duplicate imports.
+- `ppc emit-abi` exposes the implemented internal/native ABI contract for inspection.
+- PPX publish ZIPs use deterministic path ordering, timestamps and metadata, making the same package bytes reproducible across mtime-only changes.
+- CI includes the incremental compilation gate in addition to the normal compiler, docs and hygiene tests.
+
+## Release truthfulness
+
+The earlier `0.6.0-beta.1` Arch qualification failure remains unresolved unless a later real Arch workflow proves otherwise. Finishing Step 7 does not waive platform gates. `0.7.0-dev.5` therefore records compiler milestone completion without pretending to be a fully qualified 0.7 beta.

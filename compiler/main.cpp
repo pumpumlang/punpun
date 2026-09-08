@@ -141,7 +141,7 @@ static bool host_can_use_direct_x86_backend() {
 static void usage() {
     std::cerr
         << "PunPun compiler " PP_VERSION "\n\n"
-        << "usage: ppc <build|run|go|check|fmt|emit-tokens|emit-ast|emit-hir|emit-ir|emit-machine-ir|emit-c|emit-asm|emit-llvm> <file.pp> [options] [-- args...]\n\n"
+        << "usage: ppc <build|run|go|check|fmt|lint|emit-tokens|emit-ast|emit-hir|emit-ir|emit-machine-ir|emit-abi|emit-c|emit-asm|emit-llvm> <file.pp> [options] [-- args...]\n\n"
         << "options:\n"
         << "  -o <path>                    Output executable/source path\n"
         << "  -I <path>                    Add an import root (repeatable)\n"
@@ -532,6 +532,157 @@ static void write_cache_fingerprint(const fs::path &path, const std::string &val
     output << value << "\n";
 }
 
+struct NativeObjectCacheResult {
+    std::vector<fs::path> objects;
+    std::unordered_map<std::string, bool> function_reused;
+    std::size_t reused = 0;
+    std::size_t rebuilt = 0;
+};
+
+static std::unordered_map<std::string, std::string> read_key_values(const fs::path &path) {
+    std::unordered_map<std::string, std::string> values;
+    std::ifstream input(path);
+    std::string line;
+    while (std::getline(input, line)) {
+        const std::size_t equals = line.find('=');
+        if (equals == std::string::npos) continue;
+        values[line.substr(0, equals)] = line.substr(equals + 1);
+    }
+    return values;
+}
+
+static std::string object_cache_reason(const std::unordered_map<std::string, std::string> &old,
+                                       const std::string &config_hash,
+                                       const pppipeline::FunctionFingerprint &fingerprint) {
+    if (old.empty()) return "no prior function object";
+    if (auto found = old.find("config"); found == old.end() || found->second != config_hash)
+        return "target/toolchain/optimization changed";
+    if (auto found = old.find("interface"); found == old.end() || found->second != fingerprint.interface_hash)
+        return "function interface changed";
+    if (auto found = old.find("dependencies"); found == old.end() || found->second != fingerprint.dependency_hash)
+        return "direct dependency ABI/layout changed";
+    if (auto found = old.find("body"); found == old.end() || found->second != fingerprint.body_hash)
+        return "function body/debug mapping changed";
+    return "cached object missing";
+}
+
+static NativeObjectCacheResult compile_native_function_objects(
+        const std::vector<Module> &modules,
+        const pppipeline::Result &pipeline,
+        bool release,
+        const pptoolchain::Config &toolchain,
+        bool use_cache,
+        bool cache_info) {
+    NativeObjectCacheResult result;
+    const fs::path root = fs::path(".punpun/cache/native-functions");
+    fs::create_directories(root);
+    const std::string config = std::string("machine-object-v4|") + PP_VERSION + "|linux-x86_64|" +
+                               (release ? "release|" : "debug|") + pptoolchain::identity(toolchain);
+    uint64_t config_value = UINT64_C(14695981039346656037);
+    config_value = fnv1a_append(config_value, config);
+    const std::string config_hash = hex_hash(config_value);
+
+    for (const ppmachine::Function &function : pipeline.machine.functions) {
+        if (function.external_native) continue;
+        const auto fp_it = pipeline.functions.find(function.name);
+        if (fp_it == pipeline.functions.end())
+            throw Error("internal compiler error: missing function fingerprint for '" + function.name + "'");
+        const pppipeline::FunctionFingerprint &fingerprint = fp_it->second;
+
+        uint64_t stable_hash = UINT64_C(14695981039346656037);
+        stable_hash = fnv1a_append(stable_hash, function.name);
+        const fs::path metadata = root / ("fn-" + hex_hash(stable_hash) + ".meta");
+
+        uint64_t object_hash = UINT64_C(14695981039346656037);
+        object_hash = fnv1a_append(object_hash, config);
+        object_hash = fnv1a_append(object_hash, "|iface=" + fingerprint.interface_hash);
+        object_hash = fnv1a_append(object_hash, "|deps=" + fingerprint.dependency_hash);
+        object_hash = fnv1a_append(object_hash, "|body=" + fingerprint.body_hash);
+        const fs::path object = root / ("obj-" + hex_hash(object_hash) + ".o");
+
+        const bool hit = use_cache && fs::is_regular_file(object);
+        result.function_reused[function.name] = hit;
+        if (hit) {
+            ++result.reused;
+            if (cache_info) std::cerr << "FUNCTION HIT  @" << function.name << " -> " << object.string() << "\n";
+        } else {
+            ++result.rebuilt;
+            if (cache_info) {
+                const auto old = read_key_values(metadata);
+                const std::string reason = !use_cache ? "cache disabled" :
+                    object_cache_reason(old, config_hash, fingerprint);
+                std::cerr << "FUNCTION MISS @" << function.name << " (" << reason << ")\n";
+            }
+
+            const std::string assembly = X86Backend(modules, pipeline.machine).generate_function_unit(function.name);
+            TemporarySource source(".s");
+            {
+                std::ofstream stream(source.path, std::ios::binary | std::ios::trunc);
+                if (!stream) throw Error("error: cannot create temporary per-function assembly file");
+                stream << assembly;
+                if (!stream) throw Error("error: failed to write per-function assembly file");
+            }
+            TemporaryOutput staged(object);
+            std::vector<std::string> compile = toolchain.cc;
+            compile.push_back(release ? "-O2" : "-g");
+            compile.insert(compile.end(), {"-c", source.path.string(), "-o", staged.staging_path.string()});
+            if (ppprocess::run(compile) != 0)
+                throw Error("error: native per-function assembly failed for '" + function.name + "'");
+            staged.commit();
+
+            std::ofstream meta(metadata, std::ios::binary | std::ios::trunc);
+            if (!meta) throw Error("error: cannot write function cache metadata '" + metadata.string() + "'");
+            meta << "name=" << function.name << "\n"
+                 << "config=" << config_hash << "\n"
+                 << "interface=" << fingerprint.interface_hash << "\n"
+                 << "dependencies=" << fingerprint.dependency_hash << "\n"
+                 << "body=" << fingerprint.body_hash << "\n"
+                 << "object=" << object.filename().string() << "\n";
+        }
+        result.objects.push_back(object);
+    }
+
+    // The C-ABI process entry is tiny but still cached independently so a
+    // one-function edit never requires reassembling unrelated entry glue.
+    uint64_t entry_hash = UINT64_C(14695981039346656037);
+    std::string entry_identity = config + "|entry";
+    if (const auto main_fp = pipeline.functions.find("main"); main_fp != pipeline.functions.end())
+        entry_identity += "|iface=" + main_fp->second.interface_hash + "|deps=" + main_fp->second.dependency_hash;
+    else
+        entry_identity += "|abi=" + pipeline.abi_hash;
+    entry_hash = fnv1a_append(entry_hash, entry_identity);
+    const fs::path entry_object = root / ("entry-" + hex_hash(entry_hash) + ".o");
+    if (!use_cache || !fs::is_regular_file(entry_object)) {
+        const std::string assembly = X86Backend(modules, pipeline.machine).generate_entry_unit();
+        TemporarySource source(".s");
+        { std::ofstream stream(source.path, std::ios::binary | std::ios::trunc); stream << assembly; }
+        TemporaryOutput staged(entry_object);
+        std::vector<std::string> compile = toolchain.cc;
+        compile.push_back(release ? "-O2" : "-g");
+        compile.insert(compile.end(), {"-c", source.path.string(), "-o", staged.staging_path.string()});
+        if (ppprocess::run(compile) != 0) throw Error("error: native entry assembly failed");
+        staged.commit();
+    }
+    result.objects.push_back(entry_object);
+    return result;
+}
+
+static std::pair<std::size_t, std::size_t> module_reuse_counts(
+        const std::vector<Module> &modules,
+        const std::unordered_map<std::string, bool> &function_reused) {
+    std::size_t reused = 0, rebuilt = 0;
+    for (const Module &module : modules) {
+        bool all_reused = true;
+        for (const Function &function : module.functions) {
+            if (function.is_extern_native) continue;
+            auto found = function_reused.find(function.name);
+            if (found == function_reused.end() || !found->second) { all_reused = false; break; }
+        }
+        if (all_reused) ++reused; else ++rebuilt;
+    }
+    return {reused, rebuilt};
+}
+
 
 static int semantic_worker() {
     const fs::path runtime = runtime_directory();
@@ -629,9 +780,9 @@ int main(int argc, char **argv) {
         }
 
         const std::string command = std::string(argv[1]) == "go" ? "run" : argv[1];
-        if (command != "build" && command != "run" && command != "check" && command != "fmt" &&
+        if (command != "build" && command != "run" && command != "check" && command != "fmt" && command != "lint" &&
             command != "emit-tokens" && command != "emit-ast" && command != "emit-hir" && command != "emit-ir" &&
-            command != "emit-machine-ir" &&
+            command != "emit-machine-ir" && command != "emit-abi" &&
             command != "emit-c" && command != "emit-asm" && command != "emit-llvm") {
             usage();
             return 2;
@@ -816,8 +967,32 @@ int main(int argc, char **argv) {
                       << "timing HIR+MIR+MIR2 " << milliseconds(ir_started, ir_finished) << " ms\n";
         };
 
-        if (command == "check") {
-            std::cout << "checked " << input.string() << "\n";
+        if (command == "check" || command == "lint") {
+            if (command == "lint") {
+                bool lint_failed = false;
+                const std::string original = read_file(fs::absolute(input));
+                const std::string formatted = ppfmt::format_source(original);
+                if (formatted != original) {
+                    std::cerr << "warning[W2001]: source is not canonically formatted\n"
+                              << "   = help: run `pp fmt " << input.string() << "`\n";
+                    lint_failed = true;
+                }
+                for (const Module &module : modules) {
+                    std::unordered_set<std::string> seen_imports;
+                    for (const std::string &name : module.imports) {
+                        if (!seen_imports.insert(name).second) {
+                            std::cerr << "warning[W2002]: duplicate import `" << name << "` in "
+                                      << module.file.string() << "\n"
+                                      << "   = help: keep a single import for deterministic module intent\n";
+                            lint_failed = true;
+                        }
+                    }
+                }
+                if (lint_failed) return 1;
+                std::cout << "linted " << input.string() << " [clean]\n";
+            } else {
+                std::cout << "checked " << input.string() << "\n";
+            }
             print_frontend_timings();
             if (show_stats) {
                 std::size_t functions = 0;
@@ -830,10 +1005,12 @@ int main(int argc, char **argv) {
             return 0;
         }
 
-        if (command == "emit-hir" || command == "emit-ir" || command == "emit-machine-ir") {
-            const std::string dumped = command == "emit-machine-ir"
-                ? ppmachine::dump(pipeline.machine)
-                : (command == "emit-ir" ? ppmir::dump(pipeline.mir) : pphir::dump(pipeline.hir));
+        if (command == "emit-hir" || command == "emit-ir" || command == "emit-machine-ir" || command == "emit-abi") {
+            const std::string dumped = command == "emit-abi"
+                ? ppmachine::dump_abi(pipeline.machine)
+                : (command == "emit-machine-ir"
+                    ? ppmachine::dump(pipeline.machine)
+                    : (command == "emit-ir" ? ppmir::dump(pipeline.mir) : pphir::dump(pipeline.hir)));
             if (!explicit_output) std::cout << dumped;
             else {
                 if (output.has_parent_path()) fs::create_directories(output.parent_path());
@@ -941,21 +1118,17 @@ int main(int argc, char **argv) {
         TemporaryOutput staged_output(output);
         std::unique_ptr<TemporarySource> temporary;
         std::vector<std::string> build;
+        NativeObjectCacheResult native_cache;
+        bool used_function_cache = false;
         const bool windows_target = target == Target::WindowsX86_64;
         const bool direct_native = !windows_target && !cc_backend && !llvm_backend && host_can_use_direct_x86_backend();
 
         if (direct_native) {
-            const std::string generated = X86Backend(modules, pipeline.machine).generate();
-            temporary = std::make_unique<TemporarySource>(".s");
-            std::ofstream stream(temporary->path);
-            if (!stream) throw Error("error: cannot create temporary assembly file");
-            stream << generated;
-            if (!stream) throw Error("error: failed to write temporary assembly file");
-
+            native_cache = compile_native_function_objects(modules, pipeline, release, toolchain, use_cache, cache_info);
+            used_function_cache = true;
             build = toolchain.cc;
-            build.push_back(release ? "-O2" : "-g");
             pptoolchain::append_linker_selection(build, toolchain);
-            build.push_back(temporary->path.string());
+            for (const fs::path &object : native_cache.objects) build.push_back(object.string());
             for (const fs::path &object : injection_objects) build.push_back(object.string());
             build.push_back((runtime / "libpunpun.a").string());
             if (has_cpp_injection(modules)) build.push_back("-lstdc++");
@@ -1020,11 +1193,20 @@ int main(int argc, char **argv) {
         }
         if (show_stats) {
             std::size_t functions = 0;
-            for (const Module &module : modules) functions += module.functions.size();
+            for (const auto &function : pipeline.machine.functions) if (!function.external_native) ++functions;
+            std::size_t reused_modules = 0, rebuilt_modules = modules.size();
+            std::size_t reused_functions = 0, rebuilt_functions = functions;
+            if (used_function_cache) {
+                const auto module_counts = module_reuse_counts(modules, native_cache.function_reused);
+                reused_modules = module_counts.first;
+                rebuilt_modules = module_counts.second;
+                reused_functions = native_cache.reused;
+                rebuilt_functions = native_cache.rebuilt;
+            }
             std::cerr << "stats files        " << modules.size() << "\n"
-                      << "stats modules      0 reused, " << modules.size() << " rebuilt\n"
-                      << "stats functions    0 reused, " << functions << " rebuilt\n"
-                      << "stats cache        " << (use_cache ? "MISS" : "DISABLED") << "\n";
+                      << "stats modules      " << reused_modules << " reused, " << rebuilt_modules << " rebuilt\n"
+                      << "stats functions    " << reused_functions << " reused, " << rebuilt_functions << " rebuilt\n"
+                      << "stats cache        " << (use_cache ? (used_function_cache && reused_functions ? "PARTIAL" : "MISS") : "DISABLED") << "\n";
         }
 
         if (command == "run") {

@@ -200,6 +200,8 @@ struct Pattern {
     std::vector<Pattern> children;
     std::size_t variant_index = 0;
     std::vector<Type> payload_types;
+    // Assigned by the ownership pass. Zero means this pattern does not introduce a binding.
+    std::size_t binding_id = 0;
 };
 inline const Type Type::Infer{"inferred"};
 inline const Type Type::Void{"void"};
@@ -248,6 +250,8 @@ struct Expr {
     // Set by the post-typechecking ownership pass when this expression transfers
     // a named move-only binding. Backends use it to clear lexical drop flags.
     bool consumes_value = false;
+    // Canonical lexical binding identity assigned by the ownership pass for variable references.
+    std::size_t binding_id = 0;
 };
 
 enum class Visibility { Public, Private, Protected };
@@ -262,6 +266,8 @@ struct Stmt {
     bool mutable_value = false;
     bool constant_value = false;
     std::string assignment_op = "=";
+    // Canonical lexical identity for declarations/range bindings.
+    std::size_t binding_id = 0;
     std::unique_ptr<Expr> expression;
     std::unique_ptr<Expr> target;
     std::unique_ptr<Expr> upper;
@@ -278,6 +284,8 @@ struct Parameter {
     bool mutable_value = false;
     Visibility visibility = Visibility::Public;  // fields use this; parameters ignore it
     std::shared_ptr<Expr> default_value;
+    // Canonical lexical identity assigned after semantic analysis. Kept last so legacy aggregate initializers remain source-compatible.
+    std::size_t binding_id = 0;
 };
 
 struct GenericParameter {
@@ -382,6 +390,16 @@ class Parser {
             else if (check("struct") || check("object") || check("sealed")) parse_modern_shape(module);
             else if (check("enum")) module.enums.push_back(parse_enum());
             else if (match("shape")) module.shapes.push_back(parse_legacy_shape());
+            else if (check("public") || check("private") || check("protected")) {
+                const Token visibility_token = peek();
+                const Visibility visibility = parse_visibility(Visibility::Public);
+                if (visibility == Visibility::Protected)
+                    fail(visibility_token, "top-level functions cannot be protected",
+                         "use `public fn` for an exported API or `private fn` for module-local code");
+                const bool async_function = match("async");
+                if (!check("fn")) fail(peek(), "expected 'fn' after top-level visibility");
+                module.functions.push_back(parse_modern_function("", false, visibility, false, async_function));
+            }
             else if (match("async")) {
                 if (!check("fn")) fail(peek(), "expected 'fn' after 'async'");
                 module.functions.push_back(parse_modern_function("", false, Visibility::Public, false, true));

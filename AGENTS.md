@@ -30,3 +30,9 @@ These rules apply to every compiler, runtime, package, documentation and release
 - Language rules that affect ABI, ownership or overload selection must be specified before implementation.
 - Backend or ABI changes must pass through Machine IR, update its verifier/specification when the contract changes, and include a regression test that exercises the affected lowering.
 - Deterministic output and reproducible tests are release requirements.
+
+## Step 7 scalability/reproducibility gates
+
+- Direct-native incremental changes must preserve per-function dependency correctness and pass `python3 scripts/benchmark_projects.py --modules 10 --rounds 1 --gate`.
+- PPX package publishing must remain byte reproducible for identical file bytes regardless of mtimes.
+- Direct x86 function bodies must remain Machine-IR-only; do not reintroduce a typed-source backend fallback.

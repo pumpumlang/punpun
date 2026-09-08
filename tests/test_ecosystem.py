@@ -91,6 +91,19 @@ class PpxUnitTests(unittest.TestCase):
             self.assertEqual(meta['versions'][0]['checksum'], checksum)
             self.assertEqual(hashlib.sha256(registry.download('demo','1.0.0')).hexdigest(), checksum)
 
+    def test_publish_archive_is_byte_reproducible(self):
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td)
+            (root / 'src').mkdir()
+            (root / 'Punpun.toml').write_text('[package]\nname="repro"\nversion="1.0.0"\nentry="src/main.pp"\n')
+            source = root / 'src' / 'main.pp'
+            source.write_text('launch { say("same"); }\n')
+            first, first_hash = self.ppx.create_package_archive(root)
+            os.utime(source, (1_600_000_000, 1_600_000_000))
+            second, second_hash = self.ppx.create_package_archive(root)
+            self.assertEqual(first, second)
+            self.assertEqual(first_hash, second_hash)
+
     def test_registry_rejects_path_traversal(self):
         buf = io.BytesIO()
         with zipfile.ZipFile(buf, 'w') as zf:

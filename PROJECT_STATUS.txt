@@ -1,6 +1,6 @@
-PunPun 0.7.0-dev.1 — Step 7 Phase 7.1 complete; Machine IR/ABI foundation active
+PunPun 0.7.0-dev.5 — Step 7 implementation complete on the Linux x86-64 development host
 
-Completed foundation from 0.6:
+Completed 0.6 foundation:
 - deterministic generics/monomorphization and constraints
 - algebraic enums, Option/Result, exhaustive match and postfix ?
 - control-flow move-state analysis, borrow checking and checked Slice<int> views
@@ -9,29 +9,26 @@ Completed foundation from 0.6:
 - compiler-backed LSP/editor, PPX, self-host bootstrap seed, docs and packaging
 - deterministic PP branding, source/release hygiene and qualify-before-promote publisher
 
-Step 7 Phase 7.1 implemented in 0.7.0-dev.1:
-- target-aware Machine IR below verified MIR
-- explicit PunPun argument-block ABI and SysV AMD64 native ABI metadata
-- record hidden-result-pointer layout and byte-accurate argument offsets
-- call-barrier-aware liveness
-- stronger linear-scan physical allocation with callee-saved call-live placement
-- farthest-end register eviction and verified stack spill slots
-- Machine IR verifier for block validity, definition/use order, allocation overlap,
-  call-clobber safety and 16-byte frame alignment
-- `ppc emit-machine-ir` inspection command
-- direct x86 backend consumes Machine IR function authority and ABI layouts
-- portable C backend consumes Machine IR function authority
-- function body fingerprints include Machine IR ABI/allocation identity
+Step 7 / 0.7 compiler milestone completed:
+- verified target-aware Machine IR with explicit PunPun/SysV ABI metadata
+- canonical lexical binding IDs and explicit move/drop/aggregate/address/index/list/await IR semantics
+- direct x86-64 function bodies are Machine-IR-only; typed-source body fallback removed
+- call-aware physical allocation, callee-save emission, spill ranges, stack-slot reuse and CFG-safe conservative spills
+- Machine IR optimization + verification before/after optimization
+- independently cached native object per PunPun function and independent entry glue
+- per-function interface/body/direct-dependency ABI/layout fingerprints
+- precise function cache hit/miss reasons and reused/rebuilt module/function statistics
+- CI incremental scalability gate for exact one-function rebuild behavior
+- stable diagnostics with machine-applicable fix-its where replacements are known
+- cross-module top-level private-function enforcement and documented FFI/ABI boundary
+- lint gates for formatting and duplicate imports
+- deterministic byte-reproducible PPX publish archives
 
-Known release qualification issue carried from beta.1:
-- the beta.1 Arch Actions job failed before makepkg/pacman qualification completed;
-  the release publisher correctly blocks promotion on this failure
-- Linux fast CI was green in the observed beta.1 run; Windows/Arch qualification
-  remain separate release gates and must not be claimed green without successful runs
-- 0.7 source development proceeds independently from that blocked 0.6 prerelease promotion
+Release qualification boundary:
+- 0.7.0-dev.5 is a development snapshot, not a promoted beta/release
+- Linux x86-64 is the development/validation host used for this Step 7 completion pass
+- the earlier beta.1 Arch Actions failure remains a platform/release issue, not a compiler-development blocker
+- no Arch/Windows 0.7 qualification is claimed until those real platform jobs pass
 
-Next Step 7 work:
-- Phase 7.2: remove remaining typed-AST detail dependencies from direct x86 body lowering
-- Phase 7.3: function/module object-level incremental reuse and dependency invalidation
-- Phase 7.4: Machine IR optimization, spill/reload placement and allocation maturity
-- Phase 7.5: diagnostics/fix-its, module/API/FFI hardening and tooling quality gates
+Next milestone after Step 7:
+- PunPun 0.8: ownership-aware structured concurrency/networking, debugging/profiling foundations, cancellation/task groups and broader platform validation

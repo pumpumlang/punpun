@@ -8,7 +8,7 @@
 </p>
 
 <p align="center">
-  <img alt="PunPun 0.7.0-dev.1" src="https://img.shields.io/badge/version-0.7.0--dev.1-b9ff4a?style=for-the-badge&labelColor=11151e">
+  <img alt="PunPun 0.7.0-dev.5" src="https://img.shields.io/badge/version-0.7.0--dev.5-b9ff4a?style=for-the-badge&labelColor=11151e">
   <img alt="Linux x86-64 qualified" src="https://img.shields.io/badge/qualified-Linux%20x86--64-66e3ff?style=for-the-badge&labelColor=11151e">
   <img alt="MIT license" src="https://img.shields.io/badge/license-MIT-f6f7fa?style=for-the-badge&labelColor=11151e">
 </p>
@@ -52,12 +52,13 @@ native executable
 
 The project values measurable compiler/runtime behavior over benchmark folklore. If a number is not measured for a named workload, it is not presented as a universal performance claim.
 
-### 0.7 development snapshot
+### 0.7 Step 7 completion snapshot
 
-- New verified **Machine IR** below MIR with explicit PunPun/SysV ABI layout, call-aware liveness, physical allocation and spill verification.
-- `ppc emit-machine-ir` exposes target ABI, frame, call-barrier and register/stack decisions for compiler work.
-- The direct x86-64 backend now consumes Machine IR as its function and ABI authority; complete Machine-IR-only instruction selection is the next Step 7 phase.
-- Function fingerprints include Machine IR ABI/allocation identity as groundwork for function/module-granular incremental compilation.
+- Verified **Machine IR** below MIR owns target ABI layout, call barriers, physical allocation, spill ranges and direct-native function-body instruction selection.
+- `ppc emit-machine-ir` exposes frame/allocation decisions; `ppc emit-abi` exposes the implemented PunPun/SysV ABI contract.
+- Direct Linux x86-64 function bodies no longer fall back to typed-source emission: aggregates, enum/match, ownership drops/moves, address/index/list/await and short-circuit CFG all reach the backend through Machine IR.
+- Direct-native builds cache independent function objects using per-function interface/body/direct-dependency fingerprints, with exact rebuild/reuse statistics and a CI scalability gate.
+- Machine IR optimization, call-safe allocation, callee-save emission, diagnostics/fix-its, module-private boundaries, lint gates and deterministic PPX publishing complete the planned Step 7 phases.
 
 The 0.6 language-foundation features remain available:
 
@@ -72,11 +73,11 @@ The 0.6 language-foundation features remain available:
 - PPX package search, install, authenticated publishing/upload, immutable downloads, checksums, and yanking.
 - A PunPun-written bootstrap compiler with fixed-point verification for its documented self-hosting subset.
 
-> **Development boundaries are explicit.** `main` is now the 0.7 development line. Linux x86-64 remains the currently host-qualified release target from the 0.6 line. Windows/Arch release claims still require their real CI gates. Machine IR exists now, but complete Machine-IR-only backend lowering, granular object reuse, and deeper optimization remain Step 7 work.
+> **Development boundaries are explicit.** `main` is the 0.7 development line and Step 7 implementation is complete in `0.7.0-dev.5` on the Linux x86-64 development host. Windows/Arch release claims still require their real CI gates, so this development snapshot is not presented as a promoted 0.7 beta.
 
 ## Install
 
-The commands below refer to the latest published 0.6 beta release artifacts. A source checkout of `main` is the newer `0.7.0-dev.1` development line.
+The commands below refer to the latest published 0.6 beta release artifacts. A source checkout of `main` is the newer `0.7.0-dev.5` Step 7-complete development line.
 
 ### Linux x86-64 installer
 

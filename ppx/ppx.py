@@ -290,7 +290,7 @@ def create_package_archive(root: Path) -> tuple[bytes, str]:
     with tempfile.NamedTemporaryFile(suffix=".zip", delete=False) as temp:
         temp_path = Path(temp.name)
     try:
-        with zipfile.ZipFile(temp_path, "w", compression=zipfile.ZIP_DEFLATED) as zf:
+        with zipfile.ZipFile(temp_path, "w", compression=zipfile.ZIP_DEFLATED, compresslevel=9) as zf:
             for path in sorted(root.rglob("*")):
                 if not path.is_file(): continue
                 rel = path.relative_to(root)
@@ -298,7 +298,13 @@ def create_package_archive(root: Path) -> tuple[bytes, str]:
                 if rel.name in {".DS_Store", "Thumbs.db", "desktop.ini"} or rel.suffix in {".pyc", ".tmp"}: continue
                 if path.stat().st_size > 16 * 1024 * 1024:
                     raise SystemExit(f"ppx: refusing unusually large package file: {rel}")
-                zf.write(path, rel.as_posix())
+                # Registry package bytes are part of the dependency identity.
+                # Never leak filesystem mtimes/UIDs into that identity.
+                info = zipfile.ZipInfo(rel.as_posix(), date_time=(1980, 1, 1, 0, 0, 0))
+                info.compress_type = zipfile.ZIP_DEFLATED
+                info.external_attr = (0o100644 & 0xFFFF) << 16
+                info.create_system = 3
+                zf.writestr(info, path.read_bytes(), compress_type=zipfile.ZIP_DEFLATED, compresslevel=9)
         content = temp_path.read_bytes()
         if len(content) > 32 * 1024 * 1024:
             raise SystemExit("ppx: package archive exceeds 32 MiB beta registry limit")

@@ -30,7 +30,7 @@ jobs:
       - name: Probe installed compiler/linker capabilities
         run: python3 scripts/probe_toolchains.py gcc clang --output toolchain-probes/linux.json
       - name: Large-project smoke benchmark
-        run: python3 scripts/benchmark_projects.py --modules 10 100 --rounds 2 --output benchmarks/linux.json
+        run: python3 scripts/benchmark_projects.py --modules 10 100 --rounds 2 --gate --output benchmarks/linux.json
       - name: Assemble and validate Linux release
         run: python3 scripts/release.py
       - uses: actions/upload-artifact@v7

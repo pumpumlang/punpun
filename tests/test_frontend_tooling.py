@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 import os
+import re
 import shutil
 import subprocess
 import tempfile
@@ -72,6 +73,34 @@ class FrontendToolingTests(unittest.TestCase):
         check = self.run_ppc("fmt", "main.pp", "--check")
         self.assertEqual(check.returncode, 0, check.stderr)
         self.assertEqual(once, 'launch:\n    when yes:\n        say "x"\n    done\ndone\n')
+
+
+    def test_unknown_name_exposes_machine_applicable_fixit(self):
+        self.write('fn answer() -> i64 { return 42; }\nlaunch { say(answr()); }\n')
+        result = self.run_ppc("check", "main.pp")
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("error[E0201]", result.stderr)
+        self.assertIn("did you mean `answer`?", result.stderr)
+        self.assertIn("= fix-it:", result.stderr)
+        self.assertIn("=> answer [machine-applicable]", result.stderr)
+
+    def test_lint_rejects_duplicate_imports(self):
+        self.write('bring std.math;\nbring std.math;\nlaunch { say(1); }\n')
+        result = self.run_ppc("lint", "main.pp")
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("warning[W2002]", result.stderr)
+        self.assertIn("duplicate import", result.stderr)
+
+
+    def test_private_top_level_function_is_module_local(self):
+        with open(os.path.join(self.temp, "helper.pp"), "w", encoding="utf-8") as handle:
+            handle.write('private fn secret() -> i64 { return 7; }\npublic fn visible() -> i64 { return 8; }\n')
+        self.write('bring helper;\nlaunch { say(secret()); }\n')
+        result = self.run_ppc("check", "main.pp", "-I", self.temp)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("error[E1304]", result.stderr)
+        self.assertIn("private to module", result.stderr)
+        self.assertIn("mark it `public fn`", result.stderr)
 
 
 if __name__ == "__main__":
@@ -147,8 +176,8 @@ class HirTests(unittest.TestCase):
         self.assertEqual(debug.returncode, 0, debug.stderr)
         self.assertEqual(release.returncode, 0, release.stderr)
         self.assertGreater(debug.stdout.count("binary +"), release.stdout.count("binary +"))
-        self.assertIn("store scratch", debug.stdout)
-        self.assertEqual(release.stdout.count("store scratch"), 1)
+        self.assertIn(":scratch", debug.stdout)
+        self.assertEqual(release.stdout.count("store $b2:scratch"), 1)
 
     def test_optimization_preserves_program_result(self):
         self.write("""
@@ -204,6 +233,37 @@ class HirTests(unittest.TestCase):
         for line in call_live_lines:
             self.assertNotRegex(line, r"-> (r10|r11|r8|r9|rcx|rdx|xmm\d+)$")
 
+    def test_emit_abi_exposes_internal_record_return_contract(self):
+        self.write("""
+            struct Pair { public x:i64; public y:i64; }
+            fn pair(x:i64,y:i64) -> Pair { return Pair(x:x,y:y); }
+            launch { let p = pair(1,2); say(p.x); }
+        """)
+        abi = self.run_ppc("emit-abi", "flow.pp")
+        self.assertEqual(abi.returncode, 0, abi.stderr)
+        self.assertIn("punpun.abi.v1 target=x86_64-sysv", abi.stdout)
+        self.assertIn("function pair cc=punpun-block", abi.stdout)
+        self.assertIn("argblock=24 sret=yes", abi.stdout)
+        self.assertIn("result type=Pair location=sret:argblock+0 size=16", abi.stdout)
+
+    def test_cfg_crossing_values_use_distinct_spill_ranges(self):
+        self.write("""
+            enum Choice { One(i64), Two(i64, i64), }
+            fn choose(c:Choice) -> i64 {
+                return match c { One(v) => v, Two(a,b) => a + b, };
+            }
+            launch { say(choose(Choice::Two(4,5))); }
+        """)
+        machine = self.run_ppc("emit-machine-ir", "flow.pp", "--release")
+        run = self.run_ppc("run", "flow.pp", "--release")
+        self.assertEqual(machine.returncode, 0, machine.stderr)
+        self.assertEqual(run.returncode, 0, run.stderr)
+        self.assertEqual(run.stdout, "9\n")
+        choose = machine.stdout.split("machine.func @choose", 1)[1].split("machine.func @main", 1)[0]
+        slots = re.findall(r"gpr call-live=(?:yes|no) cfg-live=yes -> stack\[(\d+)", choose)
+        self.assertGreaterEqual(len(slots), 3, choose)
+        self.assertEqual(len(slots), len(set(slots)), choose)
+
     def test_machine_ir_spills_and_sizes_large_argument_block(self):
         self.write("""
             fn sum12(a:i64,b:i64,c:i64,d:i64,e:i64,f:i64,g:i64,h:i64,i:i64,j:i64,k:i64,l:i64) -> i64 {
@@ -218,3 +278,83 @@ class HirTests(unittest.TestCase):
         self.assertIn("arg11 l:int -> argblock+88 size=8", machine.stdout)
         self.assertRegex(machine.stdout, r"frame slots=[1-9]\d* bytes=[1-9]\d*")
         self.assertRegex(machine.stdout, r"v\d+:int@stack\[\d+\]")
+
+    def test_direct_x86_uses_machine_ir_body_for_scalar_cfg_and_calls(self):
+        self.write("""
+            fn plus_one(value:i64) -> i64 { return value + 1; }
+            fn choose(value:i64) -> i64 {
+                if value > 3 { return plus_one(value); }
+                return value - 1;
+            }
+            launch { say(choose(5)); }
+        """)
+        asm = self.run_ppc("emit-asm", "flow.pp")
+        run = self.run_ppc("run", "flow.pp")
+        self.assertEqual(asm.returncode, 0, asm.stderr)
+        self.assertEqual(run.returncode, 0, run.stderr)
+        self.assertEqual(run.stdout, "6\n")
+        self.assertIn("# body-lowering: machine-ir @plus_one", asm.stdout)
+        self.assertIn("# body-lowering: machine-ir @choose", asm.stdout)
+        self.assertIn("# body-lowering: machine-ir @main", asm.stdout)
+
+    def test_direct_x86_short_circuit_is_machine_ir_lowered(self):
+        self.write("""
+            fn guarded(value:i64) -> bool {
+                return value != 0 and (10 / value) > 1;
+            }
+            launch { say(guarded(0)); }
+        """)
+        asm = self.run_ppc("emit-asm", "flow.pp")
+        run = self.run_ppc("run", "flow.pp")
+        self.assertEqual(asm.returncode, 0, asm.stderr)
+        self.assertEqual(run.returncode, 0, run.stderr)
+        self.assertEqual(run.stdout, "no\n")
+        self.assertIn("# body-lowering: machine-ir @guarded", asm.stdout)
+
+
+    def test_direct_x86_all_supported_semantics_use_machine_ir(self):
+        self.write("""
+            struct Pair { public left: i64; public right: i64; }
+            enum Choice { One(i64), Two(i64, i64), }
+            fn make_pair(a:i64,b:i64) -> Pair { return Pair(left: a, right: b); }
+            fn use_pair(p:Pair) -> i64 { return p.left + p.right; }
+            fn choose(c:Choice) -> i64 {
+                return match c { One(v) => v, Two(a,b) => a + b, };
+            }
+            launch {
+                let p = make_pair(2,3);
+                say(use_pair(p));
+                say(choose(Choice::Two(4,5)));
+                let mut xs = [1,2,3];
+                xs[1] = 9;
+                say(xs[1]);
+            }
+        """)
+        asm = self.run_ppc("emit-asm", "flow.pp")
+        run = self.run_ppc("run", "flow.pp")
+        self.assertEqual(asm.returncode, 0, asm.stderr)
+        self.assertEqual(run.returncode, 0, run.stderr)
+        self.assertEqual(run.stdout, "5\n9\n9\n")
+        self.assertNotIn("body-lowering: legacy-source", asm.stdout)
+        for name in ("make_pair", "use_pair", "choose", "main"):
+            self.assertIn(f"# body-lowering: machine-ir @{name}", asm.stdout)
+
+    def test_machine_allocator_locations_drive_native_emission(self):
+        self.write("""
+            fn calc(a:i64,b:i64) -> i64 {
+                let c = a + b;
+                let d = c * 2;
+                return d;
+            }
+            launch { say(calc(2,3)); }
+        """)
+        machine = self.run_ppc("emit-machine-ir", "flow.pp", "--release")
+        asm = self.run_ppc("emit-asm", "flow.pp", "--release")
+        run = self.run_ppc("run", "flow.pp", "--release")
+        self.assertEqual(machine.returncode, 0, machine.stderr)
+        self.assertEqual(asm.returncode, 0, asm.stderr)
+        self.assertEqual(run.returncode, 0, run.stderr)
+        self.assertEqual(run.stdout, "10\n")
+        self.assertRegex(machine.stdout, r"v\d+:int@r1[0-5]")
+        # r10/r11/r12 are allocator homes, not instruction-selection scratch.
+        self.assertRegex(asm.stdout, r"\bmov r1[0-5], rax\b")

@@ -36,7 +36,7 @@ The direct x86 backend must consume these Machine IR offsets rather than indepen
 
 ## Liveness and allocation
 
-Machine IR reconstructs target-aware live intervals from MIR values and marks conservative call barriers. Values that remain live across calls may not be assigned to caller-clobbered registers.
+Machine IR reconstructs target-aware live intervals from MIR values and marks conservative call barriers. Values that remain live across calls may not be assigned to caller-clobbered registers. Values used across basic-block boundaries currently receive conservative dedicated stack ranges, because block storage order is not sufficient to prove cross-CFG lifetime non-overlap.
 
 Initial register policy:
 
@@ -66,4 +66,4 @@ Machine IR verification must reject at least:
 
 ## Transitional boundary
 
-`0.7.0-dev.1` makes Machine IR authoritative for function scheduling and ABI layout, but the direct x86 emitter still consults typed AST nodes for detailed expression instruction selection. Removing that remaining source-detail dependency is Step 7 Phase 7.2. This document must not be read as claiming that transition is already finished.
+As of `0.7.0-dev.5`, Machine IR is authoritative for direct-x86 function-body instruction selection as well as ABI/allocation state. The prior typed-source function-body emitter has been removed. Portable C/LLVM remain portability code-generation paths after the same semantic/ownership/HIR/MIR/Machine-IR authority chain.

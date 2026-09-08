@@ -40,7 +40,8 @@ inline std::string format(const fs::path &file,
                           const std::string &message,
                           const std::string &label = {},
                           const std::string &help = {},
-                          Severity severity = Severity::Error) {
+                          Severity severity = Severity::Error,
+                          const std::string &fix_replacement = {}) {
     std::ostringstream out;
     out << severity_name(severity);
     if (!code.empty()) out << '[' << code << ']';
@@ -67,6 +68,16 @@ inline std::string format(const fs::path &file,
         out << '\n';
     }
     if (!help.empty()) out << "   = help: " << help << '\n';
+    if (!fix_replacement.empty()) {
+        out << "   = fix-it: " << file.string() << ':' << line << ':' << column
+            << ':' << std::max<size_t>(1, highlight_length) << " => ";
+        for (char c : fix_replacement) {
+            if (c == '\\' || c == '"') out << '\\';
+            if (c == '\n') out << "\\n";
+            else out << c;
+        }
+        out << " [machine-applicable]\n";
+    }
     return out.str();
 }
 

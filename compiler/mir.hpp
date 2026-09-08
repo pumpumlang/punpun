@@ -95,18 +95,20 @@ class Lowerer {
             std::unordered_set<VReg> definitions;
             for (const Block &block : function.blocks) {
                 for (const Instruction &instruction : block.instructions) {
+                    if (instruction.result == pphir::NoValue) continue;
+                    if (!definitions.insert(instruction.result).second)
+                        throw Error("internal compiler error: duplicate MIR virtual register");
+                    if (!function.locations.count(instruction.result))
+                        throw Error("internal compiler error: MIR virtual register has no allocation");
+                }
+            }
+            for (const Block &block : function.blocks) {
+                for (const Instruction &instruction : block.instructions)
                     for (VReg operand : instruction.operands)
                         if (!definitions.count(operand))
-                            throw Error("internal compiler error: MIR use before definition in '" + function.name + "'");
-                    if (instruction.result != pphir::NoValue) {
-                        if (!definitions.insert(instruction.result).second)
-                            throw Error("internal compiler error: duplicate MIR virtual register");
-                        if (!function.locations.count(instruction.result))
-                            throw Error("internal compiler error: MIR virtual register has no allocation");
-                    }
-                }
+                            throw Error("internal compiler error: MIR references undefined value in '" + function.name + "'");
                 if (block.terminator.value != pphir::NoValue && !definitions.count(block.terminator.value))
-                    throw Error("internal compiler error: MIR terminator use before definition");
+                    throw Error("internal compiler error: MIR terminator references undefined value");
             }
         }
     }

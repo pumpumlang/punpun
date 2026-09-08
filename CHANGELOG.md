@@ -1,3 +1,29 @@
+## 0.7.0-dev.5 — 2026-09-08
+
+- Completed all planned Step 7 / 0.7 compiler architecture phases on the Linux x86-64 development host.
+- Removed the direct-x86 typed-source body emitter; every PunPun native function body now lowers from verified Machine IR.
+- Added canonical lexical storage identities plus explicit move/drop, aggregate/enum, member/address/index, list and await Machine-IR semantics.
+- Added CFG-safe allocation behavior: cross-block values receive conservative dedicated spill ranges while straight-line spills can still reuse non-overlapping slots.
+- Made native emission consume allocator physical register homes/spill ranges and emit required callee-save preservation.
+- Added Machine-IR propagation/cleanup, branch simplification, unreachable-block pruning and verifier checks around optimization.
+- Added dependency-aware per-function object caching with interface/body/direct-layout dependency hashes and precise hit/miss reasons.
+- Added exact incremental benchmark gating: a one-function edit must rebuild exactly one function in the generated project workload.
+- Added machine-applicable unknown-name fix-it coverage, module-private function enforcement and duplicate-import linting.
+- Made PPX publish archives byte reproducible across mtime-only source changes.
+- Added explicit 0.7 incremental-compilation and FFI/ABI specifications.
+- Kept Arch/Windows release qualification separate; no platform success is claimed without a successful real platform workflow.
+
+## 0.7.0-dev.2 — 2026-09-08
+
+- Continued Step 7 Phase 7.2 with a direct-x86 body emitter driven by verified Machine IR for eligible scalar/control-flow functions.
+- Machine-IR body lowering now covers scalar constants/locals, integer/float/string operations, comparisons, branches, loops, `say`, returns, and ordinary PunPun calls.
+- PunPun call argument blocks in the new path are populated from Machine IR ABI metadata rather than source-level call reconstruction.
+- Added conservative backend selection: short-circuit logic and operations whose ownership/aggregate semantics are not yet explicit in IR stay on the legacy source-detail emitter.
+- Assembly now annotates each function with its body-lowering path for regression tests and compiler debugging.
+- Preserved the minimum signed 64-bit literal special case while moving unary lowering behind Machine IR.
+- Added tests for Machine-IR scalar CFG/calls and safe short-circuit fallback.
+- Kept the failed beta.1 Arch qualification as a separate release issue rather than weakening the publish gate.
+
 ## 0.7.0-dev.1 — 2026-09-08
 
 - Started Step 7 with a verified target-aware Machine IR below MIR.

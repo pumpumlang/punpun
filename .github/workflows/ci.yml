@@ -30,5 +30,7 @@ jobs:
           python3 docs-site/build.py
           python3 ppx-site/build.py
           python3 scripts/package_vsix.py
+      - name: Incremental compilation gate
+        run: python3 scripts/benchmark_projects.py --modules 10 --rounds 1 --gate --output benchmarks/ci.json
       - name: Source privacy and hygiene
         run: python3 scripts/privacy_audit.py .

@@ -135,6 +135,7 @@ struct Interval {
     ValueClass value_class = ValueClass::Gpr;
     std::size_t size = 8;
     bool crosses_call = false;
+    bool crosses_block = false;
     Location location;
 };
 
@@ -171,6 +172,13 @@ struct Block {
     Terminator terminator;
 };
 
+struct OptimizationStats {
+    std::size_t copies_propagated = 0;
+    std::size_t dead_moves_removed = 0;
+    std::size_t branches_simplified = 0;
+    std::size_t unreachable_blocks_removed = 0;
+};
+
 struct Function {
     std::string name;
     std::string native_symbol;
@@ -185,6 +193,8 @@ struct Function {
     std::vector<std::string> callee_saved_registers;
     std::size_t stack_slots = 0;
     std::size_t stack_frame_bytes = 0;
+    std::size_t stack_slots_reused = 0;
+    OptimizationStats optimization;
 };
 
 struct Program {
@@ -238,8 +248,8 @@ class LayoutTable {
 class Lowerer {
   public:
     Lowerer(const ppmir::Program &mir, const std::vector<Module> &modules,
-            Target target = Target::X86_64SysV)
-        : mir_(mir), layouts_(modules), target_(target) {}
+            Target target = Target::X86_64SysV, bool optimize = false)
+        : mir_(mir), layouts_(modules), target_(target), optimize_(optimize) {}
 
     Program lower() const {
         Program program;
@@ -274,16 +284,18 @@ class Lowerer {
                 const Block &block = function.blocks[expected];
                 if (block.id != expected) fail("non-canonical Machine IR block numbering");
                 for (const Instruction &instruction : block.instructions) {
+                    if (instruction.result == NoValue) continue;
+                    if (!definitions.insert(instruction.result).second)
+                        fail("duplicate Machine IR virtual register");
+                    if (!function.locations.count(instruction.result))
+                        fail("Machine IR virtual register has no location");
+                }
+            }
+            for (const Block &block : function.blocks) {
+                for (const Instruction &instruction : block.instructions)
                     for (VReg operand : instruction.operands)
                         if (!definitions.count(operand))
-                            fail("Machine IR use before definition in '" + function.name + "'");
-                    if (instruction.result != NoValue) {
-                        if (!definitions.insert(instruction.result).second)
-                            fail("duplicate Machine IR virtual register");
-                        if (!function.locations.count(instruction.result))
-                            fail("Machine IR virtual register has no location");
-                    }
-                }
+                            fail("Machine IR references undefined value in '" + function.name + "'");
                 const Terminator &term = block.terminator;
                 if (term.kind == pphir::Terminator::Kind::None)
                     fail("unterminated Machine IR block in '" + function.name + "'");
@@ -331,6 +343,7 @@ class Lowerer {
     const ppmir::Program &mir_;
     LayoutTable layouts_;
     Target target_;
+    bool optimize_ = false;
 
     [[noreturn]] static void fail(const std::string &message) {
         throw Error("internal compiler error: " + message);
@@ -366,6 +379,38 @@ class Lowerer {
     }
 
     bool record(const Type &type) const { return layouts_.is_record(type); }
+
+    static void verify_structure(const Function &function) {
+        if (function.external_native) return;
+        if (function.blocks.empty()) fail("Machine IR function has no entry block: " + function.name);
+        std::unordered_set<VReg> definitions;
+        for (std::size_t expected = 0; expected < function.blocks.size(); ++expected) {
+            const Block &block = function.blocks[expected];
+            if (block.id != expected) fail("non-canonical Machine IR block numbering");
+            for (const Instruction &instruction : block.instructions) {
+                if (instruction.result == NoValue) continue;
+                if (!definitions.insert(instruction.result).second)
+                    fail("duplicate Machine IR virtual register");
+            }
+        }
+        for (const Block &block : function.blocks) {
+            for (const Instruction &instruction : block.instructions)
+                for (VReg operand : instruction.operands)
+                    if (!definitions.count(operand))
+                        fail("Machine IR references undefined value in '" + function.name + "'");
+            const Terminator &term = block.terminator;
+            if (term.kind == pphir::Terminator::Kind::None)
+                fail("unterminated Machine IR block in '" + function.name + "'");
+            if (term.kind == pphir::Terminator::Kind::Jump) check_block(term.first, function.blocks.size());
+            if (term.kind == pphir::Terminator::Kind::Branch) {
+                if (!definitions.count(term.value)) fail("Machine IR branch uses undefined value");
+                check_block(term.first, function.blocks.size());
+                check_block(term.second, function.blocks.size());
+            }
+            if (term.kind == pphir::Terminator::Kind::Return && term.value != NoValue && !definitions.count(term.value))
+                fail("Machine IR return uses undefined value");
+        }
+    }
 
     FunctionABI lower_abi(const ppmir::Function &source) const {
         FunctionABI abi;
@@ -436,7 +481,12 @@ class Lowerer {
             case pphir::Op::Match:
             case pphir::Op::Propagate:
             case pphir::Op::Await:
+            case pphir::Op::Unary:
+            case pphir::Op::Binary:
+            case pphir::Op::Index:
             case pphir::Op::List:
+            case pphir::Op::Drop:
+            case pphir::Op::StoreIndex:
             case pphir::Op::Say:
                 return true;
             default:
@@ -486,10 +536,179 @@ class Lowerer {
         }
 
         if (!result.external_native) {
+            verify_structure(result);
+            if (optimize_) {
+                optimize_function(result);
+                // Optimizer passes are not trusted blindly. Re-verify the CFG
+                // and value graph before liveness/allocation consume it.
+                verify_structure(result);
+            }
             build_intervals(result);
             allocate(result);
         }
         return result;
+    }
+
+    static VReg resolve_value(VReg value, const std::unordered_map<VReg, VReg> &replacement) {
+        std::unordered_set<VReg> seen;
+        auto found = replacement.find(value);
+        while (found != replacement.end() && seen.insert(value).second) {
+            value = found->second;
+            found = replacement.find(value);
+        }
+        return value;
+    }
+
+    static std::string addressed_storage(const Instruction &instruction) {
+        if (instruction.op != pphir::Op::AddressOf) return {};
+        const std::size_t space = instruction.detail.find(' ');
+        if (space == std::string::npos || space + 1 >= instruction.detail.size()) return {};
+        const std::string target = instruction.detail.substr(space + 1);
+        if (!target.empty() && target.front() != '.') return target;
+        return {};
+    }
+
+    void optimize_function(Function &function) const {
+        std::unordered_map<VReg, Type> types;
+        std::unordered_set<std::string> address_taken;
+        for (const Block &block : function.blocks) {
+            for (const Instruction &instruction : block.instructions) {
+                if (instruction.result != NoValue) types[instruction.result] = instruction.type;
+                const std::string storage = addressed_storage(instruction);
+                if (!storage.empty()) address_taken.insert(storage);
+            }
+        }
+
+        for (Block &block : function.blocks) {
+            std::unordered_map<VReg, VReg> replacement;
+            std::unordered_map<std::string, VReg> stored;
+            std::unordered_map<VReg, bool> known_truth;
+            std::vector<Instruction> rewritten;
+            rewritten.reserve(block.instructions.size());
+
+            for (Instruction instruction : block.instructions) {
+                for (VReg &operand : instruction.operands) operand = resolve_value(operand, replacement);
+
+                if (instruction.op == pphir::Op::Load && instruction.result != NoValue &&
+                    !address_taken.count(instruction.detail)) {
+                    auto prior = stored.find(instruction.detail);
+                    if (prior != stored.end()) {
+                        const VReg source = resolve_value(prior->second, replacement);
+                        auto type = types.find(source);
+                        if (type != types.end() && layouts_.classify(type->second) != ValueClass::Aggregate) {
+                            replacement[instruction.result] = source;
+                            ++function.optimization.copies_propagated;
+                            continue;
+                        }
+                    }
+                }
+
+                if (instruction.op == pphir::Op::Store && instruction.operands.size() == 1 &&
+                    !address_taken.count(instruction.detail)) {
+                    const VReg source = resolve_value(instruction.operands.front(), replacement);
+                    auto type = types.find(source);
+                    if (type != types.end() && layouts_.classify(type->second) != ValueClass::Aggregate) {
+                        auto prior = stored.find(instruction.detail);
+                        if (prior != stored.end() && resolve_value(prior->second, replacement) == source) {
+                            ++function.optimization.dead_moves_removed;
+                            continue;
+                        }
+                        stored[instruction.detail] = source;
+                    } else stored.erase(instruction.detail);
+                } else if (instruction.op == pphir::Op::MoveLoad || instruction.op == pphir::Op::Drop) {
+                    stored.erase(instruction.detail);
+                }
+
+                if (instruction.op == pphir::Op::Constant && instruction.result != NoValue) {
+                    if (instruction.type == Type::Bool)
+                        known_truth[instruction.result] = instruction.detail == "yes" || instruction.detail == "true" || instruction.detail == "1";
+                    else if (instruction.type == Type::Int) {
+                        try { known_truth[instruction.result] = std::stoll(instruction.detail) != 0; }
+                        catch (...) {}
+                    }
+                }
+                rewritten.push_back(std::move(instruction));
+            }
+
+            for (Instruction &instruction : rewritten)
+                for (VReg &operand : instruction.operands) operand = resolve_value(operand, replacement);
+            if (block.terminator.value != NoValue)
+                block.terminator.value = resolve_value(block.terminator.value, replacement);
+            if (block.terminator.kind == pphir::Terminator::Kind::Branch) {
+                auto truth = known_truth.find(block.terminator.value);
+                if (truth != known_truth.end()) {
+                    block.terminator.kind = pphir::Terminator::Kind::Jump;
+                    block.terminator.first = truth->second ? block.terminator.first : block.terminator.second;
+                    block.terminator.second = NoBlock;
+                    block.terminator.value = NoValue;
+                    ++function.optimization.branches_simplified;
+                }
+            }
+            block.instructions = std::move(rewritten);
+        }
+
+        // Temporary CFG join slots are compiler-created moves. Once copy
+        // propagation removes their loads, delete the now-unobservable stores.
+        std::unordered_set<std::string> observed_storage;
+        for (const Block &block : function.blocks) for (const Instruction &instruction : block.instructions) {
+            if (instruction.op == pphir::Op::Load || instruction.op == pphir::Op::MoveLoad)
+                observed_storage.insert(instruction.detail);
+            const std::string addressed = addressed_storage(instruction);
+            if (!addressed.empty()) observed_storage.insert(addressed);
+        }
+        for (Block &block : function.blocks) {
+            std::vector<Instruction> kept;
+            kept.reserve(block.instructions.size());
+            for (Instruction &instruction : block.instructions) {
+                if (instruction.op == pphir::Op::Store && instruction.detail.rfind("$tmp.", 0) == 0 &&
+                    !observed_storage.count(instruction.detail)) {
+                    ++function.optimization.dead_moves_removed;
+                    continue;
+                }
+                kept.push_back(std::move(instruction));
+            }
+            block.instructions = std::move(kept);
+        }
+
+        // Constant-branch simplification can disconnect entire blocks. Prune
+        // them before liveness so dead code cannot inflate intervals or spills.
+        if (!function.blocks.empty()) {
+            std::vector<bool> reachable(function.blocks.size(), false);
+            std::vector<BlockId> work{0};
+            while (!work.empty()) {
+                const BlockId id = work.back(); work.pop_back();
+                if (id >= function.blocks.size() || reachable[id]) continue;
+                reachable[id] = true;
+                const Terminator &term = function.blocks[id].terminator;
+                if (term.kind == pphir::Terminator::Kind::Jump) work.push_back(term.first);
+                else if (term.kind == pphir::Terminator::Kind::Branch) {
+                    work.push_back(term.first); work.push_back(term.second);
+                }
+            }
+            const std::size_t kept_count = static_cast<std::size_t>(
+                std::count(reachable.begin(), reachable.end(), true));
+            if (kept_count != function.blocks.size()) {
+                std::vector<BlockId> remap(function.blocks.size(), NoBlock);
+                BlockId next = 0;
+                for (std::size_t old_id = 0; old_id < reachable.size(); ++old_id)
+                    if (reachable[old_id]) remap[old_id] = next++;
+                std::vector<Block> kept_blocks; kept_blocks.reserve(kept_count);
+                for (std::size_t old_id = 0; old_id < function.blocks.size(); ++old_id) {
+                    if (!reachable[old_id]) continue;
+                    Block block = std::move(function.blocks[old_id]);
+                    block.id = remap[old_id];
+                    if (block.terminator.kind == pphir::Terminator::Kind::Jump)
+                        block.terminator.first = remap[block.terminator.first];
+                    else if (block.terminator.kind == pphir::Terminator::Kind::Branch) {
+                        block.terminator.first = remap[block.terminator.first];
+                        block.terminator.second = remap[block.terminator.second];
+                    }
+                    kept_blocks.push_back(std::move(block));
+                }
+                function.optimization.unreachable_blocks_removed += function.blocks.size() - kept_count;
+                function.blocks = std::move(kept_blocks);
+            }
+        }
     }
 
     void build_intervals(Function &function) const {
@@ -506,7 +725,10 @@ class Lowerer {
         const std::size_t missing = std::numeric_limits<std::size_t>::max();
         std::vector<std::size_t> starts(count, missing), ends(count, 0);
         std::vector<Type> types(count, Type::Void);
+        std::vector<BlockId> definition_blocks(count, NoBlock);
+        std::vector<bool> crosses_block(count, false);
         std::vector<std::size_t> barriers;
+        std::unordered_set<VReg> forced_call_live;
 
         std::size_t position = 0;
         for (const Block &block : function.blocks) {
@@ -517,8 +739,22 @@ class Lowerer {
                     starts[instruction.result] = position;
                     ends[instruction.result] = position;
                     types[instruction.result] = instruction.type;
+                    definition_blocks[instruction.result] = block.id;
                 }
-                if (instruction.call_barrier) barriers.push_back(position);
+                if (instruction.call_barrier) {
+                    barriers.push_back(position);
+                    // A Machine-IR operation is atomic, but native lowering can
+                    // require more than one runtime call (notably list creation,
+                    // aggregate/drop helpers and some conversions). Values used
+                    // by the operation, and a result produced before an internal
+                    // helper call, must therefore have call-safe homes even when
+                    // their abstract interval begins/ends at this exact position.
+                    // Being conservative here is cheap and prevents the emitter's
+                    // scratch/helper calls from invalidating allocator state.
+                    for (VReg operand : instruction.operands)
+                        if (operand < count) forced_call_live.insert(operand);
+                    if (instruction.result != NoValue) forced_call_live.insert(instruction.result);
+                }
                 ++position;
             }
             if (block.terminator.value != NoValue && block.terminator.value < count)
@@ -526,9 +762,26 @@ class Lowerer {
             ++position;
         }
 
+        // Linear-scan positions alone are not sufficient across a CFG: block
+        // storage order is not dominance order (a match arm can be emitted after
+        // its join block). Keep cross-block SSA values in spill slots until the
+        // allocator grows a full interference graph. This is conservative but
+        // correct, while straight-line/basic-block temporaries still use physical
+        // registers and call-aware allocation.
+        for (const Block &block : function.blocks) {
+            auto note_use = [&](VReg value) {
+                if (value == NoValue || value >= count) return;
+                if (definition_blocks[value] != NoBlock && definition_blocks[value] != block.id)
+                    crosses_block[value] = true;
+            };
+            for (const Instruction &instruction : block.instructions)
+                for (VReg operand : instruction.operands) note_use(operand);
+            note_use(block.terminator.value);
+        }
+
         for (VReg value = 0; value < count; ++value) {
             if (starts[value] == missing) continue;
-            bool crosses = false;
+            bool crosses = forced_call_live.count(value) != 0;
             for (std::size_t barrier : barriers) {
                 if (starts[value] < barrier && barrier < ends[value]) {
                     crosses = true;
@@ -537,18 +790,22 @@ class Lowerer {
             }
             const std::size_t size = std::max<std::size_t>(8, align_up(layouts_.size_of(types[value]), 8));
             function.intervals.push_back({value, starts[value], ends[value], types[value],
-                                          layouts_.classify(types[value]), size, crosses, {}});
+                                          layouts_.classify(types[value]), size, crosses,
+                                          crosses_block[value], {}});
         }
     }
 
     static std::vector<std::string> allowed_registers(const Interval &interval) {
-        if (interval.value_class == ValueClass::Aggregate) return {};
+        if (interval.value_class == ValueClass::Aggregate || interval.crosses_block) return {};
         if (interval.value_class == ValueClass::Fpr) {
             if (interval.crosses_call) return {};
             return {"xmm8", "xmm9", "xmm10", "xmm11", "xmm12", "xmm13", "xmm14", "xmm15"};
         }
         if (interval.crosses_call) return {"r12", "r13", "r14", "r15", "rbx"};
-        return {"r10", "r11", "r8", "r9", "rcx", "rdx", "r12", "r13", "r14", "r15", "rbx"};
+        // rax/rdi/rsi/rdx/rcx/r8/r9 are reserved as instruction-selection
+        // scratch/ABI registers. Keeping allocator homes out of them makes the
+        // Machine IR location contract directly consumable by the emitter.
+        return {"r10", "r11", "r12", "r13", "r14", "r15", "rbx"};
     }
 
     static void expire(std::vector<Interval *> &active, std::size_t start) {
@@ -604,47 +861,57 @@ class Lowerer {
         }
     }
 
-    struct ReusableSlot {
-        std::size_t slot = 0;
-        std::size_t end = 0;
-    };
-
-    static std::size_t find_reusable_scalar_slot(const std::vector<ReusableSlot> &slots,
-                                                 std::size_t start) {
-        for (std::size_t index = 0; index < slots.size(); ++index)
-            if (slots[index].end < start) return index;
-        return slots.size();
-    }
-
     static void assign_stack_slots(Function &function) {
         std::vector<Interval *> spilled;
         for (Interval &interval : function.intervals)
             if (interval.location.kind == Location::Kind::Stack) spilled.push_back(&interval);
         std::sort(spilled.begin(), spilled.end(), [](const Interval *left, const Interval *right) {
             if (left->start != right->start) return left->start < right->start;
+            if (left->end != right->end) return left->end < right->end;
             return left->value < right->value;
         });
 
-        std::vector<ReusableSlot> scalar_slots;
-        std::size_t next_slot = 0;
+        // Values that cross basic-block boundaries need a CFG-aware interference
+        // graph before their slots can safely be coalesced. Reserve those ranges
+        // for the full function. Straight-line spills still use first-fit lifetime
+        // reuse below. This avoids the classic match/join bug where two values
+        // defined in different arms looked disjoint in block storage order but
+        // were simultaneously live at the join.
+        std::size_t reserved_slots = 0;
+        std::size_t naive_slots = 0;
         for (Interval *interval : spilled) {
             const std::size_t needed = std::max<std::size_t>(1, align_up(interval->size, 8) / 8);
-            if (interval->value_class != ValueClass::Aggregate && needed == 1) {
-                const std::size_t reusable = find_reusable_scalar_slot(scalar_slots, interval->start);
-                if (reusable == scalar_slots.size()) {
-                    const std::size_t slot = next_slot++;
-                    scalar_slots.push_back({slot, interval->end});
-                    interval->location = {Location::Kind::Stack, "", slot, 1};
-                } else {
-                    scalar_slots[reusable].end = interval->end;
-                    interval->location = {Location::Kind::Stack, "", scalar_slots[reusable].slot, 1};
-                }
-            } else {
-                interval->location = {Location::Kind::Stack, "", next_slot, needed};
-                next_slot += needed;
-            }
+            naive_slots += needed;
+            if (!interval->crosses_block) continue;
+            interval->location = {Location::Kind::Stack, "", reserved_slots, needed};
+            reserved_slots += needed;
         }
-        function.stack_slots = next_slot;
+
+        // One end-position per reusable physical 8-byte stack word. Cross-block
+        // reservations occupy the prefix and are never considered available.
+        std::vector<std::size_t> slot_ends(reserved_slots, std::numeric_limits<std::size_t>::max());
+        for (Interval *interval : spilled) {
+            if (interval->crosses_block) continue;
+            const std::size_t needed = std::max<std::size_t>(1, align_up(interval->size, 8) / 8);
+            std::size_t chosen = reserved_slots;
+            for (;; ++chosen) {
+                bool available = true;
+                for (std::size_t word = 0; word < needed; ++word) {
+                    const std::size_t slot = chosen + word;
+                    if (slot < slot_ends.size() && slot_ends[slot] >= interval->start) {
+                        available = false;
+                        break;
+                    }
+                }
+                if (available) break;
+            }
+            if (slot_ends.size() < chosen + needed) slot_ends.resize(chosen + needed, 0);
+            for (std::size_t word = 0; word < needed; ++word)
+                slot_ends[chosen + word] = interval->end;
+            interval->location = {Location::Kind::Stack, "", chosen, needed};
+        }
+        function.stack_slots = slot_ends.size();
+        function.stack_slots_reused = naive_slots >= function.stack_slots ? naive_slots - function.stack_slots : 0;
         function.stack_frame_bytes = align_up(function.stack_slots * 8, 16);
     }
 
@@ -671,6 +938,34 @@ class Lowerer {
             if (preserved.count(name)) function.callee_saved_registers.push_back(name);
     }
 };
+
+inline std::string dump_abi(const Program &program) {
+    std::ostringstream out;
+    out << "punpun.abi.v1 target=" << target_name(program.target) << "\n";
+    for (const Function &function : program.functions) {
+        out << "function " << function.name
+            << " cc=" << calling_convention_name(function.abi.convention)
+            << " visibility=resolved"
+            << " async=" << (function.is_async ? "yes" : "no")
+            << " extern=" << (function.external_native ? "yes" : "no")
+            << " argblock=" << function.abi.argument_block_size
+            << " sret=" << (function.abi.hidden_result_pointer ? "yes" : "no") << "\n";
+        for (std::size_t i = 0; i < function.abi.parameters.size(); ++i) {
+            const AbiValue &arg = function.abi.parameters[i];
+            out << "  param " << i;
+            if (i < function.parameters.size()) out << " name=" << function.parameters[i].first;
+            out << " type=" << type_name(arg.type)
+                << " location=" << abi_location_name(arg.location)
+                << " size=" << arg.location.size << "\n";
+        }
+        out << "  result type=" << type_name(function.result)
+            << " location=" << abi_location_name(function.abi.result.location)
+            << " size=" << function.abi.result.location.size << "\n";
+        if (function.external_native && !function.native_symbol.empty())
+            out << "  native-symbol " << function.native_symbol << "\n";
+    }
+    return out.str();
+}
 
 inline std::string dump(const Program &program) {
     std::ostringstream out;
@@ -699,7 +994,8 @@ inline std::string dump(const Program &program) {
                 << " size=" << function.abi.result.location.size << "\n";
         if (function.external_native) continue;
 
-        out << "  frame slots=" << function.stack_slots << " bytes=" << function.stack_frame_bytes;
+        out << "  frame slots=" << function.stack_slots << " bytes=" << function.stack_frame_bytes
+            << " reused-slots=" << function.stack_slots_reused;
         if (!function.callee_saved_registers.empty()) {
             out << " saved=";
             for (std::size_t i = 0; i < function.callee_saved_registers.size(); ++i) {
@@ -708,6 +1004,13 @@ inline std::string dump(const Program &program) {
             }
         }
         out << "\n";
+        if (function.optimization.copies_propagated || function.optimization.dead_moves_removed ||
+            function.optimization.branches_simplified || function.optimization.unreachable_blocks_removed) {
+            out << "  optimize copies=" << function.optimization.copies_propagated
+                << " dead-moves=" << function.optimization.dead_moves_removed
+                << " branches=" << function.optimization.branches_simplified
+                << " unreachable=" << function.optimization.unreachable_blocks_removed << "\n";
+        }
         for (const Block &block : function.blocks) {
             out << "  bb" << block.id << ":\n";
             for (const Instruction &instruction : block.instructions) {
@@ -742,6 +1045,7 @@ inline std::string dump(const Program &program) {
             out << "    v" << interval.value << " [" << interval.start << ',' << interval.end << "] "
                 << value_class_name(interval.value_class)
                 << " call-live=" << (interval.crosses_call ? "yes" : "no")
+                << " cfg-live=" << (interval.crosses_block ? "yes" : "no")
                 << " -> " << location_name(interval.location) << "\n";
         }
     }

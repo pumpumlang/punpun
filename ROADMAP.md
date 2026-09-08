@@ -32,47 +32,50 @@ The beta.1 promotion gate is intentionally separate from compiler development. T
 
 ## Step 7 / PunPun 0.7 — compiler scalability and backend maturity
 
-Step 7 is the 0.7 architecture milestone.
+Step 7 is **implementation-complete in `0.7.0-dev.5` on the Linux x86-64 development host**. This is a development milestone, not a claim that the 0.7 release has passed Arch/Windows promotion gates.
 
-### Phase 7.1 — Machine IR and explicit ABI (`0.7.0-dev.1`) — complete
+### Phase 7.1 — Machine IR and explicit ABI — complete
 
-- Introduced verified target-aware **Machine IR** below MIR (`compiler/machine_ir.hpp`).
-- Added explicit PunPun argument-block and SysV AMD64 ABI descriptions for parameters and return values.
-- Added record-return hidden-result-pointer layout and byte-accurate PunPun argument-block offsets.
-- Added call-barrier-aware liveness and a stronger linear-scan allocator with callee-saved register preference for call-live values, farthest-end eviction and spill slots.
-- Added Machine IR allocation verification for overlapping registers/stack slots, invalid block targets, call-clobber violations and frame alignment.
-- Direct x86-64 emission now consumes Machine IR as the function/ABI authority rather than recomputing PunPun call layouts independently.
-- Portable C emission is scheduled from the authoritative Machine IR function set.
-- Added `ppc emit-machine-ir <file.pp>` for inspectable ABI/allocation output.
-- Function body fingerprints now include Machine IR ABI/allocation identity, preparing granular incremental compilation for later Step 7 phases.
+- Added verified target-aware Machine IR below MIR.
+- Made PunPun argument-block and SysV AMD64 ABI locations explicit, including hidden result pointers for by-value records.
+- Added call barriers, liveness, value classes, physical locations, callee-save requirements, spills and frame verification.
+- Added `ppc emit-machine-ir` and `ppc emit-abi` for inspectable compiler/ABI state.
 
-### Phase 7.2 — complete backend decoupling — next
+### Phase 7.2 — complete backend decoupling — complete
 
-- Move remaining direct x86 instruction selection from typed AST/source-detail helpers into Machine IR operations.
-- Make Machine IR the sole backend body representation for ordinary PunPun functions.
-- Add explicit machine-level copies, loads/stores, call argument moves, spill/reload pseudos and lowered control-flow edges where required.
-- Keep portable C/LLVM semantics on the same verified program authority while avoiding a second semantic implementation.
+- Canonical lexical binding IDs now prevent shadowed source names from aliasing backend storage.
+- HIR/MIR/Machine IR explicitly represent move-loads, drops, aggregate/enum construction, member/address/deref/index stores, lists, async/await and CFG-based short-circuit/match behavior.
+- The direct x86-64 backend emits **every non-extern PunPun function body from verified Machine IR**. The old typed-source body emitter has been removed.
+- Machine IR call metadata is the authority for internal argument blocks and native ABI placement.
 
-### Phase 7.3 — granular incremental compilation
+### Phase 7.3 — granular incremental compilation — complete
 
-- Persist function/module dependency fingerprints rather than only whole-program executable fingerprints.
-- Rebuild only invalidated functions/modules and reuse stable native objects where safe.
-- Surface precise cache reasons in `--cache-info` and rebuilt/reused counts in `--stats`.
-- Keep toolchain, ABI, runtime, target and optimization configuration in cache identity.
+- Direct-native builds assemble/cache one object per PunPun function plus independent process-entry glue.
+- Function cache identity is split into interface, body/debug mapping and direct dependency ABI/layout hashes.
+- Unrelated function/interface changes no longer invalidate every native function object.
+- `--cache-info` reports function-level hits/misses and precise invalidation reasons; `--stats` reports function/module reused/rebuilt counts.
+- `scripts/benchmark_projects.py --gate` verifies a one-function edit rebuilds exactly that function in the generated large-project workload and is enforced in CI.
 
-### Phase 7.4 — optimizer and allocation maturity
+### Phase 7.4 — optimizer and allocation maturity — complete
 
-- Add Machine IR copy propagation, dead-move elimination and branch cleanup with verifier checks between passes.
-- Improve spill/reload placement and stack-slot reuse.
-- Add call-aware register constraints and explicit callee-save emission once Machine IR drives final instruction emission.
-- Expand correctness tests under high register pressure, loops, calls, records and async boundaries.
+- Machine IR performs local load/copy propagation, redundant store/dead move cleanup, constant-branch simplification and unreachable-block pruning, with structural verification before and after optimization.
+- The direct backend consumes allocator-owned physical register homes and spill ranges rather than assigning every virtual value a redundant frame home.
+- Call-live values avoid volatile registers; required callee-saved registers are emitted/restored explicitly.
+- Straight-line spill ranges are reused when lifetimes do not overlap. CFG-crossing values are conservatively assigned dedicated stack ranges until a future interference-graph allocator can coalesce them safely.
+- Verification rejects overlapping register/stack allocations, invalid CFG targets, undefined values, call-clobber violations and out-of-frame spills.
 
-### Phase 7.5 — everyday compiler ergonomics
+### Phase 7.5 — everyday compiler ergonomics — complete
 
-- Richer diagnostics and machine-applicable fix-its.
-- Module/API visibility hardening and stable FFI/ABI documentation.
-- Formatter/linter quality gates and reproducible PPX behavior.
-- Benchmark and compatibility gates for large projects before 0.7 beta promotion.
+- Diagnostics expose source spans, stable error codes, help text and machine-applicable fix-its where a concrete replacement is known.
+- Top-level `private fn` visibility is enforced across modules; object/field/method visibility continues to be checked by semantic analysis.
+- `ppc emit-abi` exposes the implemented PunPun internal ABI and supported SysV native ABI contract; `spec/0.7/ffi-abi.md` documents the stability boundary.
+- `pp lint` now gates formatting drift (`W2001`) and duplicate imports (`W2002`).
+- PPX publish archives are byte-reproducible across source mtime changes through canonical ordering, metadata and ZIP timestamps.
+- Incremental scalability, PPX reproducibility, backend semantics and compatibility behavior are covered by automated regression/CI gates.
+
+### Step 7 completion boundary
+
+`0.7.0-dev.5` completes the planned Step 7 compiler architecture work. Promotion to a public 0.7 beta remains a separate release operation and still requires the real platform qualification jobs to pass. A failed Arch or Windows job is not converted into a success by finishing compiler development.
 
 ## Later releases
 

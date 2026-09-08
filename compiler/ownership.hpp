@@ -213,7 +213,11 @@ class Analyzer {
     }
 
     Binding *root_binding(Expr &expression) {
-        if (expression.kind == Expr::Kind::Variable) return lookup_mut(expression.value);
+        if (expression.kind == Expr::Kind::Variable) {
+            Binding *binding = lookup_mut(expression.value);
+            if (binding) expression.binding_id = binding->id;
+            return binding;
+        }
         if (expression.kind == Expr::Kind::Member && !expression.children.empty())
             return root_binding(*expression.children[0]);
         return nullptr;
@@ -277,7 +281,7 @@ class Analyzer {
         current_function_ = &function;
         scopes_.clear();
         scopes_.push_back({});
-        for (const Parameter &parameter : function.parameters) {
+        for (Parameter &parameter : function.parameters) {
             Binding binding;
             binding.id = next_binding_id_++;
             binding.type = parameter.type;
@@ -285,6 +289,7 @@ class Analyzer {
             binding.parameter = true;
             binding.scope_depth = 0;
             binding.token = parameter.token;
+            parameter.binding_id = binding.id;
             scopes_.back()[parameter.name] = std::move(binding);
         }
         for (Stmt &statement : function.body) analyze_statement(statement);
@@ -343,6 +348,7 @@ class Analyzer {
                 binding.scope_depth = scopes_.size() - 1;
                 binding.token = statement.token;
                 set_borrow_relation(binding, *statement.expression);
+                statement.binding_id = binding.id;
                 scopes_.back()[statement.name] = std::move(binding);
                 return;
             }
@@ -356,6 +362,7 @@ class Analyzer {
                 consume(*statement.expression, statement.expression->token);
                 if (statement.target->kind == Expr::Kind::Variable) {
                     Binding *target = lookup_mut(statement.target->value);
+                    if (target) statement.target->binding_id = target->id;
                     if (!target) fail(statement.target->token, "unknown binding '" + statement.target->value + "'", {}, "E0201");
                     // Whole-value assignment is the one operation allowed to reinitialize a moved binding.
                     if (target->state != InitState::Moved && target->state != InitState::MaybeMoved)
@@ -415,6 +422,7 @@ class Analyzer {
                 counter.type = Type::Int;
                 counter.scope_depth = scopes_.size() - 1;
                 counter.token = statement.token;
+                statement.binding_id = counter.id;
                 scopes_.back()[statement.name] = std::move(counter);
                 for (Stmt &child : statement.body) analyze_statement(child);
                 scopes_.pop_back();
@@ -439,6 +447,7 @@ class Analyzer {
             case Expr::Kind::Variable: {
                 Binding *binding = lookup_mut(expression.value);
                 if (!binding) return; // enum constructors and compiler-generated names are not locals.
+                expression.binding_id = binding->id;
                 check_read(*binding, expression.token);
                 return;
             }
@@ -482,13 +491,14 @@ class Analyzer {
         }
     }
 
-    void bind_pattern(const Pattern &pattern, Type subject) {
+    void bind_pattern(Pattern &pattern, Type subject) {
         if (pattern.kind == Pattern::Kind::Binding) {
             Binding binding;
             binding.id = next_binding_id_++;
             binding.type = subject;
             binding.scope_depth = scopes_.size() - 1;
             binding.token = pattern.token;
+            pattern.binding_id = binding.id;
             scopes_.back()[pattern.value] = std::move(binding);
             return;
         }
@@ -522,7 +532,10 @@ class Analyzer {
             Expr &argument = *expression.children[0];
             if (argument.kind == Expr::Kind::Variable) {
                 Binding *binding = lookup_mut(argument.value);
-                if (binding) check_read(*binding, argument.token);
+                if (binding) {
+                    argument.binding_id = binding->id;
+                    check_read(*binding, argument.token);
+                }
             }
             consume(argument, argument.token, true);
             return;

@@ -4,17 +4,17 @@
 // the same native runtime used by the portable and LLVM paths. Parsing, semantic
 // analysis, ownership checks, typed HIR, verified MIR and Machine IR have already completed.
 // Machine IR is authoritative for function scheduling, ABI layout and allocation
-// metadata. The 0.7 dev.1 emitter still consults typed source nodes for detailed
-// expression instruction selection while that final lowering boundary is migrated.
+// metadata and every direct-native function body. Step 7 removes the prior
+// typed-source body emitter: direct native instruction selection consumes only
+// verified Machine IR operations and allocation metadata.
 //
 // Conventions
 // -----------
 //   * Scalars (int/bool/str/nums, and float as its 64-bit pattern) are produced
 //     in RAX. A record expression produces the ADDRESS of its bytes in RAX.
-//   * Every intermediate that must survive another sub-evaluation is spilled to
-//     a fresh stack slot (a bump allocator that never reuses slots inside a
-//     function), so no register allocation or liveness analysis is needed and
-//     RSP stays 16-byte aligned across the whole body.
+//   * Scalar virtual registers use Machine-IR physical register homes when safe.
+//     Call-live and CFG-crossing values obey conservative allocation constraints;
+//     stack spills use allocator-owned ranges and verified 16-byte frame alignment.
 //   * Runtime helpers use the ordinary SysV ABI. PunPun-to-PunPun calls use a
 //     private convention: RDI holds a pointer to a caller-built argument block;
 //     record results are written through a hidden destination pointer stored at
@@ -58,36 +58,30 @@ class X86Backend {
     }
 
     std::string generate() {
-        text_ << ".intel_syntax noprefix\n";
-        int debug_id = 1;
-        for (const auto &module : modules_) {
-            const std::string key = module.file.lexically_normal().string();
-            if (debug_files_.count(key)) continue;
-            debug_files_[key] = debug_id;
-            text_ << ".file " << debug_id++ << " \"" << asm_escaped(key) << "\"\n";
-        }
-        text_ << ".text\n";
+        begin_unit();
         for (const ppmachine::Function &machine_function : machine_.functions) {
             if (machine_function.external_native) continue;
-            const Function *source = nullptr;
-            for (const auto &module : modules_) {
-                for (const auto &function : module.functions) {
-                    if (function.name == machine_function.name) { source = &function; break; }
-                }
-                if (source) break;
-            }
-            if (!source) internal("authoritative Machine IR references unknown function '" + machine_function.name + "'");
-            if (can_generate_machine_body(*source, machine_function))
-                generate_machine_function(machine_function);
-            else
-                generate_function(*source, machine_function);
+            generate_machine_function(machine_function);
         }
         generate_entry();
-        std::ostringstream out;
-        out << text_.str();
-        out << ".section .rodata\n" << rodata_.str();
-        out << ".section .note.GNU-stack,\"\",@progbits\n";
-        return out.str();
+        return finish_unit();
+    }
+
+    // Step 7.3 object-cache entry points. Each returned translation unit is
+    // independently assemblable, which lets the driver cache/reuse one native
+    // object per PunPun function instead of recompiling the whole program.
+    std::string generate_function_unit(const std::string &name) {
+        begin_unit();
+        const ppmachine::Function &function = machine_function(name);
+        if (function.external_native) internal("cannot emit native object for extern function '" + name + "'");
+        generate_machine_function(function);
+        return finish_unit();
+    }
+
+    std::string generate_entry_unit() {
+        begin_unit();
+        generate_entry();
+        return finish_unit();
     }
 
   private:
@@ -139,6 +133,32 @@ class X86Backend {
 
     [[noreturn]] static void internal(const std::string &message) {
         throw Error("internal error: " + message);
+    }
+
+    void begin_unit() {
+        text_.str(""); text_.clear();
+        rodata_.str(""); rodata_.clear();
+        body_.str(""); body_.clear();
+        debug_files_.clear();
+        label_count_ = 0;
+        string_count_ = 0;
+        text_ << ".intel_syntax noprefix\n";
+        int debug_id = 1;
+        for (const auto &module : modules_) {
+            const std::string key = module.file.lexically_normal().string();
+            if (debug_files_.count(key)) continue;
+            debug_files_[key] = debug_id;
+            text_ << ".file " << debug_id++ << " \"" << asm_escaped(key) << "\"\n";
+        }
+        text_ << ".text\n";
+    }
+
+    std::string finish_unit() const {
+        std::ostringstream out;
+        out << text_.str();
+        out << ".section .rodata\n" << rodata_.str();
+        out << ".section .note.GNU-stack,\"\",@progbits\n";
+        return out.str();
     }
 
     // -- small helpers ------------------------------------------------------
@@ -339,92 +359,32 @@ class X86Backend {
     }
 
     // -- Machine-IR body emission -------------------------------------------
-    // Step 7.2 migrates ordinary scalar/control-flow functions off the typed
-    // source AST. The selection predicate is intentionally conservative:
-    // unsupported aggregate/ownership/short-circuit operations stay on the
-    // legacy emitter until their semantics are explicit in Machine IR.
-    static bool machine_scalar_type(const Type &type) {
-        return type == Type::Int || type == Type::Float || type == Type::Bool ||
-               type == Type::Str || type == Type::Void;
-    }
-
-    static void collect_declared_names(const std::vector<Stmt> &statements,
-                                       std::unordered_set<std::string> &names,
-                                       bool &duplicate) {
-        for (const Stmt &statement : statements) {
-            if (statement.kind == Stmt::Kind::Variable || statement.kind == Stmt::Kind::Each) {
-                if (!names.insert(statement.name).second) duplicate = true;
-            }
-            collect_declared_names(statement.body, names, duplicate);
-            collect_declared_names(statement.alternative, names, duplicate);
-        }
-    }
-
-    bool can_generate_machine_body(const Function &source,
-                                   const ppmachine::Function &function) const {
-        if (source.is_async || function.is_async || function.external_native) return false;
-        if (!machine_scalar_type(function.result) || function.abi.hidden_result_pointer) return false;
-        if (function.abi.convention != ppmachine::CallingConvention::PunPunBlock) return false;
-        for (const auto &[name, type] : function.parameters) {
-            (void)name;
-            if (!machine_scalar_type(type) || type == Type::Void) return false;
-        }
-
-        // HIR still exposes source storage names. Reject lexical shadowing until
-        // canonical binding IDs move into the IR, otherwise two bindings with
-        // the same spelling could accidentally share a machine local.
-        std::unordered_set<std::string> declared;
-        for (const Parameter &parameter : source.parameters) declared.insert(parameter.name);
-        bool duplicate = false;
-        collect_declared_names(source.body, declared, duplicate);
-        if (duplicate) return false;
-
-        std::unordered_map<ppmachine::VReg, Type> types;
-        for (const auto &block : function.blocks) {
-            for (const auto &instruction : block.instructions) {
-                if (instruction.result != ppmachine::NoValue) types[instruction.result] = instruction.type;
-                if (!machine_scalar_type(instruction.type)) return false;
-                switch (instruction.op) {
-                    case pphir::Op::Parameter:
-                    case pphir::Op::Constant:
-                    case pphir::Op::Load:
-                    case pphir::Op::Store:
-                    case pphir::Op::Unary:
-                    case pphir::Op::Binary:
-                    case pphir::Op::Say:
-                        break;
-                    case pphir::Op::Call:
-                        if (!instruction.call.known_function ||
-                            instruction.call.convention != ppmachine::CallingConvention::PunPunBlock ||
-                            instruction.call.hidden_result_pointer)
-                            return false;
-                        for (const auto &argument : instruction.call.arguments)
-                            if (!machine_scalar_type(argument.type) || argument.type == Type::Void) return false;
-                        if (!machine_scalar_type(instruction.call.result.type)) return false;
-                        break;
-                    default:
-                        return false;
-                }
-                if (instruction.op == pphir::Op::Binary &&
-                    (instruction.detail == "and" || instruction.detail == "or"))
-                    return false;
-                for (ppmachine::VReg operand : instruction.operands) {
-                    const auto found = types.find(operand);
-                    if (found == types.end() || !machine_scalar_type(found->second)) return false;
-                }
-            }
-        }
-        return true;
-    }
+    // Step 7.2 complete: the direct x86 backend consumes verified Machine IR
+    // for every PunPun function body. The typed source AST remains available to
+    // diagnostics/C lowering, but native instruction selection no longer walks
+    // statements or expressions.
+    struct MachineLocalHome {
+        Type type = Type::Void;
+        int64_t offset = 0;
+        int64_t alive_offset = 0;
+    };
 
     struct MachineFramePlan {
         int64_t frame = 0;
         int64_t args_pointer = 0;
         int64_t call_area = 0;
         std::size_t call_area_size = 0;
+        // Byte range backing Machine-IR stack allocations. Register-allocated
+        // scalars do not receive redundant frame homes in Step 7.4.
+        int64_t machine_stack_base = 0;
+        int64_t scratch_area = 0;
+        int64_t spill_area = 0;
         std::unordered_map<ppmachine::VReg, int64_t> values;
-        std::unordered_map<std::string, int64_t> locals;
+        std::unordered_map<ppmachine::VReg, std::string> value_registers;
+        std::unordered_map<ppmachine::VReg, int64_t> aggregate_values;
+        std::unordered_map<std::string, MachineLocalHome> locals;
         std::unordered_map<ppmachine::VReg, Type> types;
+        std::unordered_map<ppmachine::VReg, std::size_t> parameter_indices;
         std::unordered_map<ppmachine::VReg, std::string> integer_constants;
     };
 
@@ -434,43 +394,238 @@ class X86Backend {
         return -plan.frame;
     }
 
-    MachineFramePlan plan_machine_frame(const ppmachine::Function &function) {
-        MachineFramePlan plan;
-        plan.args_pointer = plan_alloc(plan, 8);
-        for (const auto &block : function.blocks) {
-            for (const auto &instruction : block.instructions) {
-                if (instruction.result != ppmachine::NoValue) {
-                    plan.values[instruction.result] = plan_alloc(plan, 8);
-                    plan.types[instruction.result] = instruction.type;
-                    if (instruction.op == pphir::Op::Constant && instruction.type == Type::Int)
-                        plan.integer_constants[instruction.result] = instruction.detail;
-                }
-                if (instruction.op == pphir::Op::Store && !plan.locals.count(instruction.detail))
-                    plan.locals[instruction.detail] = plan_alloc(plan, 8);
-                if (instruction.op == pphir::Op::Call && instruction.call.known_function)
-                    plan.call_area_size = std::max(plan.call_area_size, instruction.call.argument_block_size);
-            }
-        }
-        if (plan.call_area_size != 0) plan.call_area = plan_alloc(plan, plan.call_area_size);
-        return plan;
-    }
-
-    void machine_load(const MachineFramePlan &plan, ppmachine::VReg value, const std::string &reg) {
-        const auto found = plan.values.find(value);
-        if (found == plan.values.end()) internal("Machine IR value has no frame home");
-        emit("mov " + reg + ", " + mem_rbp(found->second));
-    }
-
-    void machine_store(const MachineFramePlan &plan, ppmachine::VReg value, const std::string &reg = "rax") {
-        const auto found = plan.values.find(value);
-        if (found == plan.values.end()) internal("Machine IR value has no frame home");
-        emit("mov " + mem_rbp(found->second) + ", " + reg);
-    }
-
     Type machine_value_type(const MachineFramePlan &plan, ppmachine::VReg value) const {
         const auto found = plan.types.find(value);
         if (found == plan.types.end()) internal("Machine IR value has no type");
         return found->second;
+    }
+
+    static std::string storage_from_address_detail(const std::string &detail) {
+        const std::size_t space = detail.find(' ');
+        if (space == std::string::npos || space + 1 >= detail.size()) return {};
+        return detail.substr(space + 1);
+    }
+
+    std::size_t required_call_area(const ppmachine::Instruction &instruction) const {
+        if (instruction.op == pphir::Op::Call && instruction.call.known_function &&
+            instruction.call.convention == ppmachine::CallingConvention::PunPunBlock)
+            return instruction.call.argument_block_size;
+        if (instruction.op == pphir::Op::Construct) {
+            auto shape_it = shapes_.find(instruction.type.name);
+            if (shape_it != shapes_.end() && shape_it->second->reference_type &&
+                !shape_it->second->initializer_name.empty())
+                return machine_function(shape_it->second->initializer_name).abi.argument_block_size;
+        }
+        return 0;
+    }
+
+    MachineFramePlan plan_machine_frame(const ppmachine::Function &function) {
+        MachineFramePlan plan;
+        plan.args_pointer = plan_alloc(plan, 8);
+
+        // Reserve the exact allocator-owned spill/aggregate range once. Values
+        // assigned to registers stay in those registers; stack-assigned values
+        // share/reuse slots exactly as decided by Machine IR.
+        if (function.stack_frame_bytes != 0)
+            plan.machine_stack_base = plan_alloc(plan, function.stack_frame_bytes);
+
+        // Types are function-global and block creation order is not dominance
+        // order, so discover all virtual-register types first.
+        for (const auto &block : function.blocks)
+            for (const auto &instruction : block.instructions)
+                if (instruction.result != ppmachine::NoValue)
+                    plan.types[instruction.result] = instruction.type;
+
+        std::size_t parameter_index = 0;
+        for (const auto &block : function.blocks) {
+            for (const auto &instruction : block.instructions) {
+                if (instruction.result != ppmachine::NoValue) {
+                    const auto location_it = function.locations.find(instruction.result);
+                    if (location_it == function.locations.end())
+                        internal("Machine IR value has no physical allocation");
+                    const ppmachine::Location &location = location_it->second;
+                    if (location.kind == ppmachine::Location::Kind::Register) {
+                        if (is_record(instruction.type))
+                            internal("aggregate Machine IR value assigned to a register");
+                        plan.value_registers[instruction.result] = location.name;
+                    } else {
+                        if (function.stack_frame_bytes == 0)
+                            internal("Machine IR stack value exists without a spill frame");
+                        const int64_t home = plan.machine_stack_base + static_cast<int64_t>(location.stack_slot * 8);
+                        plan.values[instruction.result] = home;
+                        if (is_record(instruction.type)) plan.aggregate_values[instruction.result] = home;
+                    }
+                    if (instruction.op == pphir::Op::Parameter)
+                        plan.parameter_indices[instruction.result] = parameter_index++;
+                    if (instruction.op == pphir::Op::Constant && instruction.type == Type::Int)
+                        plan.integer_constants[instruction.result] = instruction.detail;
+                }
+                if (instruction.op == pphir::Op::Store && !plan.locals.count(instruction.detail)) {
+                    if (instruction.operands.empty()) internal("Machine IR store has no value");
+                    const Type type = machine_value_type(plan, instruction.operands.front());
+                    MachineLocalHome home;
+                    home.type = type;
+                    home.offset = plan_alloc(plan, static_cast<std::size_t>(type_size(type)));
+                    if (needs_drop(type)) home.alive_offset = plan_alloc(plan, 8);
+                    plan.locals.emplace(instruction.detail, home);
+                }
+                plan.call_area_size = std::max(plan.call_area_size, required_call_area(instruction));
+            }
+        }
+        if (plan.call_area_size != 0) plan.call_area = plan_alloc(plan, plan.call_area_size);
+        // Drop recursion and ABI shuffles use fixed spill scratch. This is
+        // deliberately separate from Machine-IR allocation so helper calls
+        // never overwrite a live virtual register or reusable spill slot.
+        plan.scratch_area = plan_alloc(plan, 256);
+        return plan;
+    }
+
+    static bool machine_xmm(const std::string &name) { return name.rfind("xmm", 0) == 0; }
+
+    void machine_load(const MachineFramePlan &plan, ppmachine::VReg value, const std::string &reg) {
+        const Type type = machine_value_type(plan, value);
+        if (is_record(type)) {
+            const auto found = plan.values.find(value);
+            if (found == plan.values.end()) internal("aggregate Machine IR value has no spill home");
+            emit("lea " + reg + ", " + mem_rbp(found->second));
+            return;
+        }
+        if (const auto assigned = plan.value_registers.find(value); assigned != plan.value_registers.end()) {
+            const std::string &home = assigned->second;
+            if (home == reg) return;
+            if (machine_xmm(home)) emit("movq " + reg + ", " + home);
+            else emit("mov " + reg + ", " + home);
+            return;
+        }
+        const auto found = plan.values.find(value);
+        if (found == plan.values.end()) internal("Machine IR value has no allocated home");
+        emit("mov " + reg + ", " + mem_rbp(found->second));
+    }
+
+    void machine_store(const MachineFramePlan &plan, ppmachine::VReg value, const std::string &reg = "rax") {
+        const Type type = machine_value_type(plan, value);
+        if (is_record(type)) {
+            const auto found = plan.values.find(value);
+            if (found == plan.values.end()) internal("aggregate Machine IR result has no spill home");
+            // Record virtual registers are allocated as byte ranges. A record
+            // producer yields its source address in a GPR; materialize the
+            // by-value result into the allocator-owned range.
+            if (reg != "rsi") emit("mov rsi, " + reg);
+            machine_copy_pointer_to_frame(found->second, type, "rsi");
+            return;
+        }
+        if (const auto assigned = plan.value_registers.find(value); assigned != plan.value_registers.end()) {
+            const std::string &home = assigned->second;
+            if (machine_xmm(home)) emit("movq " + home + ", " + reg);
+            else if (home != reg) emit("mov " + home + ", " + reg);
+            return;
+        }
+        const auto found = plan.values.find(value);
+        if (found == plan.values.end()) internal("Machine IR value has no allocated home");
+        emit("mov " + mem_rbp(found->second) + ", " + reg);
+    }
+
+    int64_t machine_aggregate_storage(const MachineFramePlan &plan, ppmachine::VReg value) const {
+        const auto found = plan.aggregate_values.find(value);
+        if (found == plan.aggregate_values.end()) internal("aggregate Machine IR value has no byte storage");
+        return found->second;
+    }
+
+    void machine_copy_pointer_to_frame(int64_t destination, const Type &type, const std::string &source_reg = "rsi") {
+        const int64_t size = type_size(type);
+        for (int64_t k = 0; k < size; k += 8) {
+            emit("mov rax, " + mem(source_reg, k));
+            emit("mov " + mem_rbp(destination + k) + ", rax");
+        }
+    }
+
+    void machine_copy_frame_to_pointer(const std::string &destination_reg, int64_t source,
+                                       const Type &type) {
+        const int64_t size = type_size(type);
+        for (int64_t k = 0; k < size; k += 8) {
+            emit("mov rax, " + mem_rbp(source + k));
+            emit("mov " + mem(destination_reg, k) + ", rax");
+        }
+    }
+
+    void machine_copy_value_to_frame(const MachineFramePlan &plan, ppmachine::VReg value,
+                                     const Type &type, int64_t destination) {
+        if (is_record(type)) {
+            machine_load(plan, value, "rsi");
+            machine_copy_pointer_to_frame(destination, type, "rsi");
+        } else {
+            machine_load(plan, value, "rax");
+            emit("mov " + mem_rbp(destination) + ", rax");
+        }
+    }
+
+    void machine_set_result_address(const MachineFramePlan &plan, ppmachine::VReg result,
+                                    int64_t storage) {
+        if (machine_aggregate_storage(plan, result) != storage)
+            internal("aggregate result storage diverged from Machine IR allocation");
+    }
+
+    int64_t machine_scratch(const MachineFramePlan &plan, std::size_t depth) const {
+        if (depth >= 32) internal("owning type nesting exceeds Machine IR drop scratch capacity");
+        return plan.scratch_area + static_cast<int64_t>(depth * 8);
+    }
+
+    // RAX enters as the address of storage containing `type`.
+    void machine_drop_at_address(const Type &type, const MachineFramePlan &plan, std::size_t depth = 0) {
+        if (!needs_drop(type)) return;
+        const int64_t saved = machine_scratch(plan, depth);
+        emit("mov " + mem_rbp(saved) + ", rax");
+        if (type == Type::Nums) {
+            emit("mov rcx, " + mem_rbp(saved));
+            emit("mov rdi, " + mem("rcx", 0));
+            emit("call pp_numbers_free@PLT");
+            return;
+        }
+        auto found = shapes_.find(type.name);
+        if (found == shapes_.end()) return;
+        const Shape &shape = *found->second;
+        const ShapeLayout &shape_layout = layout(shape.name);
+        if (shape.reference_type) {
+            const int64_t object_saved = machine_scratch(plan, depth + 1);
+            emit("mov rcx, " + mem_rbp(saved));
+            emit("mov rax, " + mem("rcx", 0));
+            emit("mov " + mem_rbp(object_saved) + ", rax");
+            const std::string done = new_label();
+            emit("test rax, rax");
+            emit("je " + done);
+            for (auto field = shape.fields.rbegin(); field != shape.fields.rend(); ++field) {
+                if (!needs_drop(field->type)) continue;
+                emit("mov rax, " + mem_rbp(object_saved));
+                const int64_t offset = shape_layout.fields.at(field->name).offset;
+                if (offset) emit("add rax, " + std::to_string(offset));
+                machine_drop_at_address(field->type, plan, depth + 2);
+            }
+            emit("mov rdi, " + mem_rbp(object_saved));
+            emit("call pp_object_free@PLT");
+            label(done);
+            return;
+        }
+        for (auto field = shape.fields.rbegin(); field != shape.fields.rend(); ++field) {
+            if (!needs_drop(field->type)) continue;
+            emit("mov rax, " + mem_rbp(saved));
+            const int64_t offset = shape_layout.fields.at(field->name).offset;
+            if (offset) emit("add rax, " + std::to_string(offset));
+            machine_drop_at_address(field->type, plan, depth + 1);
+        }
+    }
+
+    void machine_drop_local(const MachineFramePlan &plan, const std::string &name) {
+        const auto found = plan.locals.find(name);
+        if (found == plan.locals.end()) internal("Machine IR drop references unknown local '" + name + "'");
+        const MachineLocalHome &home = found->second;
+        if (home.alive_offset == 0) return;
+        const std::string skip = new_label();
+        emit("cmp qword ptr " + mem_rbp(home.alive_offset) + ", 0");
+        emit("je " + skip);
+        emit("lea rax, " + mem_rbp(home.offset));
+        machine_drop_at_address(home.type, plan);
+        emit("mov qword ptr " + mem_rbp(home.alive_offset) + ", 0");
+        label(skip);
     }
 
     void emit_machine_constant(const ppmachine::Instruction &instruction,
@@ -513,9 +668,9 @@ class X86Backend {
                     emit("mov rdi, rax");
                     emit("call pp_neg_i64@PLT");
                 }
-            }
-            else if (operand == Type::Float) { emit("movabs rdi, 0x8000000000000000"); emit("xor rax, rdi"); }
-            else internal("invalid unary minus in Machine IR");
+            } else if (operand == Type::Float) {
+                emit("movabs rdi, 0x8000000000000000"); emit("xor rax, rdi");
+            } else internal("invalid unary minus in Machine IR");
         } else internal("unsupported Machine IR unary operation '" + instruction.detail + "'");
         machine_store(plan, instruction.result);
     }
@@ -530,6 +685,12 @@ class X86Backend {
         machine_load(plan, left_value, "rax");
         machine_load(plan, right_value, "rdi");
 
+        if (is_raw_pointer_type(left) && right == Type::Int && (op == "+" || op == "-")) {
+            const int64_t stride = type_size(pointee_type(left));
+            if (stride != 1) emit("imul rdi, " + std::to_string(stride));
+            emit(std::string(op == "+" ? "add" : "sub") + " rax, rdi");
+            machine_store(plan, instruction.result); return;
+        }
         if (op == "==" || op == "!=") {
             if (left == Type::Str) {
                 emit("mov rsi, rdi"); emit("mov rdi, rax"); emit("call pp_str_eq@PLT");
@@ -586,21 +747,247 @@ class X86Backend {
         machine_store(plan, instruction.result);
     }
 
-    void emit_machine_call(const ppmachine::Instruction &instruction,
-                           const MachineFramePlan &plan) {
+    void machine_emit_print(const std::string &name, const Type &type,
+                            ppmachine::VReg value, const MachineFramePlan &plan) {
+        machine_load(plan, value, "rax");
+        const std::string prefix = "pp_" + name + "_";
+        if (type == Type::Float) { emit("movq xmm0, rax"); emit("call " + prefix + "float@PLT"); }
+        else if (type == Type::Bool) { emit("mov rdi, rax"); emit("call " + prefix + "bool@PLT"); }
+        else if (type == Type::Str) { emit("mov rdi, rax"); emit("call " + prefix + "str@PLT"); }
+        else { emit("mov rdi, rax"); emit("call " + prefix + "int@PLT"); }
+    }
+
+    void machine_load_builtin_gpr_args(const ppmachine::Instruction &instruction,
+                                       const MachineFramePlan &plan) {
+        static const std::vector<std::string> regs{"rdi", "rsi", "rdx", "rcx", "r8", "r9"};
+        if (instruction.operands.size() > regs.size()) internal("builtin has too many direct runtime arguments");
+        for (std::size_t i = 0; i < instruction.operands.size(); ++i)
+            machine_load(plan, instruction.operands[i], regs[i]);
+    }
+
+    void emit_machine_builtin(const ppmachine::Instruction &instruction,
+                              const MachineFramePlan &plan) {
+        const std::string &name = instruction.detail;
+        if (name == "move") {
+            if (instruction.result != ppmachine::NoValue) {
+                machine_load(plan, instruction.operands.at(0), "rax");
+                machine_store(plan, instruction.result);
+            }
+            return;
+        }
+        if (name == "drop") {
+            const Type type = machine_value_type(plan, instruction.operands.at(0));
+            if (is_record(type)) {
+                machine_load(plan, instruction.operands.at(0), "rax");
+                machine_drop_at_address(type, plan);
+            } else if (type == Type::Nums) {
+                machine_load(plan, instruction.operands.at(0), "rdi"); emit("call pp_numbers_free@PLT");
+            } else if (needs_drop(type)) {
+                machine_load(plan, instruction.operands.at(0), "rdi"); emit("call pp_object_free@PLT");
+            }
+            return;
+        }
+        if (name == "print" || name == "println") {
+            machine_emit_print(name, machine_value_type(plan, instruction.operands.at(0)), instruction.operands.at(0), plan);
+            return;
+        }
+        if (name == "decimal") {
+            machine_load(plan, instruction.operands.at(0), "rdi"); emit("call pp_decimal@PLT"); emit("movq rax, xmm0");
+        } else if (name == "whole") {
+            machine_load(plan, instruction.operands.at(0), "rax"); emit("movq xmm0, rax"); emit("call pp_whole@PLT");
+        } else {
+            const BuiltinSpec *builtin = nullptr;
+            for (const BuiltinSpec &candidate : punpun_builtins()) if (candidate.name == name) { builtin = &candidate; break; }
+            if (!builtin || builtin->runtime_symbol.empty()) internal("unknown Machine IR builtin '" + name + "'");
+            machine_load_builtin_gpr_args(instruction, plan);
+            emit("call " + builtin->runtime_symbol + "@PLT");
+        }
+        if (instruction.result != ppmachine::NoValue) {
+            if (instruction.type == Type::Bool) emit("movzx eax, al");
+            machine_store(plan, instruction.result);
+        }
+    }
+
+    void emit_machine_native_call(const ppmachine::Instruction &instruction,
+                                  const MachineFramePlan &plan) {
+        if (instruction.operands.size() != instruction.call.arguments.size())
+            internal("native Machine IR call argument count mismatch");
+        std::size_t stack_bytes = 0;
+        for (std::size_t i = 0; i < instruction.operands.size(); ++i) {
+            const auto &argument = instruction.call.arguments[i];
+            if (argument.location.kind == ppmachine::AbiLocationKind::Register) {
+                machine_load(plan, instruction.operands[i], "rax");
+                if (argument.location.name.rfind("xmm", 0) == 0)
+                    emit("movq " + argument.location.name + ", rax");
+                else emit("mov " + argument.location.name + ", rax");
+            } else if (argument.location.kind == ppmachine::AbiLocationKind::Stack) {
+                stack_bytes = std::max(stack_bytes, argument.location.offset + argument.location.size);
+            } else internal("unsupported native ABI argument location");
+        }
+        const std::size_t stack_frame = ((stack_bytes + 15) / 16) * 16;
+        if (stack_frame) {
+            emit("sub rsp, " + std::to_string(stack_frame));
+            for (std::size_t i = 0; i < instruction.operands.size(); ++i) {
+                const auto &argument = instruction.call.arguments[i];
+                if (argument.location.kind != ppmachine::AbiLocationKind::Stack) continue;
+                machine_load(plan, instruction.operands[i], "rax");
+                emit("mov " + mem("rsp", static_cast<int64_t>(argument.location.offset)) + ", rax");
+            }
+        }
+        const ppmachine::Function &callee = machine_function(instruction.detail);
+        emit("call " + callee.native_symbol + "@PLT");
+        if (stack_frame) emit("add rsp, " + std::to_string(stack_frame));
+        if (instruction.result != ppmachine::NoValue) {
+            if (instruction.type == Type::Float) emit("movq rax, xmm0");
+            else if (instruction.type == Type::Bool) emit("movzx eax, al");
+            machine_store(plan, instruction.result);
+        }
+    }
+
+    void emit_machine_user_call(const ppmachine::Instruction &instruction,
+                                const MachineFramePlan &plan) {
         if (instruction.operands.size() != instruction.call.arguments.size())
             internal("Machine IR call argument count mismatch");
+        const ppmachine::Function &callee = machine_function(instruction.detail);
+        if (instruction.call.hidden_result_pointer) {
+            const int64_t destination = machine_aggregate_storage(plan, instruction.result);
+            emit("lea rax, " + mem_rbp(destination));
+            emit("mov " + mem_rbp(plan.call_area + static_cast<int64_t>(instruction.call.result.location.offset)) + ", rax");
+        }
         for (std::size_t i = 0; i < instruction.operands.size(); ++i) {
             const auto &argument = instruction.call.arguments[i];
             if (argument.location.kind != ppmachine::AbiLocationKind::ArgumentBlock)
                 internal("PunPun call argument is not in argument block");
-            machine_load(plan, instruction.operands[i], "rax");
-            emit("mov " + mem_rbp(plan.call_area + static_cast<int64_t>(argument.location.offset)) + ", rax");
+            const Type actual = machine_value_type(plan, instruction.operands[i]);
+            const int64_t destination = plan.call_area + static_cast<int64_t>(argument.location.offset);
+            if (is_record(actual) && !is_reference_type(argument.type))
+                machine_copy_value_to_frame(plan, instruction.operands[i], actual, destination);
+            else {
+                machine_load(plan, instruction.operands[i], "rax");
+                emit("mov " + mem_rbp(destination) + ", rax");
+            }
         }
-        if (instruction.call.argument_block_size == 0) emit("xor edi, edi");
-        else emit("lea rdi, " + mem_rbp(plan.call_area));
-        emit("call " + function_symbol(instruction.detail));
-        if (instruction.result != ppmachine::NoValue) machine_store(plan, instruction.result);
+        if (callee.is_async) {
+            emit("lea rdi, [rip + " + function_symbol(instruction.detail) + "]");
+            if (instruction.call.argument_block_size) emit("lea rsi, " + mem_rbp(plan.call_area));
+            else emit("xor esi, esi");
+            emit("mov rdx, " + std::to_string(instruction.call.argument_block_size));
+            emit("call pp_task_spawn@PLT");
+        } else {
+            if (instruction.call.argument_block_size) emit("lea rdi, " + mem_rbp(plan.call_area));
+            else emit("xor edi, edi");
+            emit("call " + function_symbol(instruction.detail));
+        }
+        if (instruction.result != ppmachine::NoValue) {
+            if (instruction.call.hidden_result_pointer) {
+                machine_set_result_address(plan, instruction.result, machine_aggregate_storage(plan, instruction.result));
+            } else {
+                if (instruction.type == Type::Bool) emit("movzx eax, al");
+                machine_store(plan, instruction.result);
+            }
+        }
+    }
+
+    void emit_machine_call(const ppmachine::Instruction &instruction,
+                           const MachineFramePlan &plan) {
+        if (!instruction.call.known_function) {
+            emit_machine_builtin(instruction, plan);
+            return;
+        }
+        if (instruction.call.convention == ppmachine::CallingConvention::SysVAMD64)
+            emit_machine_native_call(instruction, plan);
+        else emit_machine_user_call(instruction, plan);
+    }
+
+    void emit_machine_construct(const ppmachine::Instruction &instruction,
+                                const MachineFramePlan &plan) {
+        const Shape &definition = *shapes_.at(instruction.type.name);
+        const ShapeLayout &shape = layout(instruction.type.name);
+        if (!definition.reference_type) {
+            const int64_t destination = machine_aggregate_storage(plan, instruction.result);
+            for (std::size_t i = 0; i < instruction.operands.size(); ++i) {
+                const Parameter &field = definition.fields.at(i);
+                const int64_t offset = shape.fields.at(field.name).offset;
+                machine_copy_value_to_frame(plan, instruction.operands[i], field.type, destination + offset);
+            }
+            machine_set_result_address(plan, instruction.result, destination);
+            return;
+        }
+        emit("mov rdi, " + std::to_string(shape.size));
+        emit("call pp_object_alloc@PLT");
+        machine_store(plan, instruction.result);
+        if (!definition.initializer_name.empty()) {
+            const ppmachine::Function &initializer = machine_function(definition.initializer_name);
+            if (initializer.abi.parameters.size() != instruction.operands.size() + 1)
+                internal("initializer Machine IR ABI parameter mismatch");
+            machine_load(plan, instruction.result, "rax");
+            emit("mov " + mem_rbp(plan.call_area + static_cast<int64_t>(initializer.abi.parameters[0].location.offset)) + ", rax");
+            for (std::size_t i = 0; i < instruction.operands.size(); ++i) {
+                const Type actual = machine_value_type(plan, instruction.operands[i]);
+                const int64_t destination = plan.call_area + static_cast<int64_t>(initializer.abi.parameters[i + 1].location.offset);
+                if (is_record(actual)) machine_copy_value_to_frame(plan, instruction.operands[i], actual, destination);
+                else { machine_load(plan, instruction.operands[i], "rax"); emit("mov " + mem_rbp(destination) + ", rax"); }
+            }
+            emit("lea rdi, " + mem_rbp(plan.call_area));
+            emit("call " + function_symbol(definition.initializer_name));
+        }
+    }
+
+    static std::size_t enum_variant_index(const Shape &definition, const std::string &name) {
+        for (std::size_t i = 0; i < definition.enum_variants.size(); ++i)
+            if (definition.enum_variants[i].name == name) return i;
+        throw Error("internal compiler error: unknown enum variant '" + definition.name + "::" + name + "'");
+    }
+
+    void emit_machine_enum_construct(const ppmachine::Instruction &instruction,
+                                     const MachineFramePlan &plan) {
+        const Shape &definition = *shapes_.at(instruction.type.name);
+        const ShapeLayout &shape = layout(instruction.type.name);
+        const std::size_t split = instruction.detail.rfind("::");
+        if (split == std::string::npos) internal("enum Machine IR detail has no variant");
+        const std::string variant_name = instruction.detail.substr(split + 2);
+        const std::size_t index = enum_variant_index(definition, variant_name);
+        const int64_t destination = machine_aggregate_storage(plan, instruction.result);
+        for (int64_t offset = 0; offset < shape.size; offset += 8)
+            emit("mov qword ptr " + mem_rbp(destination + offset) + ", 0");
+        emit("mov qword ptr " + mem_rbp(destination + shape.fields.at("__tag").offset) + ", " + std::to_string(index));
+        for (std::size_t i = 0; i < instruction.operands.size(); ++i) {
+            const Type payload = definition.enum_variants.at(index).payload.at(i);
+            const FieldInfo &field = shape.fields.at("__v" + std::to_string(index) + "_" + std::to_string(i));
+            machine_copy_value_to_frame(plan, instruction.operands[i], payload, destination + field.offset);
+        }
+        machine_set_result_address(plan, instruction.result, destination);
+    }
+
+    void emit_machine_member(const ppmachine::Instruction &instruction,
+                             const MachineFramePlan &plan) {
+        Type base_type = machine_value_type(plan, instruction.operands.at(0));
+        if (is_reference_type(base_type)) base_type = pointee_type(base_type);
+        const ShapeLayout &shape = layout(base_type.name);
+        const FieldInfo &field = shape.fields.at(instruction.detail);
+        machine_load(plan, instruction.operands.at(0), "rax");
+        if (is_record(field.type)) {
+            if (field.offset) emit("add rax, " + std::to_string(field.offset));
+        } else emit("mov rax, " + mem("rax", field.offset));
+        machine_store(plan, instruction.result);
+    }
+
+    void emit_machine_address(const ppmachine::Instruction &instruction,
+                              const MachineFramePlan &plan) {
+        const std::string target = storage_from_address_detail(instruction.detail);
+        if (!target.empty() && target.front() != '.') {
+            const auto local = plan.locals.find(target);
+            if (local == plan.locals.end()) internal("address.of references unknown local '" + target + "'");
+            emit("lea rax, " + mem_rbp(local->second.offset));
+        } else {
+            if (instruction.operands.empty() || target.size() < 2) internal("malformed member address in Machine IR");
+            Type base_type = machine_value_type(plan, instruction.operands.at(0));
+            if (is_reference_type(base_type)) base_type = pointee_type(base_type);
+            const FieldInfo &field = layout(base_type.name).fields.at(target.substr(1));
+            machine_load(plan, instruction.operands.at(0), "rax");
+            if (field.offset) emit("add rax, " + std::to_string(field.offset));
+        }
+        machine_store(plan, instruction.result);
     }
 
     void emit_machine_instruction(const ppmachine::Instruction &instruction,
@@ -609,29 +996,94 @@ class X86Backend {
         debug_location(instruction.token);
         switch (instruction.op) {
             case pphir::Op::Parameter: {
-                std::size_t parameter = function.parameters.size();
-                for (std::size_t i = 0; i < function.parameters.size(); ++i)
-                    if (function.parameters[i].first == instruction.detail) { parameter = i; break; }
-                if (parameter == function.parameters.size()) internal("unknown Machine IR parameter '" + instruction.detail + "'");
-                const auto &abi = function.abi.parameters.at(parameter);
-                emit("mov rax, " + mem_rbp(plan.args_pointer));
-                emit("mov rax, " + mem("rax", static_cast<int64_t>(abi.location.offset)));
+                const auto parameter = plan.parameter_indices.find(instruction.result);
+                if (parameter == plan.parameter_indices.end() || parameter->second >= function.abi.parameters.size())
+                    internal("Machine IR parameter has no ABI slot: '" + instruction.detail + "'");
+                const auto &abi = function.abi.parameters.at(parameter->second);
+                emit("mov rcx, " + mem_rbp(plan.args_pointer));
+                if (is_record(instruction.type)) emit("lea rax, " + mem("rcx", static_cast<int64_t>(abi.location.offset)));
+                else emit("mov rax, " + mem("rcx", static_cast<int64_t>(abi.location.offset)));
                 machine_store(plan, instruction.result); return;
             }
             case pphir::Op::Constant: emit_machine_constant(instruction, plan); return;
-            case pphir::Op::Load: {
+            case pphir::Op::Load:
+            case pphir::Op::MoveLoad: {
                 const auto found = plan.locals.find(instruction.detail);
                 if (found == plan.locals.end()) internal("Machine IR load references unknown local '" + instruction.detail + "'");
-                emit("mov rax, " + mem_rbp(found->second)); machine_store(plan, instruction.result); return;
+                if (is_record(found->second.type)) emit("lea rax, " + mem_rbp(found->second.offset));
+                else emit("mov rax, " + mem_rbp(found->second.offset));
+                machine_store(plan, instruction.result);
+                if (instruction.op == pphir::Op::MoveLoad && found->second.alive_offset)
+                    emit("mov qword ptr " + mem_rbp(found->second.alive_offset) + ", 0");
+                return;
             }
             case pphir::Op::Store: {
                 const auto found = plan.locals.find(instruction.detail);
                 if (found == plan.locals.end()) internal("Machine IR store references unknown local '" + instruction.detail + "'");
-                machine_load(plan, instruction.operands.at(0), "rax"); emit("mov " + mem_rbp(found->second) + ", rax"); return;
+                machine_copy_value_to_frame(plan, instruction.operands.at(0), found->second.type, found->second.offset);
+                if (found->second.alive_offset) emit("mov qword ptr " + mem_rbp(found->second.alive_offset) + ", 1");
+                return;
             }
+            case pphir::Op::Drop: machine_drop_local(plan, instruction.detail); return;
             case pphir::Op::Call: emit_machine_call(instruction, plan); return;
+            case pphir::Op::Construct: emit_machine_construct(instruction, plan); return;
+            case pphir::Op::EnumConstruct: emit_machine_enum_construct(instruction, plan); return;
+            case pphir::Op::Match:
+            case pphir::Op::Propagate:
+                internal("high-level match/propagate survived HIR CFG lowering");
+            case pphir::Op::Await:
+                machine_load(plan, instruction.operands.at(0), "rdi"); emit("call pp_task_await_bits@PLT");
+                if (instruction.result != ppmachine::NoValue) machine_store(plan, instruction.result);
+                return;
             case pphir::Op::Unary: emit_machine_unary(instruction, plan); return;
             case pphir::Op::Binary: emit_machine_binary(instruction, plan); return;
+            case pphir::Op::Member: emit_machine_member(instruction, plan); return;
+            case pphir::Op::Index:
+                machine_load(plan, instruction.operands.at(0), "rdi"); machine_load(plan, instruction.operands.at(1), "rsi");
+                emit("call pp_at@PLT"); machine_store(plan, instruction.result); return;
+            case pphir::Op::List:
+                emit("call pp_numbers_new@PLT"); machine_store(plan, instruction.result);
+                for (ppmachine::VReg operand : instruction.operands) {
+                    machine_load(plan, instruction.result, "rdi"); machine_load(plan, operand, "rsi"); emit("call pp_push@PLT");
+                }
+                return;
+            case pphir::Op::AddressOf: emit_machine_address(instruction, plan); return;
+            case pphir::Op::Deref:
+                machine_load(plan, instruction.operands.at(0), "rax");
+                if (!is_record(instruction.type)) emit("mov rax, " + mem("rax", 0));
+                machine_store(plan, instruction.result); return;
+            case pphir::Op::SizeOf:
+                emit("mov rax, " + std::to_string(type_size(Type{instruction.detail})));
+                machine_store(plan, instruction.result); return;
+            case pphir::Op::AlignOf:
+                emit("mov rax, 8"); machine_store(plan, instruction.result); return;
+            case pphir::Op::StoreMember: {
+                Type base_type = machine_value_type(plan, instruction.operands.at(0));
+                if (is_reference_type(base_type)) base_type = pointee_type(base_type);
+                const FieldInfo &field = layout(base_type.name).fields.at(instruction.detail);
+                machine_load(plan, instruction.operands.at(0), "rcx");
+                if (is_record(field.type)) {
+                    machine_load(plan, instruction.operands.at(1), "rsi");
+                    for (int64_t k = 0; k < type_size(field.type); k += 8) {
+                        emit("mov rax, " + mem("rsi", k)); emit("mov " + mem("rcx", field.offset + k) + ", rax");
+                    }
+                } else {
+                    machine_load(plan, instruction.operands.at(1), "rax"); emit("mov " + mem("rcx", field.offset) + ", rax");
+                }
+                return;
+            }
+            case pphir::Op::StoreIndex:
+                machine_load(plan, instruction.operands.at(0), "rdi"); machine_load(plan, instruction.operands.at(1), "rsi");
+                machine_load(plan, instruction.operands.at(2), "rdx"); emit("call pp_put@PLT"); return;
+            case pphir::Op::StoreIndirect:
+                machine_load(plan, instruction.operands.at(0), "rcx");
+                if (is_record(instruction.type)) {
+                    machine_load(plan, instruction.operands.at(1), "rsi");
+                    for (int64_t k = 0; k < type_size(instruction.type); k += 8) {
+                        emit("mov rax, " + mem("rsi", k)); emit("mov " + mem("rcx", k) + ", rax");
+                    }
+                } else { machine_load(plan, instruction.operands.at(1), "rax"); emit("mov " + mem("rcx", 0) + ", rax"); }
+                return;
             case pphir::Op::Say: {
                 const auto value = instruction.operands.at(0);
                 const Type type = machine_value_type(plan, value);
@@ -642,18 +1094,21 @@ class X86Backend {
                 else { emit("mov rdi, rax"); emit("call pp_println_int@PLT"); }
                 return;
             }
-            default: internal("unsupported operation reached Machine IR body emitter");
         }
+        internal("unsupported operation reached Machine IR body emitter");
     }
 
     void generate_machine_function(const ppmachine::Function &function) {
         MachineFramePlan plan = plan_machine_frame(function);
         body_.str(""); body_.clear(); ret_label_ = new_label();
-        const int64_t frame_size = align_up(plan.frame, 16);
+        const int64_t saved_bytes = static_cast<int64_t>(function.callee_saved_registers.size() * 8);
+        const int64_t frame_size = align_up(plan.frame + saved_bytes, 16) - saved_bytes;
         const std::string symbol = function_symbol(function.name);
         text_ << "# body-lowering: machine-ir @" << function.name << "\n";
+        text_ << ".globl " << symbol << "\n";
         text_ << ".type " << symbol << ", @function\n" << symbol << ":\n";
         text_ << "    push rbp\n    mov rbp, rsp\n    sub rsp, " << frame_size << "\n";
+        for (const std::string &reg : function.callee_saved_registers) text_ << "    push " << reg << "\n";
         text_ << "    mov " << mem_rbp(plan.args_pointer) << ", rdi\n";
         for (const auto &block : function.blocks) {
             const std::string block_label = ".Lmir_" + function_symbol(function.name) + "_bb" + std::to_string(block.id);
@@ -667,69 +1122,30 @@ class X86Backend {
                 emit("jne .Lmir_" + function_symbol(function.name) + "_bb" + std::to_string(term.first));
                 emit("jmp .Lmir_" + function_symbol(function.name) + "_bb" + std::to_string(term.second));
             } else if (term.kind == pphir::Terminator::Kind::Return) {
-                if (term.value != ppmachine::NoValue) machine_load(plan, term.value, "rax");
+                if (term.value != ppmachine::NoValue) {
+                    if (function.abi.hidden_result_pointer) {
+                        machine_load(plan, term.value, "rsi");
+                        emit("mov rcx, " + mem_rbp(plan.args_pointer));
+                        emit("mov rdi, " + mem("rcx", static_cast<int64_t>(function.abi.result.location.offset)));
+                        for (int64_t k = 0; k < type_size(function.result); k += 8) {
+                            emit("mov rax, " + mem("rsi", k)); emit("mov " + mem("rdi", k) + ", rax");
+                        }
+                        emit("mov rax, rdi");
+                    } else machine_load(plan, term.value, "rax");
+                }
                 emit("jmp " + ret_label_);
             } else if (term.kind == pphir::Terminator::Kind::Unreachable) emit("ud2");
             else internal("unterminated Machine IR block reached x86 body emitter");
         }
-        text_ << body_.str() << ret_label_ << ":\n    leave\n    ret\n";
+        text_ << body_.str() << ret_label_ << ":\n";
+        for (auto reg = function.callee_saved_registers.rbegin(); reg != function.callee_saved_registers.rend(); ++reg)
+            text_ << "    pop " << *reg << "\n";
+        text_ << "    add rsp, " << frame_size << "\n    pop rbp\n    ret\n";
         text_ << "    .size " << symbol << ", .-" << symbol << "\n";
     }
 
-    // -- function emission --------------------------------------------------
-    void generate_function(const Function &function, const ppmachine::Function &machine_function) {
-        if (machine_function.abi.convention != ppmachine::CallingConvention::PunPunBlock)
-            internal("non-native PunPun function reached x86 emitter with wrong Machine IR calling convention");
-        if (machine_function.abi.parameters.size() != function.parameters.size())
-            internal("Machine IR/source parameter count mismatch for '" + function.name + "'");
 
-        frame_ = 0;
-        scopes_.clear();
-        drop_scopes_.clear();
-        scopes_.push_back({});
-        drop_scopes_.push_back({});
-        loops_.clear();
-        body_.str("");
-        body_.clear();
-        current_result_ = function.result;
-        result_is_record_ = machine_function.abi.hidden_result_pointer;
-        args_ptr_off_ = alloc(8);
-        ret_label_ = new_label();
-
-        for (std::size_t i = 0; i < function.parameters.size(); ++i) {
-            const auto &parameter = function.parameters[i];
-            const auto &abi_parameter = machine_function.abi.parameters[i];
-            if (abi_parameter.location.kind != ppmachine::AbiLocationKind::ArgumentBlock)
-                internal("PunPun parameter is not in Machine IR argument block for '" + function.name + "'");
-            scopes_.back()[parameter.name] = {
-                parameter.type, static_cast<int64_t>(abi_parameter.location.offset), true, 0
-            };
-        }
-
-        for (std::size_t i = 0; i < function.parameters.size(); ++i) {
-            if (function.is_method && i == 0) continue;
-            register_drop(scopes_.back().at(function.parameters[i].name));
-        }
-        for (const auto &statement : function.body) gen_statement(statement);
-        emit_scope_drops(0);
-        if (function.name == "main") emit("xor eax, eax");
-
-        const int64_t frame_size = align_up(frame_, 16);
-        const std::string symbol = function_symbol(function.name);
-        text_ << "# body-lowering: legacy-source @" << function.name << "\n";
-        text_ << ".type " << symbol << ", @function\n";
-        text_ << symbol << ":\n";
-        text_ << "    push rbp\n";
-        text_ << "    mov rbp, rsp\n";
-        text_ << "    sub rsp, " << frame_size << "\n";
-        text_ << "    mov " << mem_rbp(args_ptr_off_) << ", rdi\n";
-        text_ << body_.str();
-        text_ << ret_label_ << ":\n";
-        text_ << "    leave\n";
-        text_ << "    ret\n";
-        text_ << "    .size " << symbol << ", .-" << symbol << "\n";
-    }
-
+    // -- process entry -----------------------------------------------------
     void generate_entry() {
         text_ << ".globl main\n";
         text_ << ".type main, @function\n";
@@ -743,912 +1159,7 @@ class X86Backend {
         text_ << "    ret\n";
     }
 
-    // -- statements ---------------------------------------------------------
-    void gen_statement(const Stmt &statement) {
-        debug_location(statement.token);
-        switch (statement.kind) {
-            case Stmt::Kind::Variable: gen_variable(statement); break;
-            case Stmt::Kind::Assign: gen_assign(statement); break;
-            case Stmt::Kind::Expression: gen_expression(*statement.expression); break;
-            case Stmt::Kind::Say: gen_say(statement); break;
-            case Stmt::Kind::Return: gen_return(statement); break;
-            case Stmt::Kind::If: gen_if(statement); break;
-            case Stmt::Kind::While: gen_while(statement); break;
-            case Stmt::Kind::Each: gen_each(statement); break;
-            case Stmt::Kind::Break:
-            case Stmt::Kind::Continue: gen_break_continue(statement); break;
-            case Stmt::Kind::Unsafe: gen_block(statement.body); break;
-        }
-    }
 
-    void gen_variable(const Stmt &statement) {
-        const Type value_type = gen_expression(*statement.expression);
-        const Type type = statement.declared_type == Type::Infer ? value_type : statement.declared_type;
-        const int64_t slot = alloc(type_size(type));
-        if (is_record(type)) {
-            emit("mov rsi, rax");
-            copy_rsi_to_frame(slot, type_size(type));
-        } else {
-            emit("mov " + mem_rbp(slot) + ", rax");
-        }
-        scopes_.back()[statement.name] = {type, slot, false, 0};
-        register_drop(scopes_.back().at(statement.name));
-    }
-
-    void gen_assign(const Stmt &statement) {
-        const bool compound = statement.assignment_op != "=" && statement.assignment_op != "<-";
-        if (statement.target->kind == Expr::Kind::Index) {
-            const Expr &target = *statement.target;
-            gen_expression(*target.children[0]);  // nums pointer
-            const int64_t list_slot = alloc(8);
-            emit("mov " + mem_rbp(list_slot) + ", rax");
-            gen_expression(*target.children[1]);  // index
-            const int64_t index_slot = alloc(8);
-            emit("mov " + mem_rbp(index_slot) + ", rax");
-            gen_expression(*statement.expression);
-            const int64_t value_slot = alloc(8);
-            emit("mov " + mem_rbp(value_slot) + ", rax");
-            if (compound) {
-                emit("mov rdi, " + mem_rbp(list_slot));
-                emit("mov rsi, " + mem_rbp(index_slot));
-                emit("call pp_at@PLT");
-                emit("mov rdi, rax");
-                emit("mov rsi, " + mem_rbp(value_slot));
-                static const std::unordered_map<std::string, std::string> ops = {
-                    {"+=", "pp_add_i64"}, {"-=", "pp_sub_i64"},
-                    {"*=", "pp_mul_i64"}, {"/=", "pp_div_i64"}};
-                emit("call " + ops.at(statement.assignment_op) + "@PLT");
-                emit("mov " + mem_rbp(value_slot) + ", rax");
-            }
-            emit("mov rdx, " + mem_rbp(value_slot));
-            emit("mov rdi, " + mem_rbp(list_slot));
-            emit("mov rsi, " + mem_rbp(index_slot));
-            emit("call pp_put@PLT");
-            return;
-        }
-        const Type type = gen_lvalue_address(*statement.target);  // address in rax
-        const int64_t addr_slot = alloc(8);
-        emit("mov " + mem_rbp(addr_slot) + ", rax");
-        gen_expression(*statement.expression);  // value or record address
-        int64_t owning_value_slot = 0;
-        if (!compound && needs_drop(type)) {
-            owning_value_slot = alloc(8);
-            emit("mov " + mem_rbp(owning_value_slot) + ", rax");
-            if (statement.target->kind == Expr::Kind::Variable) {
-                const Var *target_var = lookup(statement.target->value);
-                if (target_var) emit_drop_var(*target_var);
-            } else {
-                emit("mov rax, " + mem_rbp(addr_slot));
-                emit_drop_at_address(type);
-            }
-            emit("mov rax, " + mem_rbp(owning_value_slot));
-        }
-        if (compound) {
-            if (type == Type::Int) {
-                emit("mov rsi, rax");
-                emit("mov rcx, " + mem_rbp(addr_slot));
-                emit("mov rdi, " + mem("rcx", 0));
-                static const std::unordered_map<std::string, std::string> ops = {
-                    {"+=", "pp_add_i64"}, {"-=", "pp_sub_i64"},
-                    {"*=", "pp_mul_i64"}, {"/=", "pp_div_i64"}};
-                emit("call " + ops.at(statement.assignment_op) + "@PLT");
-            } else if (type == Type::Float) {
-                emit("movq xmm1, rax");
-                emit("mov rcx, " + mem_rbp(addr_slot));
-                emit("movq xmm0, " + mem("rcx", 0));
-                if (statement.assignment_op == "+=") emit("addsd xmm0, xmm1");
-                else if (statement.assignment_op == "-=") emit("subsd xmm0, xmm1");
-                else if (statement.assignment_op == "*=") emit("mulsd xmm0, xmm1");
-                else emit("divsd xmm0, xmm1");
-                emit("movq rax, xmm0");
-            } else internal("compound assignment reached non-numeric type");
-        }
-        emit("mov rdi, " + mem_rbp(addr_slot));
-        if (is_record(type)) {
-            emit("mov rsi, rax");
-            copy_via_rdi_rsi(type_size(type));
-        } else emit("mov " + mem("rdi", 0) + ", rax");
-        if (!compound && statement.target->kind == Expr::Kind::Variable) {
-            const Var *target_var = lookup(statement.target->value);
-            if (target_var && target_var->alive_offset != 0)
-                emit("mov qword ptr " + mem_rbp(target_var->alive_offset) + ", 1");
-        }
-    }
-
-    // Produce the address of an assignable location (scalar slot or record
-    // bytes) in RAX; returns its type.
-    Type gen_lvalue_address(const Expr &expression) {
-        if (expression.kind == Expr::Kind::Variable) {
-            const Var *variable = lookup(expression.value);
-            if (!variable) internal("unknown lvalue '" + expression.value + "'");
-            if (variable->is_param) {
-                emit("mov rcx, " + mem_rbp(args_ptr_off_));
-                emit("lea rax, " + mem("rcx", variable->offset));
-            } else emit("lea rax, " + mem_rbp(variable->offset));
-            return variable->type;
-        }
-        if (expression.kind == Expr::Kind::Member) {
-            const Type source_type = expression.children[0]->inferred_type;
-            Type base;
-            if (is_object(source_type) || is_reference_type(source_type)) {
-                base = gen_expression(*expression.children[0]); // RAX is payload/reference pointer
-            } else base = gen_lvalue_address(*expression.children[0]);
-            if (is_reference_type(base)) base = pointee_type(base);
-            const ShapeLayout &shape = layout(base.name);
-            const FieldInfo &field = shape.fields.at(expression.value);
-            if (field.offset != 0) emit("add rax, " + std::to_string(field.offset));
-            return field.type;
-        }
-        if (expression.kind == Expr::Kind::Unary && expression.value == "*") {
-            const Type pointer = gen_expression(*expression.children[0]);
-            if (!is_pointer_like_type(pointer)) internal("dereference lvalue is not a pointer");
-            return pointee_type(pointer);
-        }
-        internal("unsupported lvalue");
-    }
-
-    void gen_say(const Stmt &statement) {
-        const Type type = gen_expression(*statement.expression);
-        if (type == Type::Float) {
-            emit("movq xmm0, rax");
-            emit("call pp_println_float@PLT");
-        } else if (type == Type::Bool) {
-            emit("mov rdi, rax");
-            emit("call pp_println_bool@PLT");
-        } else if (type == Type::Str) {
-            emit("mov rdi, rax");
-            emit("call pp_println_str@PLT");
-        } else {
-            emit("mov rdi, rax");
-            emit("call pp_println_int@PLT");
-        }
-    }
-
-    void gen_return(const Stmt &statement) {
-        if (!statement.expression) {
-            emit_drops_from(0);
-            emit("jmp " + ret_label_);
-            return;
-        }
-        gen_expression(*statement.expression);
-        const int64_t result_slot = alloc(8);
-        if (result_is_record_) {
-            emit("mov rcx, " + mem_rbp(args_ptr_off_));
-            emit("mov rdi, " + mem("rcx", 0));
-            emit("mov rsi, rax");
-            copy_via_rdi_rsi(type_size(current_result_));
-            emit("mov " + mem_rbp(result_slot) + ", rdi");
-        } else emit("mov " + mem_rbp(result_slot) + ", rax");
-        emit_drops_from(0);
-        emit("mov rax, " + mem_rbp(result_slot));
-        emit("jmp " + ret_label_);
-    }
-
-    void gen_if(const Stmt &statement) {
-        gen_expression(*statement.expression);
-        emit("cmp rax, 0");
-        const std::string end = new_label();
-        if (statement.alternative.empty()) {
-            emit("je " + end);
-            gen_block(statement.body);
-            label(end);
-        } else {
-            const std::string other = new_label();
-            emit("je " + other);
-            gen_block(statement.body);
-            emit("jmp " + end);
-            label(other);
-            gen_block(statement.alternative);
-            label(end);
-        }
-    }
-
-    void gen_while(const Stmt &statement) {
-        const std::string top = new_label();
-        const std::string end = new_label();
-        label(top);
-        gen_expression(*statement.expression);
-        emit("cmp rax, 0");
-        emit("je " + end);
-        loops_.push_back({end, top, drop_scopes_.size()});
-        gen_block(statement.body);
-        loops_.pop_back();
-        emit("jmp " + top);
-        label(end);
-    }
-
-    void gen_each(const Stmt &statement) {
-        const int64_t counter = alloc(8);
-        gen_expression(*statement.expression);  // start
-        emit("mov " + mem_rbp(counter) + ", rax");
-        const int64_t limit = alloc(8);
-        gen_expression(*statement.upper);  // end
-        emit("mov " + mem_rbp(limit) + ", rax");
-        const std::string top = new_label();
-        const std::string cont = new_label();
-        const std::string end = new_label();
-        const std::size_t loop_base = drop_scopes_.size();
-        scopes_.push_back({{statement.name, {Type::Int, counter, false, 0}}});
-        drop_scopes_.push_back({});
-        loops_.push_back({end, cont, loop_base});
-        label(top);
-        emit("mov rax, " + mem_rbp(counter));
-        emit("cmp rax, " + mem_rbp(limit));
-        emit("jge " + end);
-        for (const auto &child : statement.body) gen_statement(child);
-        emit_scope_drops(drop_scopes_.size() - 1);
-        label(cont);
-        emit("mov rax, " + mem_rbp(counter));
-        emit("add rax, 1");
-        emit("mov " + mem_rbp(counter) + ", rax");
-        emit("jmp " + top);
-        label(end);
-        loops_.pop_back();
-        drop_scopes_.pop_back();
-        scopes_.pop_back();
-    }
-
-    void gen_break_continue(const Stmt &statement) {
-        if (loops_.empty()) internal("loop control outside loop");
-        const auto &loop = loops_.back();
-        emit_drops_from(loop.scope_base);
-        emit("jmp " + (statement.kind == Stmt::Kind::Break ? loop.break_label : loop.continue_label));
-    }
-
-    void gen_block(const std::vector<Stmt> &statements) {
-        scopes_.push_back({});
-        drop_scopes_.push_back({});
-        for (const auto &statement : statements) gen_statement(statement);
-        emit_scope_drops(drop_scopes_.size() - 1);
-        drop_scopes_.pop_back();
-        scopes_.pop_back();
-    }
-
-    // -- expressions (result in RAX; record -> address in RAX) --------------
-    Type gen_expression(const Expr &expression) {
-        switch (expression.kind) {
-            case Expr::Kind::Integer: {
-                emit("movabs rax, " + std::to_string(std::stoll(expression.value)));
-                return Type::Int;
-            }
-            case Expr::Kind::Float: {
-                double value = std::stod(expression.value);
-                uint64_t bits;
-                std::memcpy(&bits, &value, sizeof(bits));
-                emit("movabs rax, " + hex_u64(bits));
-                return Type::Float;
-            }
-            case Expr::Kind::String: {
-                emit("lea rax, [rip + " + add_string(expression.value) + "]");
-                return Type::Str;
-            }
-            case Expr::Kind::Boolean: {
-                if (expression.value == "yes") emit("mov eax, 1");
-                else emit("xor eax, eax");
-                return Type::Bool;
-            }
-            case Expr::Kind::Variable: return gen_variable_load(expression);
-            case Expr::Kind::Member: return gen_member(expression);
-            case Expr::Kind::Index: return gen_index(expression);
-            case Expr::Kind::List: return gen_list(expression);
-            case Expr::Kind::Call: return gen_call(expression);
-            case Expr::Kind::MethodCall: return gen_call(expression);
-            case Expr::Kind::EnumConstruct: return gen_enum_construct(expression);
-            case Expr::Kind::Match: return gen_match(expression);
-            case Expr::Kind::Propagate: return gen_propagate(expression);
-            case Expr::Kind::SizeOf:
-                emit("mov rax, " + std::to_string(type_size(Type{expression.value})));
-                return Type::Int;
-            case Expr::Kind::AlignOf:
-                emit("mov rax, 8");
-                return Type::Int;
-            case Expr::Kind::Unary: return gen_unary(expression);
-            case Expr::Kind::Binary: return gen_binary(expression);
-        }
-        internal("unreachable expression");
-    }
-
-    std::size_t enum_variant_index(const Shape &shape, const std::string &name) const {
-        for (std::size_t i = 0; i < shape.enum_variants.size(); ++i)
-            if (shape.enum_variants[i].name == name) return i;
-        internal("unknown enum variant '" + name + "'");
-    }
-
-    Type gen_enum_construct(const Expr &expression) {
-        const Shape *shape = shapes_.at(expression.value);
-        const ShapeLayout &shape_layout = layout(shape->name);
-        const std::size_t index = enum_variant_index(*shape, expression.enum_variant);
-        const int64_t result = alloc(shape_layout.size);
-        for (int64_t offset = 0; offset < shape_layout.size; offset += 8)
-            emit("mov qword ptr " + mem_rbp(result + offset) + ", 0");
-        emit("mov qword ptr " + mem_rbp(result + shape_layout.fields.at("__tag").offset) + ", " + std::to_string(index));
-        for (std::size_t i = 0; i < expression.children.size(); ++i) {
-            const Type payload = gen_expression(*expression.children[i]);
-            const FieldInfo &field = shape_layout.fields.at("__v" + std::to_string(index) + "_" + std::to_string(i));
-            if (is_record(payload)) {
-                emit("mov rsi, rax");
-                copy_rsi_to_frame(result + field.offset, type_size(payload));
-            } else emit("mov " + mem_rbp(result + field.offset) + ", rax");
-        }
-        emit("lea rax, " + mem_rbp(result));
-        return Type{shape->name};
-    }
-
-    void emit_pattern(const Pattern &pattern, Type type, int64_t address_slot, const std::string &failure) {
-        if (pattern.kind == Pattern::Kind::Wildcard) return;
-        if (pattern.kind == Pattern::Kind::Binding) {
-            const int64_t slot = alloc(type_size(type));
-            emit("mov rsi, " + mem_rbp(address_slot));
-            if (is_record(type)) copy_rsi_to_frame(slot, type_size(type));
-            else { emit("mov rax, " + mem("rsi", 0)); emit("mov " + mem_rbp(slot) + ", rax"); }
-            scopes_.back()[pattern.value] = {type, slot, false};
-            return;
-        }
-        emit("mov rcx, " + mem_rbp(address_slot));
-        if (pattern.kind == Pattern::Kind::Integer) {
-            emit("movabs rax, " + pattern.value); emit("cmp " + mem("rcx", 0) + ", rax"); emit("jne " + failure); return;
-        }
-        if (pattern.kind == Pattern::Kind::Boolean) {
-            emit("cmp qword ptr " + mem("rcx", 0) + ", " + (pattern.value == "yes" ? "1" : "0")); emit("jne " + failure); return;
-        }
-        if (pattern.kind == Pattern::Kind::String) {
-            emit("mov rdi, " + mem("rcx", 0)); emit("lea rsi, [rip + " + add_string(pattern.value) + "]");
-            emit("call pp_str_eq@PLT"); emit("cmp rax, 0"); emit("je " + failure); return;
-        }
-        const Shape *shape = shapes_.at(type.name);
-        const ShapeLayout &shape_layout = layout(type.name);
-        emit("mov rax, " + mem("rcx", shape_layout.fields.at("__tag").offset));
-        emit("cmp rax, " + std::to_string(pattern.variant_index)); emit("jne " + failure);
-        for (std::size_t i = 0; i < pattern.children.size(); ++i) {
-            const FieldInfo &field = shape_layout.fields.at("__v" + std::to_string(pattern.variant_index) + "_" + std::to_string(i));
-            const int64_t child_address = alloc(8);
-            emit("mov rax, " + mem_rbp(address_slot));
-            if (field.offset) emit("add rax, " + std::to_string(field.offset));
-            emit("mov " + mem_rbp(child_address) + ", rax");
-            emit_pattern(pattern.children[i], shape->enum_variants[pattern.variant_index].payload[i], child_address, failure);
-        }
-    }
-
-    Type gen_match(const Expr &expression) {
-        const Type subject_type = gen_expression(*expression.children[0]);
-        const int64_t subject = alloc(type_size(subject_type));
-        if (is_record(subject_type)) { emit("mov rsi, rax"); copy_rsi_to_frame(subject, type_size(subject_type)); }
-        else emit("mov " + mem_rbp(subject) + ", rax");
-        const int64_t subject_address = alloc(8);
-        emit("lea rax, " + mem_rbp(subject)); emit("mov " + mem_rbp(subject_address) + ", rax");
-        const Type result_type = expression.inferred_type;
-        const int64_t result = result_type == Type::Void ? 0 : alloc(type_size(result_type));
-        const std::string end = new_label();
-        for (std::size_t i = 0; i < expression.match_patterns.size(); ++i) {
-            const std::string next = new_label();
-            scopes_.push_back({});
-            emit_pattern(expression.match_patterns[i], subject_type, subject_address, next);
-            const Type arm = gen_expression(*expression.children[i + 1]);
-            if (result_type != Type::Void) {
-                if (is_record(arm)) { emit("mov rsi, rax"); copy_rsi_to_frame(result, type_size(arm)); }
-                else emit("mov " + mem_rbp(result) + ", rax");
-            }
-            scopes_.pop_back();
-            emit("jmp " + end); label(next);
-        }
-        label(end);
-        if (result_type == Type::Void) emit("xor eax, eax");
-        else if (is_record(result_type)) emit("lea rax, " + mem_rbp(result));
-        else emit("mov rax, " + mem_rbp(result));
-        return result_type;
-    }
-
-    Type gen_propagate(const Expr &expression) {
-        const Type source_type = gen_expression(*expression.children[0]);
-        const Shape *source_shape = shapes_.at(source_type.name);
-        const Shape *result_shape = shapes_.at(current_result_.name);
-        const ShapeLayout &source_layout = layout(source_type.name);
-        const ShapeLayout &result_layout = layout(current_result_.name);
-        const std::size_t success = enum_variant_index(*source_shape, expression.enum_variant);
-        const std::string failure_name = expression.enum_variant == "Some" ? "None" : "Error";
-        const std::size_t source_failure = enum_variant_index(*source_shape, failure_name);
-        const std::size_t result_failure = enum_variant_index(*result_shape, failure_name);
-        const int64_t source_address = alloc(8);
-        emit("mov " + mem_rbp(source_address) + ", rax");
-        emit("mov rcx, rax"); emit("cmp qword ptr " + mem("rcx", source_layout.fields.at("__tag").offset) + ", " + std::to_string(success));
-        const std::string ok = new_label(); emit("je " + ok);
-        const int64_t failure = alloc(result_layout.size);
-        for (int64_t offset = 0; offset < result_layout.size; offset += 8)
-            emit("mov qword ptr " + mem_rbp(failure + offset) + ", 0");
-        emit("mov qword ptr " + mem_rbp(failure + result_layout.fields.at("__tag").offset) + ", " + std::to_string(result_failure));
-        if (!source_shape->enum_variants[source_failure].payload.empty()) {
-            const FieldInfo &from = source_layout.fields.at("__v" + std::to_string(source_failure) + "_0");
-            const FieldInfo &to = result_layout.fields.at("__v" + std::to_string(result_failure) + "_0");
-            emit("mov rcx, " + mem_rbp(source_address));
-            if (is_record(from.type)) {
-                emit("lea rsi, " + mem("rcx", from.offset)); copy_rsi_to_frame(failure + to.offset, type_size(from.type));
-            } else { emit("mov rax, " + mem("rcx", from.offset)); emit("mov " + mem_rbp(failure + to.offset) + ", rax"); }
-        }
-        emit("mov rcx, " + mem_rbp(args_ptr_off_)); emit("mov rdi, " + mem("rcx", 0));
-        emit("lea rsi, " + mem_rbp(failure)); copy_via_rdi_rsi(result_layout.size); emit("jmp " + ret_label_);
-        label(ok);
-        const FieldInfo &payload = source_layout.fields.at("__v" + std::to_string(success) + "_0");
-        emit("mov rax, " + mem_rbp(source_address));
-        if (payload.offset) emit("add rax, " + std::to_string(payload.offset));
-        if (!is_record(payload.type)) emit("mov rax, " + mem("rax", 0));
-        return payload.type;
-    }
-
-    Type gen_variable_load(const Expr &expression) {
-        const Var *variable = lookup(expression.value);
-        if (!variable) internal("unknown variable '" + expression.value + "'");
-        if (variable->is_param) {
-            emit("mov rcx, " + mem_rbp(args_ptr_off_));
-            if (is_record(variable->type)) emit("lea rax, " + mem("rcx", variable->offset));
-            else emit("mov rax, " + mem("rcx", variable->offset));
-        } else {
-            if (is_record(variable->type)) emit("lea rax, " + mem_rbp(variable->offset));
-            else emit("mov rax, " + mem_rbp(variable->offset));
-        }
-        if (expression.consumes_value && variable->alive_offset != 0)
-            emit("mov qword ptr " + mem_rbp(variable->alive_offset) + ", 0");
-        return variable->type;
-    }
-
-    Type gen_member(const Expr &expression) {
-        Type base = gen_expression(*expression.children[0]);  // value-record address or object/reference pointer in rax
-        if (is_reference_type(base)) base = pointee_type(base);
-        const ShapeLayout &shape = layout(base.name);
-        const FieldInfo &field = shape.fields.at(expression.value);
-        if (is_record(field.type)) {
-            if (field.offset != 0) emit("add rax, " + std::to_string(field.offset));
-        } else {
-            emit("mov rax, " + mem("rax", field.offset));
-        }
-        return field.type;
-    }
-
-    Type gen_index(const Expr &expression) {
-        gen_expression(*expression.children[0]);  // nums pointer
-        const int64_t list_slot = alloc(8);
-        emit("mov " + mem_rbp(list_slot) + ", rax");
-        gen_expression(*expression.children[1]);  // index
-        emit("mov rsi, rax");
-        emit("mov rdi, " + mem_rbp(list_slot));
-        emit("call pp_at@PLT");
-        return Type::Int;
-    }
-
-    Type gen_list(const Expr &expression) {
-        emit("call pp_numbers_new@PLT");
-        const int64_t list_slot = alloc(8);
-        emit("mov " + mem_rbp(list_slot) + ", rax");
-        for (const auto &child : expression.children) {
-            gen_expression(*child);
-            emit("mov rsi, rax");
-            emit("mov rdi, " + mem_rbp(list_slot));
-            emit("call pp_push@PLT");
-        }
-        emit("mov rax, " + mem_rbp(list_slot));
-        return Type::Nums;
-    }
-
-    Type gen_unary(const Expr &expression) {
-        if (expression.value == "await") {
-            const Type task = gen_expression(*expression.children[0]);
-            if (!is_task_type(task)) internal("non-task reached await after semantic analysis");
-            emit("mov rdi, rax");
-            emit("call pp_task_await_bits@PLT");
-            return expression.inferred_type;
-        }
-        if (expression.value == "-" && expression.children[0]->kind == Expr::Kind::Integer &&
-            expression.children[0]->value == "9223372036854775808") {
-            emit("movabs rax, 0x8000000000000000");
-            return Type::Int;
-        }
-        if (expression.value == "&" || expression.value == "&mut" || expression.value == "&raw") {
-            (void)gen_lvalue_address(*expression.children[0]);
-            return expression.inferred_type;
-        }
-        const Type operand = gen_expression(*expression.children[0]);
-        if (expression.value == "*") {
-            const Type inner = pointee_type(operand);
-            // A by-value record expression is represented by its address. For
-            // scalar/object-reference pointees, load the referenced 8-byte value.
-            if (!is_record(inner)) emit("mov rax, " + mem("rax", 0));
-            return inner;
-        }
-        if (expression.value == "not") {
-            emit("xor rax, 1");
-            return Type::Bool;
-        }
-        if (expression.value == "~") {
-            emit("not rax");
-            return Type::Int;
-        }
-        if (operand == Type::Int) {
-            emit("mov rdi, rax");
-            emit("call pp_neg_i64@PLT");
-            return Type::Int;
-        }
-        // float negation: flip the sign bit
-        emit("movabs rcx, 0x8000000000000000");
-        emit("xor rax, rcx");
-        return Type::Float;
-    }
-
-    Type gen_binary(const Expr &expression) {
-        const std::string &op = expression.value;
-        if (op == "and" || op == "or") return gen_short_circuit(expression);
-
-        const Type left = gen_expression(*expression.children[0]);
-        const int64_t left_slot = alloc(8);
-        emit("mov " + mem_rbp(left_slot) + ", rax");
-        const Type right = gen_expression(*expression.children[1]);
-        const int64_t right_slot = alloc(8);
-        emit("mov " + mem_rbp(right_slot) + ", rax");
-
-        if (is_raw_pointer_type(left) && right == Type::Int && (op == "+" || op == "-")) {
-            emit("mov rax, " + mem_rbp(right_slot));
-            const int64_t stride = type_size(pointee_type(left));
-            if (stride != 1) emit("imul rax, " + std::to_string(stride));
-            emit("mov rcx, " + mem_rbp(left_slot));
-            emit(std::string(op == "+" ? "add" : "sub") + " rcx, rax");
-            emit("mov rax, rcx");
-            return left;
-        }
-
-        const bool is_float = left == Type::Float && right == Type::Float;
-        (void)right;
-
-        if (op == "==" || op == "!=") {
-            if (left == Type::Str) {
-                emit("mov rdi, " + mem_rbp(left_slot));
-                emit("mov rsi, " + mem_rbp(right_slot));
-                emit("call pp_str_eq@PLT");
-                if (op == "!=") emit("xor rax, 1");
-                return Type::Bool;
-            }
-            if (is_float) {
-                load_float_operands(left_slot, right_slot);
-                emit("ucomisd xmm0, xmm1");
-                if (op == "==") {
-                    emit("sete al");
-                    emit("setnp cl");
-                    emit("and al, cl");
-                } else {
-                    emit("setne al");
-                    emit("setp cl");
-                    emit("or al, cl");
-                }
-                emit("movzx eax, al");
-                return Type::Bool;
-            }
-            emit("mov rax, " + mem_rbp(left_slot));
-            emit("cmp rax, " + mem_rbp(right_slot));
-            emit(op == "==" ? "sete al" : "setne al");
-            emit("movzx eax, al");
-            return Type::Bool;
-        }
-
-        if (op == "<" || op == "<=" || op == ">" || op == ">=") {
-            if (is_float) {
-                gen_float_compare(op, left_slot, right_slot);
-                return Type::Bool;
-            }
-            emit("mov rax, " + mem_rbp(left_slot));
-            emit("cmp rax, " + mem_rbp(right_slot));
-            if (op == "<") emit("setl al");
-            else if (op == "<=") emit("setle al");
-            else if (op == ">") emit("setg al");
-            else emit("setge al");
-            emit("movzx eax, al");
-            return Type::Bool;
-        }
-
-        if (left == Type::Int) {
-            if (op == "&" || op == "|" || op == "^") {
-                emit("mov rax, " + mem_rbp(left_slot));
-                emit(std::string(op == "&" ? "and" : op == "|" ? "or" : "xor") +
-                     " rax, " + mem_rbp(right_slot));
-                return Type::Int;
-            }
-            if (op == "<<" || op == ">>") {
-                emit("mov rax, " + mem_rbp(left_slot));
-                emit("mov rcx, " + mem_rbp(right_slot));
-                emit(std::string(op == "<<" ? "shl" : "sar") + " rax, cl");
-                return Type::Int;
-            }
-            emit("mov rdi, " + mem_rbp(left_slot));
-            emit("mov rsi, " + mem_rbp(right_slot));
-            static const std::unordered_map<std::string, std::string> ops = {
-                {"+", "pp_add_i64"}, {"-", "pp_sub_i64"}, {"*", "pp_mul_i64"},
-                {"/", "pp_div_i64"}, {"%", "pp_mod_i64"}};
-            emit("call " + ops.at(op) + "@PLT");
-            return Type::Int;
-        }
-        if (left == Type::Str && op == "+") {
-            emit("mov rdi, " + mem_rbp(left_slot));
-            emit("mov rsi, " + mem_rbp(right_slot));
-            emit("call pp_concat@PLT");
-            return Type::Str;
-        }
-        // float arithmetic
-        load_float_operands(left_slot, right_slot);
-        if (op == "+") emit("addsd xmm0, xmm1");
-        else if (op == "-") emit("subsd xmm0, xmm1");
-        else if (op == "*") emit("mulsd xmm0, xmm1");
-        else emit("divsd xmm0, xmm1");
-        emit("movq rax, xmm0");
-        return Type::Float;
-    }
-
-    void load_float_operands(int64_t left_slot, int64_t right_slot) {
-        emit("mov rax, " + mem_rbp(left_slot));
-        emit("movq xmm0, rax");
-        emit("mov rax, " + mem_rbp(right_slot));
-        emit("movq xmm1, rax");
-    }
-
-    void gen_float_compare(const std::string &op, int64_t left_slot, int64_t right_slot) {
-        load_float_operands(left_slot, right_slot);
-        // Use the swap trick so every comparison is false for NaN operands.
-        if (op == "<") {
-            emit("ucomisd xmm1, xmm0");
-            emit("seta al");
-        } else if (op == "<=") {
-            emit("ucomisd xmm1, xmm0");
-            emit("setae al");
-        } else if (op == ">") {
-            emit("ucomisd xmm0, xmm1");
-            emit("seta al");
-        } else {
-            emit("ucomisd xmm0, xmm1");
-            emit("setae al");
-        }
-        emit("movzx eax, al");
-    }
-
-    Type gen_short_circuit(const Expr &expression) {
-        const std::string &op = expression.value;
-        gen_expression(*expression.children[0]);
-        const int64_t result_slot = alloc(8);
-        emit("mov " + mem_rbp(result_slot) + ", rax");
-        const std::string skip = new_label();
-        emit("cmp rax, 0");
-        emit(op == "and" ? "je " + skip : "jne " + skip);
-        gen_expression(*expression.children[1]);
-        emit("mov " + mem_rbp(result_slot) + ", rax");
-        label(skip);
-        emit("mov rax, " + mem_rbp(result_slot));
-        return Type::Bool;
-    }
-
-    // -- calls --------------------------------------------------------------
-    Type gen_call(const Expr &expression) {
-        if (shapes_.count(expression.value)) return gen_constructor(expression);
-        if (is_builtin_.count(expression.value)) return gen_builtin(expression);
-        if (native_symbols_.count(expression.value)) return gen_native_call(expression);
-        return gen_user_call(expression);
-    }
-
-    Type gen_constructor(const Expr &expression) {
-        const ShapeLayout &shape = layout(expression.value);
-        const Shape *definition = shapes_.at(expression.value);
-        if (!definition->reference_type) {
-            const int64_t record_slot = alloc(shape.size);
-            for (size_t i = 0; i < definition->fields.size(); ++i) {
-                const Parameter &field = definition->fields[i];
-                const int64_t offset = shape.fields.at(field.name).offset;
-                const Type value_type = gen_expression(*expression.children[i]);
-                if (is_record(value_type)) {
-                    emit("mov rsi, rax");
-                    copy_rsi_to_frame(record_slot + offset, type_size(value_type));
-                } else emit("mov " + mem_rbp(record_slot + offset) + ", rax");
-            }
-            emit("lea rax, " + mem_rbp(record_slot));
-            return Type{expression.value};
-        }
-
-        // Identity object: allocate its payload once, then invoke the flattened
-        // init method with the object pointer as the first argument.
-        emit("mov rdi, " + std::to_string(shape.size));
-        emit("call pp_object_alloc@PLT");
-        const int64_t object_slot = alloc(8);
-        emit("mov " + mem_rbp(object_slot) + ", rax");
-        if (!definition->initializer_name.empty()) {
-            const ppmachine::Function &machine = machine_function(definition->initializer_name);
-            if (machine.abi.convention != ppmachine::CallingConvention::PunPunBlock)
-                internal("initializer has non-PunPun Machine IR ABI");
-            if (machine.abi.parameters.size() != expression.children.size() + 1)
-                internal("initializer Machine IR ABI parameter mismatch");
-            const int64_t block_size = static_cast<int64_t>(machine.abi.argument_block_size);
-            const int64_t block_off = alloc(align_up(block_size, 8));
-            emit("mov rax, " + mem_rbp(object_slot));
-            emit("mov " + mem_rbp(block_off + static_cast<int64_t>(machine.abi.parameters[0].location.offset)) + ", rax");
-            for (size_t i = 0; i < expression.children.size(); ++i) {
-                const Type value_type = gen_expression(*expression.children[i]);
-                const int64_t destination = block_off + static_cast<int64_t>(machine.abi.parameters[i + 1].location.offset);
-                if (is_record(value_type)) {
-                    emit("mov rsi, rax");
-                    copy_rsi_to_frame(destination, type_size(value_type));
-                } else emit("mov " + mem_rbp(destination) + ", rax");
-            }
-            emit("lea rdi, " + mem_rbp(block_off));
-            emit("call " + function_symbol(definition->initializer_name));
-        }
-        emit("mov rax, " + mem_rbp(object_slot));
-        return Type{expression.value};
-    }
-
-    Type gen_native_call(const Expr &expression) {
-        const Signature &signature = user_signatures_.at(expression.value);
-        const ppmachine::Function &machine = machine_function(expression.value);
-        if (machine.abi.convention != ppmachine::CallingConvention::SysVAMD64)
-            internal("extern native function has non-SysV Machine IR ABI");
-        if (machine.abi.parameters.size() != expression.children.size())
-            internal("extern native Machine IR ABI parameter mismatch");
-        std::vector<int64_t> slots;
-        for (const auto &child : expression.children) {
-            const Type type = gen_expression(*child);
-            if (is_record(type) || type == Type::Float)
-                internal("unsupported direct native ABI value after semantic analysis");
-            const int64_t slot = alloc(8);
-            emit("mov " + mem_rbp(slot) + ", rax");
-            slots.push_back(slot);
-        }
-        for (std::size_t i = 0; i < slots.size(); ++i) {
-            const auto &location = machine.abi.parameters[i].location;
-            if (location.kind != ppmachine::AbiLocationKind::Register || location.name.empty())
-                internal("direct x86 native call requires register-passed scalar ABI arguments");
-            emit("mov " + location.name + ", " + mem_rbp(slots[i]));
-        }
-        emit("call " + native_symbols_.at(expression.value) + "@PLT");
-        if (signature.result == Type::Bool) emit("movzx eax, al");
-        return signature.result;
-    }
-
-    Type gen_user_call(const Expr &expression) {
-        const Signature &signature = user_signatures_.at(expression.value);
-        const ppmachine::Function &machine = machine_function(expression.value);
-        if (machine.abi.convention != ppmachine::CallingConvention::PunPunBlock)
-            internal("user function has non-PunPun Machine IR ABI");
-        if (machine.abi.parameters.size() != expression.children.size())
-            internal("user call Machine IR ABI parameter mismatch");
-
-        const bool returns_record = machine.abi.hidden_result_pointer;
-        const int64_t block_size = static_cast<int64_t>(machine.abi.argument_block_size);
-
-        int64_t dest_slot = 0;
-        if (returns_record) dest_slot = alloc(type_size(signature.result));
-        int64_t block_off = 0;
-        if (block_size > 0) block_off = alloc(align_up(block_size, 8));
-
-        if (returns_record) {
-            if (machine.abi.result.location.kind != ppmachine::AbiLocationKind::HiddenResultPointer)
-                internal("record-returning user function lacks Machine IR hidden result pointer");
-            emit("lea rax, " + mem_rbp(dest_slot));
-            emit("mov " + mem_rbp(block_off + static_cast<int64_t>(machine.abi.result.location.offset)) + ", rax");
-        }
-        for (size_t i = 0; i < expression.children.size(); ++i) {
-            const Type value_type = gen_expression(*expression.children[i]);
-            const Type expected = signature.parameters[i];
-            const auto &parameter_abi = machine.abi.parameters[i];
-            if (parameter_abi.location.kind != ppmachine::AbiLocationKind::ArgumentBlock)
-                internal("user-call parameter is not in Machine IR argument block");
-            const int64_t destination = block_off + static_cast<int64_t>(parameter_abi.location.offset);
-            if (is_reference_type(expected) && is_record(value_type)) {
-                // Record expressions already produce their address. A method
-                // self-reference therefore costs one pointer store, not a copy.
-                emit("mov " + mem_rbp(destination) + ", rax");
-            } else if (is_record(value_type)) {
-                emit("mov rsi, rax");
-                copy_rsi_to_frame(destination, type_size(value_type));
-            } else {
-                emit("mov " + mem_rbp(destination) + ", rax");
-            }
-        }
-        if (signature.is_async) {
-            emit("lea rdi, [rip + " + function_symbol(expression.value) + "]");
-            if (block_size > 0) emit("lea rsi, " + mem_rbp(block_off));
-            else emit("xor esi, esi");
-            emit("mov rdx, " + std::to_string(block_size));
-            emit("call pp_task_spawn@PLT");
-            return task_type(signature.result);
-        }
-        if (block_size > 0) emit("lea rdi, " + mem_rbp(block_off));
-        else emit("xor edi, edi");
-        emit("call " + function_symbol(expression.value));
-        if (returns_record) {
-            emit("lea rax, " + mem_rbp(dest_slot));
-            return signature.result;
-        }
-        if (signature.result == Type::Bool) emit("movzx eax, al");
-        return signature.result;
-    }
-
-    Type gen_builtin(const Expr &expression) {
-        const std::string &name = expression.value;
-        std::vector<int64_t> slots;
-        std::vector<Type> types;
-        for (const auto &child : expression.children) {
-            const Type type = gen_expression(*child);
-            const int64_t slot = alloc(8);
-            emit("mov " + mem_rbp(slot) + ", rax");
-            slots.push_back(slot);
-            types.push_back(type);
-        }
-        const auto load = [&](const std::string &reg, size_t index) {
-            emit("mov " + reg + ", " + mem_rbp(slots[index]));
-        };
-
-        if (name == "move") {
-            load("rax", 0);
-            return types.at(0);
-        }
-        if (name == "drop") {
-            load("rdi", 0);
-            emit(std::string("call ") + (types.at(0) == Type::Nums ? "pp_numbers_free@PLT" : "pp_object_free@PLT"));
-            return Type::Void;
-        }
-
-        if (name == "print" || name == "println") {
-            const std::string prefix = "pp_" + name + "_";
-            if (types[0] == Type::Float) {
-                load("rax", 0);
-                emit("movq xmm0, rax");
-                emit("call " + prefix + "float@PLT");
-            } else if (types[0] == Type::Bool) {
-                load("rdi", 0);
-                emit("call " + prefix + "bool@PLT");
-            } else if (types[0] == Type::Str) {
-                load("rdi", 0);
-                emit("call " + prefix + "str@PLT");
-            } else {
-                load("rdi", 0);
-                emit("call " + prefix + "int@PLT");
-            }
-            return Type::Void;
-        }
-        if (name == "len") { load("rdi", 0); emit("call pp_len@PLT"); return Type::Int; }
-        if (name == "abs") { load("rdi", 0); emit("call pp_abs_i64@PLT"); return Type::Int; }
-        if (name == "clock_ms") { emit("call pp_clock_ms@PLT"); return Type::Int; }
-        if (name == "panic") { load("rdi", 0); emit("call pp_panic@PLT"); return Type::Void; }
-        if (name == "numbers") { emit("call pp_numbers_new@PLT"); return Type::Nums; }
-        if (name == "push") { load("rdi", 0); load("rsi", 1); emit("call pp_push@PLT"); return Type::Void; }
-        if (name == "at") { load("rdi", 0); load("rsi", 1); emit("call pp_at@PLT"); return Type::Int; }
-        if (name == "put") { load("rdi", 0); load("rsi", 1); load("rdx", 2); emit("call pp_put@PLT"); return Type::Void; }
-        if (name == "size") { load("rdi", 0); emit("call pp_size@PLT"); return Type::Int; }
-        if (name == "view") { load("rdi", 0); load("rsi", 1); load("rdx", 2); emit("call pp_numbers_view@PLT"); return Type{"Slice<int>"}; }
-        if (name == "slice_len") { load("rdi", 0); emit("call pp_slice_len_i64@PLT"); return Type::Int; }
-        if (name == "slice_get") { load("rdi", 0); load("rsi", 1); emit("call pp_slice_at_i64@PLT"); return Type::Int; }
-        if (name == "pop") { load("rdi", 0); emit("call pp_pop@PLT"); return Type::Int; }
-        if (name == "sort") { load("rdi", 0); emit("call pp_sort@PLT"); return Type::Void; }
-        if (name == "concat") { load("rdi", 0); load("rsi", 1); emit("call pp_concat@PLT"); return Type::Str; }
-        if (name == "slice") { load("rdi", 0); load("rsi", 1); load("rdx", 2); emit("call pp_slice@PLT"); return Type::Str; }
-        if (name == "contains") { load("rdi", 0); load("rsi", 1); emit("call pp_contains@PLT"); emit("movzx eax, al"); return Type::Bool; }
-        if (name == "read_text") { load("rdi", 0); emit("call pp_read_text@PLT"); return Type::Str; }
-        if (name == "write_text") { load("rdi", 0); load("rsi", 1); emit("call pp_write_text@PLT"); return Type::Void; }
-        if (name == "text") { load("rdi", 0); emit("call pp_text_int@PLT"); return Type::Str; }
-        if (name == "parse_int") { load("rdi", 0); emit("call pp_parse_int@PLT"); return Type::Int; }
-        if (name == "decimal") { load("rdi", 0); emit("call pp_decimal@PLT"); emit("movq rax, xmm0"); return Type::Float; }
-        if (name == "whole") { load("rax", 0); emit("movq xmm0, rax"); emit("call pp_whole@PLT"); return Type::Int; }
-        if (name == "assert") { load("rdi", 0); load("rsi", 1); emit("call pp_assert@PLT"); return Type::Void; }
-        if (name == "arg_count") { emit("call pp_arg_count@PLT"); return Type::Int; }
-        if (name == "arg") { load("rdi", 0); emit("call pp_arg@PLT"); return Type::Str; }
-        if (name == "file_exists") { load("rdi", 0); emit("call pp_file_exists@PLT"); emit("movzx eax, al"); return Type::Bool; }
-        if (name == "current_dir") { emit("call pp_current_dir@PLT"); return Type::Str; }
-        if (name == "env_has") { load("rdi", 0); emit("call pp_env_has@PLT"); emit("movzx eax, al"); return Type::Bool; }
-        if (name == "env_or") { load("rdi", 0); load("rsi", 1); emit("call pp_env_or@PLT"); return Type::Str; }
-        if (name == "platform") { emit("call pp_platform@PLT"); return Type::Str; }
-        if (name == "read_line") { emit("call pp_read_line@PLT"); return Type::Str; }
-        if (name == "sleep_ms") { load("rdi", 0); emit("call pp_sleep_ms@PLT"); return Type::Void; }
-        if (name == "cancel") { load("rdi", 0); emit("call pp_task_cancel@PLT"); return Type::Void; }
-        if (name == "task_done") { load("rdi", 0); emit("call pp_task_is_done@PLT"); emit("movzx eax, al"); return Type::Bool; }
-        if (name == "cancelled") { emit("call pp_task_cancelled@PLT"); emit("movzx eax, al"); return Type::Bool; }
-        if (name == "utf8_valid") { load("rdi", 0); emit("call pp_utf8_valid@PLT"); emit("movzx eax, al"); return Type::Bool; }
-        if (name == "utf8_len") { load("rdi", 0); emit("call pp_utf8_len@PLT"); return Type::Int; }
-        if (name == "make_dir") { load("rdi", 0); emit("call pp_make_dir@PLT"); emit("movzx eax, al"); return Type::Bool; }
-        if (name == "remove_file") { load("rdi", 0); emit("call pp_remove_file@PLT"); emit("movzx eax, al"); return Type::Bool; }
-        if (name == "rename_file") { load("rdi", 0); load("rsi", 1); emit("call pp_rename_file@PLT"); emit("movzx eax, al"); return Type::Bool; }
-        if (name == "path_join") { load("rdi", 0); load("rsi", 1); emit("call pp_path_join@PLT"); return Type::Str; }
-        internal("unknown builtin '" + name + "'");
-    }
 };
 
 #endif  // PUNPUN_BACKEND_X86_64_HPP

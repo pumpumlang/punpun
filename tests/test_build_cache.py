@@ -102,6 +102,29 @@ class BuildCacheRegressionTests(unittest.TestCase):
             self.assertEqual(third.returncode, 0, third.stderr)
             self.assertIn("CACHE MISS", third.stderr)
 
+    def test_function_object_cache_reuses_unrelated_functions(self):
+        self.write_source(
+            'fn left() -> i64 { return 10; }\n'
+            'fn unused(value:i64) -> i64 { return value + 1; }\n'
+            'launch { say(left()); }\n'
+        )
+        first = self.run_pp("build", "--release", "--no-cache")
+        self.assertEqual(first.returncode, 0, first.stderr)
+        # Rebuild once with cache enabled so stable function objects/metadata exist.
+        warm = self.run_pp("build", "--release")
+        self.assertEqual(warm.returncode, 0, warm.stderr)
+        self.write_source(
+            'fn left() -> i64 { return 10; }\n'
+            'fn unused(value:i64, extra:i64) -> i64 { return value + extra; }\n'
+            'launch { say(left()); }\n'
+        )
+        changed = self.run_pp("build", "--release", "--stats", "--cache-info")
+        self.assertEqual(changed.returncode, 0, changed.stderr)
+        self.assertIn("FUNCTION HIT  @left", changed.stderr)
+        self.assertIn("FUNCTION HIT  @main", changed.stderr)
+        self.assertIn("FUNCTION MISS @unused", changed.stderr)
+        self.assertIn("stats functions    2 reused, 1 rebuilt", changed.stderr)
+
     def test_stats_report_is_real_and_nonempty(self):
         self.write_source('launch { say("STATS"); }\n')
         result = self.run_pp("build", "--stats")
