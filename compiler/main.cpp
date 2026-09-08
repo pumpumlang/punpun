@@ -1,4 +1,4 @@
-// Punpun compiler driver (`ppc`).
+// PunPun compiler driver (`ppc`).
 //
 // Pipeline:
 //   .pp source -> lexer/parser/type checker -> native x86-64 assembly (Linux)
@@ -140,7 +140,7 @@ static bool host_can_use_direct_x86_backend() {
 
 static void usage() {
     std::cerr
-        << "Punpun compiler " PP_VERSION "\n\n"
+        << "PunPun compiler " PP_VERSION "\n\n"
         << "usage: ppc <build|run|go|check|fmt|emit-tokens|emit-ast|emit-hir|emit-ir|emit-c|emit-asm|emit-llvm> <file.pp> [options] [-- args...]\n\n"
         << "options:\n"
         << "  -o <path>                    Output executable/source path\n"
@@ -637,7 +637,7 @@ int main(int argc, char **argv) {
         }
 
         fs::path input = argv[2];
-        if (input.extension() != ".pp") throw Error("error: Punpun source files must use the .pp extension");
+        if (input.extension() != ".pp") throw Error("error: PunPun source files must use the .pp extension");
 
         Target target = Target::Native;
         fs::path output;
@@ -765,7 +765,7 @@ int main(int argc, char **argv) {
         }
 
         if (explicit_output && (fs::weakly_canonical(input) == fs::weakly_canonical(output) || output.extension() == ".pp"))
-            throw Error("error: output must not overwrite Punpun source");
+            throw Error("error: output must not overwrite PunPun source");
 
         if (command == "emit-tokens") {
             const auto tokens = Lexer(fs::absolute(input), read_file(fs::absolute(input))).scan();

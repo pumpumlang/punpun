@@ -34,7 +34,7 @@ from pathlib import Path
 
 try:
     import resource
-except ImportError:  # pragma: no cover - Punpun targets Linux only.
+except ImportError:  # pragma: no cover - PunPun targets Linux only.
     resource = None
 
 
@@ -1429,7 +1429,7 @@ class CompilerCliTest(ToolchainTestCase):
         result = self.run_command([PPC, "build", "prog.pp", "-o", "prog.pp"],
                                   cwd=directory, timeout=BUILD_TIMEOUT)
         self.assertNotEqual(result.returncode, 0)
-        self.assertIn("output must not overwrite Punpun source", result.stderr)
+        self.assertIn("output must not overwrite PunPun source", result.stderr)
 
 
 # --------------------------------------------------------------------------
@@ -1451,7 +1451,7 @@ class ExamplesTest(ToolchainTestCase):
     def test_hello_example(self):
         result = self._run_example("hello/main.pp")
         self.assertLines(result, [
-            "Punpun",
+            "PunPun",
             "fibonacci(10) = 55",
             "sum_to(100) = 5050",
             "safe abs(-42) = 42",

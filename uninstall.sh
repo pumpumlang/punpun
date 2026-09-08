@@ -2,7 +2,7 @@
 set -eu
 
 if [ -z "${HOME:-}" ]; then
-    echo "Punpun uninstaller: HOME is not set" >&2
+    echo "PunPun uninstaller: HOME is not set" >&2
     exit 1
 fi
 
@@ -16,8 +16,8 @@ remove_path_block() {
     [ -f "$file" ] || return 0
     tmp="${file}.punpun-remove.$$"
     awk '
-        $0 == "# >>> Punpun PATH >>>" { skip=1; next }
-        $0 == "# <<< Punpun PATH <<<" { skip=0; next }
+        $0 == "# >>> PunPun PATH >>>" || $0 == "# >>> Punpun PATH >>>" { skip=1; next }
+        $0 == "# <<< PunPun PATH <<<" || $0 == "# <<< Punpun PATH <<<" { skip=0; next }
         !skip { print }
     ' "$file" > "$tmp"
     mv "$tmp" "$file"
@@ -65,4 +65,4 @@ if [ -x "$ROOT/packaging/linux/uninstall-file-icons.sh" ]; then
 fi
 
 rm -rf "$ROOT"
-printf '%s\n' "Punpun $VERSION was removed. Reload VS Code and open a new terminal to refresh the environment."
+printf '%s\n' "PunPun $VERSION was removed. Reload VS Code and open a new terminal to refresh the environment."

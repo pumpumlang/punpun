@@ -9,7 +9,7 @@ fn main() {
     let values = [5, 8, 13, 21, 34];
     let reversed = nums_reverse(values);
 
-    println("Punpun 0.5 native compiler is alive.");
+    println("PunPun 0.6 native compiler is alive.");
     println("sum = " + text(stats_sum(values)));
     println("mean = ");
     println(stats_mean(values));
@@ -17,6 +17,6 @@ fn main() {
     println("contains 13 = ");
     println(nums_contains(values, 13));
     println("first reversed value = " + text(reversed[0]));
-    println("trimmed = '" + text_trim("  hello Punpun  ") + "'");
+    println("trimmed = '" + text_trim("  hello PunPun  ") + "'");
     println("startup work took " + text(elapsed_ms(started)) + " ms");
 }

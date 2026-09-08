@@ -1,4 +1,4 @@
-// Tiny assertion helpers for Punpun programs and library tests.
+// Tiny assertion helpers for PunPun programs and library tests.
 
 fn expect_int(actual: i64, expected: i64) -> void {
     assert(actual == expected, "expected int " + text(expected) + ", got " + text(actual));

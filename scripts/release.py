@@ -8,6 +8,7 @@ ROOT=Path(__file__).resolve().parents[1]
 TARGET='linux-x86_64'
 RELEASE=ROOT/'dist'/f'release-{VERSION}'
 SOURCE_DATE_EPOCH=int(os.environ.get('SOURCE_DATE_EPOCH','1788753600'))
+PROJECT_URL=os.environ.get('PUNPUN_PROJECT_URL','https://github.com/pumpumlang/punpun')
 
 
 def run(cmd,cwd=ROOT,**kw):
@@ -40,12 +41,13 @@ def copy_clean_source(dst:Path):
         '.ruff_cache','.idea','node_modules','__MACOSX','.ppx-registry','htmlcov'
     }
     ignored_names={'.DS_Store','Thumbs.db','desktop.ini','.coverage'}
-    ignored_suffixes={'.pyc','.tmp','.swp','.swo','.o','.a','.so','.dll','.exe'}
+    ignored_suffixes={'.pyc','.tmp','.swp','.swo','.o','.a','.so','.dll','.exe','.bak','.orig','.rej'}
     def ignore(path,names):
         out=[]
         for n in names:
             candidate=Path(n)
-            if n in ignored_dirs or n in ignored_names or n.endswith('~') or candidate.suffix.lower() in ignored_suffixes:
+            if (n in ignored_dirs or n in ignored_names or n.endswith('~') or '.bak-' in n.lower()
+                    or candidate.suffix.lower() in ignored_suffixes):
                 out.append(n)
         return out
     shutil.copytree(ROOT,dst,ignore=ignore)
@@ -154,7 +156,7 @@ pkgver={PKGVER}
 pkgrel=1
 pkgdesc="PunPun native programming language SDK"
 arch=('x86_64')
-url="https://example.invalid/punpun"
+url="{PROJECT_URL}"
 license=('MIT')
 depends=('glibc' 'gcc-libs' 'python' 'nodejs' 'shared-mime-info' 'hicolor-icon-theme')
 optdepends=('base-devel: rebuild compiler and use C injection' 'libcurl: requests package' 'libx11: PunUI Linux backend')
@@ -193,7 +195,7 @@ def make_arch_package(sdk:Path,out:Path):
             icon_dir=root/f'usr/share/icons/hicolor/{icon_size}x{icon_size}/mimetypes'; icon_dir.mkdir(parents=True)
             shutil.copy2(sdk/f'assets/punpun-icon-{icon_size}.png',icon_dir/'application-x-punpun.png')
         size=sum(p.stat().st_size for p in root.rglob('*') if p.is_file())
-        (root/'.PKGINFO').write_text(f'pkgname = punpun\npkgbase = punpun\npkgver = {PKGVER}-1\npkgdesc = PunPun native programming language SDK\nurl = https://example.invalid/punpun\nbuilddate = {SOURCE_DATE_EPOCH}\npackager = PunPun Project\nsize = {size}\narch = x86_64\nlicense = MIT\ndepend = glibc\ndepend = gcc-libs\ndepend = python\ndepend = nodejs\ndepend = shared-mime-info\ndepend = hicolor-icon-theme\n')
+        (root/'.PKGINFO').write_text(f'pkgname = punpun\npkgbase = punpun\npkgver = {PKGVER}-1\npkgdesc = PunPun native programming language SDK\nurl = {PROJECT_URL}\nbuilddate = {SOURCE_DATE_EPOCH}\npackager = PunPun Project\nsize = {size}\narch = x86_64\nlicense = MIT\ndepend = glibc\ndepend = gcc-libs\ndepend = python\ndepend = nodejs\ndepend = shared-mime-info\ndepend = hicolor-icon-theme\n')
         # GNU tar + zstd produces the package payload format; .MTREE is omitted on this host because libarchive/makepkg are unavailable.
         subprocess.run(['tar','--zstd','-cf',str(out),'-C',str(root),'.'],check=True)
 
@@ -243,7 +245,8 @@ def main():
     if RELEASE.exists(): shutil.rmtree(RELEASE)
     RELEASE.mkdir(parents=True)
     run(['python3','scripts/sync_version.py'])
-    run(['make','-s','-B','compiler'])
+    run(['python3','scripts/build_brand.py','--repo-root',str(ROOT)])
+    run(['make','-s','compiler'])
     run(['python3','scripts/check_version.py'])
     run(['python3','scripts/privacy_audit.py',str(ROOT)])
     run(['./selfhost/bootstrap.sh'])

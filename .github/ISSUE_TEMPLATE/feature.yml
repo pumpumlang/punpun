@@ -1,0 +1,23 @@
+name: Feature proposal
+description: Propose a language, tooling, package, or platform improvement
+title: "[proposal] "
+labels: ["enhancement"]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem to solve
+      description: Describe the developer problem before proposing syntax or implementation.
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed behavior
+    validations:
+      required: true
+  - type: textarea
+    id: compatibility
+    attributes:
+      label: Compatibility / safety / tooling impact
+      description: Note effects on ownership, type checking, HIR/MIR/backends, packages, diagnostics, or existing code.

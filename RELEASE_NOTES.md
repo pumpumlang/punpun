@@ -1,4 +1,6 @@
-# PunPun 0.6.0-beta
+# PunPun 0.6.0-beta.1
+
+This repaired prerelease keeps the Step 6 language surface intact and hardens the repository/release boundary before Step 7. The PP logo is now generated consistently for every consumer, source debris is rejected, package metadata is canonical, fast CI runs on normal development changes, and release promotion is gated on exact-candidate platform qualification.
 
 PunPun 0.6 completes the language-foundation cycle: generics and algebraic data types now sit beside a real ownership/borrow pass, a mandatory verified HIR/MIR pipeline, and three selectable native code-generation paths on supported hosts.
 

@@ -1,6 +1,6 @@
 # Publishing PunPun
 
-The publisher bundle contains only the files required to update the PunPun source repository, release assets, documentation site, and PPX catalog. It is assembled from fresh release outputs rather than copied from an old publisher directory.
+PunPun releases use **build → qualify → promote**. The publisher bundle may update the candidate source on `main`, but it must not promote release downloads or the documentation/PPX sites until the exact candidate commit passes the required Linux, Arch, and Windows qualification workflow.
 
 ## One-command publication
 
@@ -18,140 +18,55 @@ chmod +x publish-punpun.sh
 ./publish-punpun.sh
 ```
 
-The script derives the GitHub account from the authenticated `gh` session. It does not hardcode a personal account name or token.
+The script derives the GitHub account from the authenticated `gh` session and never embeds a token in the bundle.
 
-## What the script updates
+## Publication sequence
 
 A successful run:
 
-1. verifies the publisher bundle against `SHA256SUMS`;
-2. extracts and sanitizes the source archive in a temporary directory;
-3. replaces the contents of the `punpun` source repository, preserving only its `.git` database;
-4. triggers the platform release workflow when GitHub accepts the dispatch;
-5. updates the current `v<VERSION>` prerelease and uploads the exact current asset set;
-6. removes stale uploaded assets from **that release tag only** when they are no longer present in the publisher bundle;
-7. replaces the `punpun-docs` Pages repository with the newly built documentation site;
-8. replaces the `punpun-ppx` Pages repository with the newly built PPX site;
-9. enables/refreshes GitHub Pages and prints the resulting repository/site URLs.
+1. verifies every publisher input against `SHA256SUMS`;
+2. extracts and sanitizes the clean source archive;
+3. replaces the `punpun` source repository with the candidate source while preserving `.git`;
+4. creates or verifies the immutable `v<VERSION>` candidate tag at that exact source commit;
+5. waits for `platform-release.yml` to qualify that exact commit on Linux, Arch, and Windows;
+6. **stops immediately on any failed platform job**;
+7. only after a green qualification run, promotes the release assets for the candidate tag;
+8. removes stale uploaded assets from that tag only;
+9. replaces the `punpun-docs` and `punpun-ppx` Pages repositories with the built static sites.
 
-Because repository contents are replaced rather than overlaid, a file removed from the current source/site build is also removed from the published repository on the next run.
+The old publish-while-CI-runs behavior is intentionally gone. A red qualification run leaves the candidate source/tag available for diagnosis but does not create a falsely healthy release.
 
 ## Cleanup policy
 
-Cleanup is deliberately narrow. The publisher removes known generated, machine-local, cache, and compiled-host artifacts. It does **not** use a broad extension allowlist that might silently delete legitimate source.
-
-### Removed directories
+Source/publication cleanup removes machine-local caches, compiled host output, and backup/reject files including:
 
 ```text
-.punpun/
-build/
-dist/                  source publication only
-__pycache__/
-.pytest_cache/
-.mypy_cache/
-.ruff_cache/
-node_modules/
-.idea/
-__MACOSX/
-.ppx-registry/
-htmlcov/
+.punpun/  build/  dist/  node_modules/  __pycache__/  .pytest_cache/
+.mypy_cache/  .ruff_cache/  .idea/  __MACOSX/  .ppx-registry/  htmlcov/
+*.pyc  *.tmp  *.swp  *.swo  *.bak  *.bak-*  *.orig  *.rej  *~
+*.o  *.a  *.so  *.dll  *.exe
+.DS_Store  Thumbs.db  desktop.ini  .coverage
 ```
 
-### Removed files
-
-```text
-*.pyc
-*.tmp
-*.swp
-*.swo
-*~
-.DS_Store
-Thumbs.db
-desktop.ini
-.coverage
-```
-
-For **source publication only**, host-compiled files are also removed:
-
-```text
-*.o
-*.a
-*.so
-*.dll
-*.exe
-```
-
-These are rebuilt by the project/release toolchain and should never make the public source tree depend on the machine that assembled the bundle.
-
-### Intentionally retained
-
-The cleanup pass keeps project content that may look “developer-ish” but is part of the product/repository:
-
-```text
-.github/
-.vscode/
-compiler/
-runtime source
-stdlib/
-packages/
-ppx/
-ppx-registry/
-editors/
-packaging/
-installers/
-docs + docs-site source
-spec/
-tests/
-examples/
-scripts/
-LICENSE
-README / roadmap / release documentation
-manifest and reproducibility metadata
-```
-
-The temporary cleanup functions use `find -P` and operate only inside the publisher's temporary extraction directories. They do not follow symlinks and do not clean the user's working repository.
-
-## Release asset pruning safety
-
-When a release tag already exists, `publish-punpun.sh` compares its uploaded asset names with the current publisher bundle. An old uploaded asset is deleted only when:
-
-- it belongs to the exact current tag `v<VERSION>`;
-- it is an uploaded release asset returned by GitHub for that tag; and
-- its filename is absent from the current publisher bundle's release asset list.
-
-GitHub-generated source archives are not touched. Other tags/releases are not touched.
-
-## If the script is outside the publisher folder
-
-The script checks its own directory, the current directory, Desktop, and Downloads. You can set the bundle explicitly:
-
-```sh
-env PUNPUN_PUBLISHER_DIR="$HOME/Desktop/PunPun-<VERSION>-publisher" bash publish-punpun.sh
-```
+The cleanup is bounded to temporary release/publisher trees and does not follow symlinks. Project source such as `.github/`, `.vscode/`, compiler/runtime/stdlib code, packages, PPX, editor support, installers, docs/spec/tests/examples, manifests, lock/reproducibility metadata, and governance files is retained.
 
 ## Local release verification
 
-From source:
+From a clean source checkout:
 
 ```sh
-make clean all
-./tests/run.sh
-make selfhost
+python3 scripts/build_brand.py --repo-root .
+python3 scripts/check_links.py README.md docs docs-site/content examples editors/vscode/README.md CONTRIBUTING.md SECURITY.md
+make -j2 test
+./selfhost/bootstrap.sh
 python3 scripts/release.py
 ```
 
-Build/preview the sites separately:
+Then verify:
 
 ```sh
-python3 docs-site/build.py
-python3 ppx-site/build.py
-python3 -m http.server 8000 --directory docs-site/dist
+cd "dist/release-$(cat VERSION)"
+sha256sum -c SHA256SUMS
 ```
 
-## Optional Cloudflare Pages mirror
-
-The publisher's website ZIPs are deployment-ready static output. Extract those ZIPs to temporary directories before passing them to another hosting provider; do not publish the source-site folders as though they were generated output.
-
-## Release honesty
-
-Linux artifacts are built and validated on the Linux host. Windows WiX installer source is published until Windows CI/VM qualification produces real MSI/Setup artifacts. Never rename an archive to impersonate a native installer.
+Linux artifacts are executable-qualified on Linux. Arch installation/upgrade/removal and Windows MSI/file-association/upgrade/uninstall claims become release-qualified only when their real platform jobs pass. Do not manufacture native artifacts that were not built on a suitable host.

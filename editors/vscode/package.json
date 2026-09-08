@@ -1,8 +1,8 @@
 {
   "name": "punpun",
-  "displayName": "Punpun",
+  "displayName": "PunPun",
   "description": "PunPun language support powered by the compiler semantic engine: live diagnostics, semantic completion, navigation, rename, formatting, inlay hints, semantic highlighting, and build commands.",
-  "version": "0.6.0-beta",
+  "version": "0.6.0-beta.1",
   "publisher": "punpun",
   "license": "MIT",
   "engines": {
@@ -32,7 +32,7 @@
       {
         "id": "punpun",
         "aliases": [
-          "Punpun",
+          "PunPun",
           "punpun"
         ],
         "extensions": [
@@ -61,27 +61,27 @@
     "commands": [
       {
         "command": "punpun.build",
-        "title": "Punpun: Build Current File"
+        "title": "PunPun: Build Current File"
       },
       {
         "command": "punpun.run",
-        "title": "Punpun: Run Current File"
+        "title": "PunPun: Run Current File"
       },
       {
         "command": "punpun.check",
-        "title": "Punpun: Check Current File"
+        "title": "PunPun: Check Current File"
       },
       {
         "command": "punpun.buildWindows",
-        "title": "Punpun: Build Windows x86-64 .exe"
+        "title": "PunPun: Build Windows x86-64 .exe"
       },
       {
         "command": "punpun.format",
-        "title": "Punpun: Format Current File"
+        "title": "PunPun: Format Current File"
       },
       {
         "command": "punpun.test",
-        "title": "Punpun: Run Project Tests"
+        "title": "PunPun: Run Project Tests"
       },
       {
         "command": "punpun.restartLanguageServer",
@@ -89,7 +89,7 @@
       }
     ],
     "configuration": {
-      "title": "Punpun",
+      "title": "PunPun",
       "properties": {
         "punpun.toolPath": {
           "type": "string",
@@ -107,18 +107,7 @@
           "description": "Path to PunPun LSP server.js. Empty uses the server bundled with this extension."
         }
       }
-    },
-    "iconThemes": [
-      {
-        "id": "punpun",
-        "label": "PunPun",
-        "path": "./fileicons/punpun-icon-theme.json"
-      }
-    ]
+    }
   },
-  "icon": "icon.png",
-  "galleryBanner": {
-    "color": "#11151e",
-    "theme": "dark"
-  }
+  "icon": "assets/punpun-icon-128.png"
 }

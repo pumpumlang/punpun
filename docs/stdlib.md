@@ -7,7 +7,7 @@
 Import `std::result` for `result_is_ok`, `result_is_error`, and
 `result_unwrap_or`. The `*_unwrap_or` helpers require a `Copy` success type.
 
-The `stdlib/` import root is included automatically. Modules are ordinary Punpun
+The `stdlib/` import root is included automatically. Modules are ordinary PunPun
 source, with no entry point or global constants. Import only what you need:
 
 ```punpun
@@ -137,4 +137,4 @@ Source: [`stdlib/std/testing.pp`](../stdlib/std/testing.pp).
 | `expect_str(actual as str, expected as str) gives void` | Assert string equality |
 
 The testing module is intentionally tiny. Failures use the built-in `assert`, so a
-failing expectation prints a Punpun panic and aborts the process.
+failing expectation prints a PunPun panic and aborts the process.

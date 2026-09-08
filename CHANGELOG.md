@@ -1,3 +1,13 @@
+## 0.6.0-beta.1 — 2026-09-08
+
+- Canonicalized the new PP brand so Linux MIME icons, VS Code marketplace/file icons, favicons, social artwork and Windows ICOs are generated from one source.
+- Removed release-hygiene gaps for timestamped `.bak-*`, `.orig`, `.rej`, swap and temporary files.
+- Replaced placeholder Arch package URLs with the canonical PunPun repository URL.
+- Added continuous push/PR CI, documentation link validation, security/contribution guidance and issue templates.
+- Updated GitHub Actions to Node 24-capable releases and hardened Arch/Windows qualification setup.
+- Changed publishing to build/qualify/promote: release assets and sites are blocked until the exact candidate commit passes Linux, Arch and Windows qualification.
+- Formally defined Step 7 as the PunPun 0.7 compiler-scalability/backend-maturity milestone.
+
 ## 0.6.0-beta — 2026-09-08
 
 - Reworked the documentation site into a staged beginner → intermediate learning path with compiler-checked runnable examples, common-mistake guidance, grouped navigation, and next-page progression.

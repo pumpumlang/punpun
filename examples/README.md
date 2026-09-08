@@ -28,7 +28,7 @@ standalone entry points. They are checked as part of the programs importing them
 build/ppc go examples/hello/main.pp
 ```
 
-Prints `Punpun`, Fibonacci at `10` (`55`), the sum from `1` through `100`
+Prints `PunPun`, Fibonacci at `10` (`55`), the sum from `1` through `100`
 (`5050`), an absolute value (`42`), and the language name's byte length (`6`).
 The recursive Fibonacci function illustrates syntax, not an efficient algorithm
 for large inputs. `sum_to` expects a small enough input for its checked arithmetic.
@@ -97,7 +97,7 @@ For useful measurements, record hardware, compiler/toolchain versions, limits,
 rounds, and release/debug mode. Repeat runs and report variation. An external
 wall-clock measurement of the binary also includes allocation and output, unlike
 the internal timer. Compare equivalent work and safety checks. The portable C backend uses `-O3 -flto` in release, while checked integer arithmetic
-stays in the Punpun runtime; this example makes no claim to outperform C or every
+stays in the PunPun runtime; this example makes no claim to outperform C or every
 other language.
 
 ## Local Packages

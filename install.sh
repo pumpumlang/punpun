@@ -5,14 +5,14 @@ ROOT=$(CDPATH= cd -- "$(dirname -- "$0")" 2>/dev/null && pwd)
 VERSION=$(tr -d '\r\n' < "$ROOT/VERSION")
 
 if [ -z "${HOME:-}" ]; then
-    echo "Punpun installer: HOME is not set" >&2
+    echo "PunPun installer: HOME is not set" >&2
     exit 1
 fi
 
 case "$(uname -s 2>/dev/null || true)" in
     Linux) ;;
     *)
-        echo "Punpun installer: this installer currently supports Linux only" >&2
+        echo "PunPun installer: this installer currently supports Linux only" >&2
         exit 1
         ;;
 esac
@@ -20,7 +20,7 @@ esac
 case "$(uname -m 2>/dev/null || true)" in
     x86_64|amd64) ;;
     *)
-        echo "Punpun installer: this bundle currently contains an x86-64 compiler" >&2
+        echo "PunPun installer: this bundle currently contains an x86-64 compiler" >&2
         exit 1
         ;;
 esac
@@ -55,13 +55,13 @@ append_path_block() {
     line=$2
     [ -n "$file" ] || return 0
     [ -f "$file" ] || : > "$file"
-    if grep -Fq '# >>> Punpun PATH >>>' "$file" 2>/dev/null; then
+    if grep -Eq '# >>> Pun[Pp]un PATH >>>' "$file" 2>/dev/null; then
         return 0
     fi
     {
-        printf '\n# >>> Punpun PATH >>>\n'
+        printf '\n# >>> PunPun PATH >>>\n'
         printf '%s\n' "$line"
-        printf '# <<< Punpun PATH <<<\n'
+        printf '# <<< PunPun PATH <<<\n'
     } >> "$file"
 }
 
@@ -88,7 +88,7 @@ install_extension_via_cli() {
     return 1
 }
 
-say "Punpun $VERSION installer"
+say "PunPun $VERSION installer"
 say "  project: $INSTALL_DIR"
 say "  commands: $BIN_DIR"
 
@@ -109,7 +109,7 @@ if command -v make >/dev/null 2>&1 && command -v c++ >/dev/null 2>&1 && command 
     say "Rebuilding compiler/runtime for this machine..."
     if ! make -s -B -C "$stage" compiler; then
         rm -rf "$stage"
-        echo "Punpun installer: local compiler rebuild failed" >&2
+        echo "PunPun installer: local compiler rebuild failed" >&2
         exit 1
     fi
 else
@@ -119,7 +119,7 @@ fi
 
 if [ ! -x "$stage/build/ppc" ]; then
     rm -rf "$stage"
-    echo "Punpun installer: compiler binary is missing" >&2
+    echo "PunPun installer: compiler binary is missing" >&2
     exit 1
 fi
 
@@ -132,7 +132,7 @@ if [ -e "$INSTALL_DIR" ]; then
 fi
 if ! mv "$stage" "$INSTALL_DIR"; then
     [ ! -e "$backup" ] || mv "$backup" "$INSTALL_DIR"
-    echo "Punpun installer: could not activate installation" >&2
+    echo "PunPun installer: could not activate installation" >&2
     exit 1
 fi
 rm -rf "$backup"
@@ -202,11 +202,11 @@ if command -v cc >/dev/null 2>&1; then
     trap 'rm -rf "$smoke"' EXIT HUP INT TERM
     cat > "$smoke/main.pp" <<'EOF_PP'
 fn main() {
-    println("Punpun installed");
+    println("PunPun installed");
 }
 EOF_PP
     if ! (cd "$smoke" && "$INSTALL_DIR/pp" build main.pp -o hello >/dev/null && ./hello >/dev/null); then
-        echo "Punpun installer: end-to-end native compilation smoke test failed" >&2
+        echo "PunPun installer: end-to-end native compilation smoke test failed" >&2
         exit 1
     fi
     rm -rf "$smoke"
@@ -216,7 +216,7 @@ else
 fi
 
 say ""
-say "Installed Punpun $VERSION successfully."
+say "Installed PunPun $VERSION successfully."
 say ""
 say "Commands:"
 say "  pp --version"

@@ -1,0 +1,34 @@
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  linux-fast:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - name: Install test dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libcurl4-openssl-dev python3-pil zstd
+      - name: Regenerate canonical PP brand
+        run: |
+          python3 scripts/build_brand.py --repo-root .
+          git diff --exit-code -- assets editors/vscode/icon.png editors/vscode/assets editors/vscode/fileicons
+      - name: Build and test
+        run: make -j2 test
+      - name: Validate documentation links
+        run: python3 scripts/check_links.py README.md docs docs-site/content examples editors/vscode/README.md CONTRIBUTING.md SECURITY.md
+      - name: Build static sites and VSIX
+        run: |
+          python3 docs-site/build.py
+          python3 ppx-site/build.py
+          python3 scripts/package_vsix.py
+      - name: Source privacy and hygiene
+        run: python3 scripts/privacy_audit.py .

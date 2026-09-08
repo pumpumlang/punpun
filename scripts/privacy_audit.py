@@ -17,7 +17,18 @@ PRIVATE_PATTERNS = {
     "private key": re.compile(r"-----BEGIN [A-Z ]*PRIVATE KEY-----"),
 }
 FORBIDDEN_SUFFIXES = {".bak", ".orig", ".rej", ".pyc", ".tmp"}
-FORBIDDEN_NAMES = {".env", "credentials", "id_rsa", "id_ed25519", ".DS_Store"}
+FORBIDDEN_NAMES = {".env", "credentials", "id_rsa", "id_ed25519", ".DS_Store", "Thumbs.db", "desktop.ini", ".coverage"}
+
+
+def forbidden_filename(path: Path) -> bool:
+    name = path.name
+    lower = name.lower()
+    if name in FORBIDDEN_NAMES or path.suffix.lower() in FORBIDDEN_SUFFIXES:
+        return True
+    return (
+        ".bak-" in lower
+        or lower.endswith((".swp", ".swo", "~"))
+    )
 
 
 def files_under(root: Path):
@@ -36,7 +47,7 @@ def main() -> int:
     scanned = 0
     for path in files_under(root):
         relative = path.relative_to(root)
-        if path.name in FORBIDDEN_NAMES or path.suffix in FORBIDDEN_SUFFIXES:
+        if forbidden_filename(path):
             findings.append(f"generated/private filename: {relative}")
             continue
         if path.stat().st_size > TEXT_LIMIT:

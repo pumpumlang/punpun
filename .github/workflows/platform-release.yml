@@ -5,24 +5,35 @@ on:
   push:
     tags: ["v*"]
 
+permissions:
+  contents: read
+
 jobs:
   linux:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: Read release version
         run: echo "PUNPUN_VERSION=$(tr -d '\r\n' < VERSION)" >> "$GITHUB_ENV"
-      - name: Install runtime test dependencies
-        run: sudo apt-get update && sudo apt-get install -y libcurl4-openssl-dev
+      - name: Install runtime/release dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libcurl4-openssl-dev python3-pil zstd
+      - name: Regenerate and verify canonical PP brand
+        run: |
+          python3 scripts/build_brand.py --repo-root .
+          git diff --exit-code -- assets editors/vscode/icon.png editors/vscode/assets editors/vscode/fileicons
       - name: Build and test
         run: make -j2 test
+      - name: Validate documentation links
+        run: python3 scripts/check_links.py README.md docs docs-site/content examples editors/vscode/README.md CONTRIBUTING.md SECURITY.md
       - name: Probe installed compiler/linker capabilities
         run: python3 scripts/probe_toolchains.py gcc clang --output toolchain-probes/linux.json
       - name: Large-project smoke benchmark
         run: python3 scripts/benchmark_projects.py --modules 10 100 --rounds 2 --output benchmarks/linux.json
       - name: Assemble and validate Linux release
         run: python3 scripts/release.py
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: punpun-linux-release
           path: |
@@ -34,11 +45,17 @@ jobs:
     runs-on: ubuntu-latest
     container: archlinux:latest
     steps:
-      - name: Install build tools
-        run: pacman -Syu --noconfirm --needed base-devel gcc python nodejs npm zstd libcurl git sudo
-      - uses: actions/checkout@v4
+      - name: Refresh keys and install build tools
+        run: |
+          pacman -Sy --noconfirm archlinux-keyring
+          pacman -Syu --noconfirm --needed base-devel gcc python python-pillow nodejs zstd libcurl git sudo
+      - uses: actions/checkout@v7
       - name: Read release version
         run: echo "PUNPUN_VERSION=$(tr -d '\r\n' < VERSION)" >> "$GITHUB_ENV"
+      - name: Regenerate and verify canonical PP brand
+        run: |
+          python3 scripts/build_brand.py --repo-root .
+          git diff --exit-code -- assets editors/vscode/icon.png editors/vscode/assets editors/vscode/fileicons
       - name: Build release inputs
         run: python3 scripts/release.py --skip-tests
       - name: Build canonical makepkg artifact
@@ -58,7 +75,7 @@ jobs:
           pacman -R --noconfirm punpun
           hash -r
           ! command -v ppc
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: punpun-arch-package
           path: packaging/arch/punpun-*.pkg.tar.zst
@@ -66,7 +83,7 @@ jobs:
   windows:
     runs-on: windows-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: Read release version
         shell: pwsh
         run: |
@@ -74,9 +91,13 @@ jobs:
           "PUNPUN_VERSION=$version" | Out-File -FilePath $env:GITHUB_ENV -Append
       - uses: msys2/setup-msys2@v2
         with:
-          msystem: MINGW64
-          update: true
-          install: mingw-w64-x86_64-gcc make python nodejs
+          msystem: UCRT64
+          update: false
+          install: >-
+            make
+            python
+          pacboy: >-
+            gcc:p
       - name: Build Windows compiler and runtime
         shell: msys2 {0}
         run: |
@@ -89,17 +110,18 @@ jobs:
         shell: pwsh
         run: |
           $payload = "installers/windows/payload"
+          Remove-Item $payload -Recurse -Force -ErrorAction SilentlyContinue
           New-Item -ItemType Directory -Force "$payload/bin" | Out-Null
           Copy-Item build/ppc.exe "$payload/bin/ppc.exe"
           Copy-Item runtime,stdlib,packages,ppx,tooling,editors,docs,spec,assets,gui-maker,selfhost -Destination $payload -Recurse
-          Copy-Item VERSION,README.md,LICENSE,CHANGELOG.md,ROADMAP.md,PROJECT_STATUS.txt,COMPLETION_REPORT.md,PUBLISHING.md,RELEASE_NOTES.md -Destination $payload
+          Copy-Item VERSION,README.md,LICENSE,CHANGELOG.md,ROADMAP.md,PROJECT_STATUS.txt,COMPLETION_REPORT.md,PUBLISHING.md,RELEASE_NOTES.md,SECURITY.md,CONTRIBUTING.md -Destination $payload
       - name: Install WiX and build installers
         shell: pwsh
         run: |
           dotnet tool install --global wix
           wix extension add WixToolset.Bal.wixext
           ./installers/windows/build.ps1
-      - name: MSI install, PATH/file association, native build, upgrade, uninstall
+      - name: MSI install, file association, upgrade, and uninstall
         shell: pwsh
         run: |
           $msi = (Resolve-Path "installers/windows/PunPun-$env:PUNPUN_VERSION-win-x64.msi")
@@ -109,7 +131,7 @@ jobs:
           Start-Process msiexec.exe -Wait -ArgumentList "/i `"$msi`" /qn /norestart REINSTALL=ALL REINSTALLMODE=vomus"
           Start-Process msiexec.exe -Wait -ArgumentList "/x `"$msi`" /qn /norestart"
           if (Test-Path "$env:ProgramFiles/PunPun/bin/ppc.exe") { throw "uninstall left compiler behind" }
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: punpun-windows-installers
           path: |

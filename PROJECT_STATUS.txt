@@ -1,0 +1,36 @@
+PunPun 0.6.0-beta.1 — Steps 1 through 6 complete; pre-Step-7 cleanup/qualification candidate
+
+Implemented in 0.6:
+- canonical repository versioning and compatibility gates
+- deterministic generics/monomorphization and constraints
+- algebraic enums, Option/Result, exhaustive match and postfix ?
+- control-flow move-state analysis and explicit move/drop diagnostics
+- lexical destruction for supported move-only identity objects
+- shared/mutable borrow conflict checking and checked Slice<int> views
+- mandatory verified typed HIR -> MIR pipeline with stable fingerprints
+- direct Linux x86-64 backend and portable C backend
+- optional Clang/LLVM backend plus emit-llvm
+- existing 0.5 syntax/behavior compatibility fixtures, including legacy shared nums handles
+- compiler-backed LSP/editor, PPX, self-host bootstrap seed and release packaging
+- staged learning documentation with compiler-checked runnable examples
+- `.pp` file icon/association integration for VS Code, Linux MIME/hicolor desktops, and Windows MSI
+- PPX user publishing/upload, metadata validation, immutable download and named install workflows
+- deterministic publish cleanup and stale release-asset pruning
+
+Local beta release verification requires:
+- clean C17/C++17 warnings-as-errors build
+- full compiler/runtime/tooling suite
+- direct Linux x86-64 + portable C parity
+- LLVM parity when Clang is available
+- self-host stage-one/stage-two fixed point
+- documentation and PPX static-site builds
+- isolated Linux installer install/run/stale-build/diagnostic/async/uninstall validation
+- source privacy and artifact checksum audit
+
+Platform truthfulness:
+- Linux x86-64 artifacts are built and executable on the release host.
+- Arch package structure is generated locally; makepkg/pacman qualification requires the Arch CI job or a real Arch/CachyOS host.
+- Windows WiX sources are packaged locally; MSI/setup binaries and install/upgrade/uninstall claims require the Windows CI job.
+- The optional LLVM backend is qualified only where a compatible Clang is available; 0.6 does not claim a native Windows LLVM path.
+
+Next milestone: Step 7 / PunPun 0.7 — Machine IR, explicit ABI lowering, stronger optimizer/register allocation, granular incremental compilation, and developer-experience hardening. Begin only after beta.1 platform qualification is green.

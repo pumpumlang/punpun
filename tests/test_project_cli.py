@@ -42,7 +42,7 @@ class ProjectCliTests(unittest.TestCase):
             handle.write('launch:\n    assert(2 + 2 == 4, "math")\ndone\n')
         result = self.run_pp("test")
         self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertIn("1/1 Punpun tests passed", result.stdout)
+        self.assertIn("1/1 PunPun tests passed", result.stdout)
 
 
 if __name__ == "__main__":

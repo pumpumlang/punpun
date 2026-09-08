@@ -1,7 +1,7 @@
 bring math
 
 launch:
-    pin language <- "Punpun"
+    pin language <- "PunPun"
     say language
     print("fibonacci(10) = ")
     say fibonacci(10)

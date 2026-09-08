@@ -24,11 +24,28 @@ The normative 0.6 decisions live in [`spec/0.6/`](spec/0.6/). Platform-specific 
 
 LLVM is an alternative code-generation path, not a replacement parser/type checker and not the ordinary PunPun compilation pipeline.
 
+## Pre-Step-7 quality gate
+
+`0.6.0-beta.1` is the cleanup/qualification candidate between Step 6 and Step 7. It canonicalizes the PP brand, rejects source/release debris, fixes packaging metadata, adds continuous CI and governance files, repairs platform setup, and changes publication to **build → qualify → promote**. Step 7 does not begin until the candidate's Linux, Arch and Windows qualification jobs are green.
+
+## Step 7 / PunPun 0.7 — compiler scalability and backend maturity
+
+Step 7 is now formally defined as the 0.7 architecture milestone:
+
+1. introduce Machine IR below verified MIR;
+2. define explicit ABI lowering into Machine IR;
+3. make native backends consume Machine IR rather than source-detail escape hatches;
+4. strengthen register allocation and spill handling;
+5. deepen optimization with correctness-first verification;
+6. add function/module-granular incremental compilation with dependency fingerprints;
+7. improve diagnostics/fix-its, module/API visibility, FFI/ABI documentation, formatter/linter gates, and PPX reproducibility without destabilizing core semantics.
+
+The acceptance gate for Step 7 includes deterministic brand generation, debris-free source archives, green fast CI, green Linux/Arch/Windows qualification, exact release provenance, and publication blocked on failed qualification.
+
 ## Later releases
 
-- **0.7:** Machine IR, ABI lowering, backend consumption directly from Machine IR, stronger register allocation, deeper optimization and function/module-granular incremental compilation.
-- **0.8:** event-driven async I/O, mature networking/stdlib, source debugging and broader platform validation.
-- **0.9:** ecosystem, fuzzing, compatibility suites, long-running benchmarks and production hardening.
-- **1.0:** stable specification, compatibility guarantees and fully qualified releases.
+- **0.8:** ownership-aware structured async I/O, mature networking/stdlib, source debugging, safe cancellation/task groups, and broader platform validation.
+- **0.9:** ecosystem/security hardening, fuzzing, compatibility suites, generated API docs/doctests, long-running benchmarks, and carefully reviewed metaprogramming/performance features.
+- **1.0:** stable specification, compatibility guarantees, stable package/ABI policy, platform support tiers, and fully reproducible qualified releases.
 
 Hosted registry operations, ARM/macOS, complete GUI infrastructure, inheritance, SIMD/PGO and full-language self-hosting remain outside 0.6 unless separately promoted with tests and design review.

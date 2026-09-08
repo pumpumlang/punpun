@@ -1,0 +1,38 @@
+name: Compiler crash / ICE
+description: Report an internal compiler error or compiler process crash
+title: "[ICE] "
+labels: ["bug"]
+body:
+  - type: input
+    id: version
+    attributes:
+      label: ppc version / commit
+    validations:
+      required: true
+  - type: input
+    id: target
+    attributes:
+      label: Host and target
+    validations:
+      required: true
+  - type: input
+    id: command
+    attributes:
+      label: Exact command
+      placeholder: "ppc build main.pp ..."
+    validations:
+      required: true
+  - type: textarea
+    id: source
+    attributes:
+      label: Minimal .pp source
+      render: text
+    validations:
+      required: true
+  - type: textarea
+    id: output
+    attributes:
+      label: Full diagnostic / crash output
+      render: text
+    validations:
+      required: true

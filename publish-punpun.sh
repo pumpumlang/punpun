@@ -12,6 +12,7 @@ PUBLISHER_NAME="PunPun-${VERSION}-publisher"
 DOCS_REPO="punpun-docs"
 PPX_REPO="punpun-ppx"
 SOURCE_REPO="punpun"
+WORKFLOW="platform-release.yml"
 
 green='\033[1;32m'
 blue='\033[1;36m'
@@ -22,19 +23,15 @@ step() { printf '\n%b==>%b %s\n' "$blue" "$reset" "$*"; }
 ok() { printf '%b✓%b %s\n' "$green" "$reset" "$*"; }
 warn() { printf '%b!%b %s\n' "$yellow" "$reset" "$*" >&2; }
 die() { printf 'publish-punpun: %s\n' "$*" >&2; exit 1; }
-
-need() {
-    command -v "$1" >/dev/null 2>&1 || die "missing '$1' (install it, then rerun this script)"
-}
-
+need() { command -v "$1" >/dev/null 2>&1 || die "missing '$1' (install it, then rerun this script)"; }
 
 print_cleanup_policy() {
     cat <<'EOF'
 Publish cleanup policy:
   stale repository files: removed because each publish replaces the remote checkout
   generated/cache dirs:   .punpun build dist __pycache__ .pytest_cache .mypy_cache .ruff_cache node_modules .idea __MACOSX .ppx-registry htmlcov
-  generated files:        *.pyc *.tmp *.swp *.swo *.o *.a *.so *.dll *.exe *~ .DS_Store Thumbs.db desktop.ini .coverage
-  release assets:          uploaded assets not present in this publisher bundle are removed from this release tag only
+  generated files:        *.pyc *.tmp *.swp *.swo *.bak *.bak-* *.orig *.rej *.o *.a *.so *.dll *.exe *~ .DS_Store Thumbs.db desktop.ini .coverage
+  release assets:          uploaded assets absent from this publisher bundle are removed from this release tag only
   intentionally retained: .github .vscode docs/spec/tests/source files, LICENSE, manifests and lock/reproducibility metadata
 EOF
 }
@@ -46,12 +43,10 @@ sanitize_publish_tree() {
     # Never follow symlinks and never delete outside the temporary publish tree.
     find -P "$tree" -depth \
         \( -type d \( -name .punpun -o -name build -o -name __pycache__ -o -name .pytest_cache -o -name .mypy_cache -o -name .ruff_cache -o -name node_modules -o -name .idea -o -name __MACOSX -o -name .ppx-registry -o -name htmlcov \) \
-        -o -type f \( -name '*.pyc' -o -name '*.tmp' -o -name '*.swp' -o -name '*.swo' -o -name '*~' -o -name .DS_Store -o -name Thumbs.db -o -name desktop.ini -o -name .coverage \) \) \
+        -o -type f \( -name '*.pyc' -o -name '*.tmp' -o -name '*.swp' -o -name '*.swo' -o -name '*.bak' -o -name '*.bak-*' -o -name '*.orig' -o -name '*.rej' -o -name '*~' -o -name .DS_Store -o -name Thumbs.db -o -name desktop.ini -o -name .coverage \) \) \
         -exec rm -rf -- {} +
 
     if [[ "$mode" == source ]]; then
-        # Source publication must never inherit compiled host artifacts. Keep
-        # source/runtime code; rebuild binaries through CI/release automation.
         find -P "$tree" -type f \
             \( -name '*.o' -o -name '*.a' -o -name '*.so' -o -name '*.dll' -o -name '*.exe' \) \
             -delete
@@ -79,11 +74,10 @@ prune_release_assets() {
 }
 
 find_publisher() {
-    local script_dir candidate old_bundle=''
-    script_dir=$SCRIPT_DIR
+    local candidate old_bundle=''
     for candidate in \
         "${PUNPUN_PUBLISHER_DIR:-}" \
-        "$script_dir" \
+        "$SCRIPT_DIR" \
         "$PWD" \
         "$HOME/Desktop/$PUBLISHER_NAME" \
         "$HOME/Downloads/$PUBLISHER_NAME"
@@ -97,9 +91,7 @@ find_publisher() {
             old_bundle=$candidate
         fi
     done
-    if [[ -n "$old_bundle" ]]; then
-        die "found an older publisher bundle at $old_bundle. Extract the newly repaired publisher ZIP into a fresh folder, then rerun this script."
-    fi
+    [[ -z "$old_bundle" ]] || die "found an older publisher bundle at $old_bundle. Extract the current publisher ZIP into a fresh folder."
     die "cannot find $PUBLISHER_NAME. Put this script inside that folder, or set PUNPUN_PUBLISHER_DIR."
 }
 
@@ -129,10 +121,7 @@ sync_repository() {
         git -C "$checkout" init -b main >/dev/null
     fi
 
-    if [[ "$pages" == yes ]]; then
-        : > "$checkout/.nojekyll"
-    fi
-
+    [[ "$pages" != yes ]] || : > "$checkout/.nojekyll"
     git_identity "$checkout"
     git -C "$checkout" add -A
     if git -C "$checkout" diff --cached --quiet; then
@@ -147,6 +136,42 @@ sync_repository() {
         fi
         ok "updated $GH_ACCOUNT/$repo_name"
     fi
+}
+
+ensure_candidate_tag() {
+    local checkout=$1 sha=$2 remote_sha=''
+    remote_sha=$(gh api "repos/$GH_ACCOUNT/$SOURCE_REPO/commits/$TAG" --jq .sha 2>/dev/null || true)
+    if [[ -n "$remote_sha" ]]; then
+        [[ "$remote_sha" == "$sha" ]] || die "$TAG already points at $remote_sha, not candidate $sha; release tags are immutable"
+        ok "$TAG already identifies the exact candidate commit"
+        return
+    fi
+    git -C "$checkout" tag "$TAG" "$sha"
+    git -C "$checkout" push origin "refs/tags/$TAG" >/dev/null
+    ok "created immutable candidate tag $TAG at $sha"
+}
+
+wait_for_platform_qualification() {
+    local sha=$1 run_id='' attempts=0 dispatched=0
+    step "Waiting for Linux, Arch and Windows qualification"
+    while [[ -z "$run_id" ]]; do
+        run_id=$(gh run list --repo "$GH_ACCOUNT/$SOURCE_REPO" --workflow "$WORKFLOW" --limit 30 \
+            --json databaseId,headSha --jq ".[] | select(.headSha == \"$sha\") | .databaseId" 2>/dev/null | head -n1 || true)
+        [[ -n "$run_id" ]] && break
+        attempts=$((attempts + 1))
+        if (( attempts == 4 && dispatched == 0 )); then
+            gh workflow run "$WORKFLOW" --repo "$GH_ACCOUNT/$SOURCE_REPO" --ref "$TAG" >/dev/null || die "could not start $WORKFLOW"
+            dispatched=1
+            ok "explicitly dispatched $WORKFLOW for $TAG"
+        fi
+        (( attempts < 30 )) || die "no platform qualification run appeared for candidate $sha"
+        sleep 5
+    done
+    printf 'Qualification run: %s\n' "$run_id"
+    if ! gh run watch "$run_id" --repo "$GH_ACCOUNT/$SOURCE_REPO" --exit-status; then
+        die "platform qualification failed; release downloads and sites were NOT promoted"
+    fi
+    ok "exact candidate $sha passed platform qualification"
 }
 
 enable_pages() {
@@ -169,7 +194,7 @@ need unzip
 need sha256sum
 
 ROOT=$(find_publisher)
-SCRIPT_PATH=$(CDPATH= cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)/$(basename -- "${BASH_SOURCE[0]}")
+SCRIPT_PATH="$SCRIPT_DIR/$(basename -- "${BASH_SOURCE[0]}")"
 WORK=$(mktemp -d "${TMPDIR:-/tmp}/punpun-publish.XXXXXX")
 trap 'rm -rf -- "$WORK"' EXIT HUP INT TERM
 
@@ -183,21 +208,20 @@ step "Verifying every release file"
 (cd "$ROOT" && sha256sum -c SHA256SUMS)
 ok "release checksums passed"
 
-step "Publishing the complete source repository"
+step "Publishing the candidate source repository"
 mkdir -p "$WORK/source"
 unzip -q "$ROOT/source/PunPun-${VERSION}-source.zip" -d "$WORK/source"
 SOURCE_TREE="$WORK/source/PunPun-${VERSION}-source"
 [[ -d "$SOURCE_TREE" ]] || die "source archive has an unexpected layout"
 sanitize_publish_tree "$SOURCE_TREE" source
-sync_repository "$SOURCE_REPO" "$SOURCE_TREE" "Publish PunPun $VERSION"
+sync_repository "$SOURCE_REPO" "$SOURCE_TREE" "Publish PunPun $VERSION candidate"
+SOURCE_CHECKOUT="$WORK/repos/$SOURCE_REPO"
+SOURCE_SHA=$(git -C "$SOURCE_CHECKOUT" rev-parse HEAD)
+ensure_candidate_tag "$SOURCE_CHECKOUT" "$SOURCE_SHA"
+wait_for_platform_qualification "$SOURCE_SHA"
 
-if gh workflow run platform-release.yml --repo "$GH_ACCOUNT/$SOURCE_REPO" --ref main >/dev/null 2>&1; then
-    ok "started fresh Linux, Arch and Windows CI validation"
-else
-    warn "source was published, but CI could not be started automatically; open the repository Actions tab"
-fi
-
-step "Publishing release downloads"
+# Nothing below this line runs unless the exact tagged candidate is qualified.
+step "Promoting release downloads"
 shopt -s nullglob
 PUBLISH_SCRIPT="$ROOT/publish-punpun.sh"
 [[ -f "$PUBLISH_SCRIPT" ]] || PUBLISH_SCRIPT="$SCRIPT_PATH"
@@ -217,11 +241,11 @@ if gh release view "$TAG" --repo "$GH_ACCOUNT/$SOURCE_REPO" >/dev/null 2>&1; the
     gh release edit "$TAG" --repo "$GH_ACCOUNT/$SOURCE_REPO" \
         --title "PunPun $VERSION" --notes-file "$ROOT/RELEASE_NOTES.md" --prerelease >/dev/null
     gh release upload "$TAG" "${assets[@]}" --repo "$GH_ACCOUNT/$SOURCE_REPO" --clobber
-    ok "updated release $TAG"
+    ok "updated qualified release $TAG"
 else
     gh release create "$TAG" "${assets[@]}" --repo "$GH_ACCOUNT/$SOURCE_REPO" \
-        --title "PunPun $VERSION" --notes-file "$ROOT/RELEASE_NOTES.md" --prerelease
-    ok "created release $TAG"
+        --verify-tag --title "PunPun $VERSION" --notes-file "$ROOT/RELEASE_NOTES.md" --prerelease
+    ok "created qualified release $TAG"
 fi
 
 step "Publishing the documentation website"
@@ -238,9 +262,8 @@ sanitize_publish_tree "$WORK/ppx" website
 sync_repository "$PPX_REPO" "$WORK/ppx" "Publish PunPunXPac $VERSION catalog" yes
 enable_pages "$PPX_REPO"
 
-printf '\n%bEverything is published.%b\n' "$green" "$reset"
+printf '\n%bQualified PunPun release published.%b\n' "$green" "$reset"
 printf 'Source:        https://github.com/%s/%s\n' "$GH_ACCOUNT" "$SOURCE_REPO"
 printf 'Release:       https://github.com/%s/%s/releases/tag/%s\n' "$GH_ACCOUNT" "$SOURCE_REPO" "$TAG"
 printf 'Documentation: https://%s.github.io/%s/\n' "$GH_ACCOUNT" "$DOCS_REPO"
 printf 'PPX catalog:   https://%s.github.io/%s/\n' "$GH_ACCOUNT" "$PPX_REPO"
-printf '\nGitHub Pages can take a minute or two to replace an earlier 404 page.\n'

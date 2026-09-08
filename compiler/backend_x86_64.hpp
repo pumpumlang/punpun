@@ -14,7 +14,7 @@
 //     a fresh stack slot (a bump allocator that never reuses slots inside a
 //     function), so no register allocation or liveness analysis is needed and
 //     RSP stays 16-byte aligned across the whole body.
-//   * Runtime helpers use the ordinary SysV ABI. Punpun-to-Punpun calls use a
+//   * Runtime helpers use the ordinary SysV ABI. PunPun-to-PunPun calls use a
 //     private convention: RDI holds a pointer to a caller-built argument block;
 //     record results are written through a hidden destination pointer stored at
 //     block offset 0. This keeps by-value records correct without implementing

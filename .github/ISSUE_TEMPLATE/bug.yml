@@ -1,0 +1,51 @@
+name: Bug report
+description: Compiler, language/spec, tooling/LSP, PPX/package, installer, or platform bug
+title: "[bug] "
+labels: ["bug"]
+body:
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      options:
+        - Compiler / code generation
+        - Language / specification
+        - Ownership / type system
+        - LSP / VS Code / formatter
+        - PPX / package manager
+        - Runtime / standard library
+        - Installer / packaging / platform
+        - Documentation
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: PunPun version
+      placeholder: "ppc --version or commit SHA"
+    validations:
+      required: true
+  - type: input
+    id: target
+    attributes:
+      label: Target and host
+      placeholder: "x86_64-unknown-linux-gnu on CachyOS, Windows x64, etc."
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: Minimal reproduction
+      description: Include the smallest .pp source and exact command that reproduces the problem.
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual behavior and diagnostics
+    validations:
+      required: true

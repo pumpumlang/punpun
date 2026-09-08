@@ -21,7 +21,7 @@ inline const std::vector<BuiltinSpec> &punpun_builtins() {
         {"len", {Type::Str}, Type::Int, "pp_len", "Return the byte length of a string."},
         {"abs", {Type::Int}, Type::Int, "pp_abs_i64", "Checked absolute value of an integer."},
         {"clock_ms", {}, Type::Int, "pp_clock_ms", "Return monotonic milliseconds."},
-        {"panic", {Type::Str}, Type::Void, "pp_panic", "Abort with a Punpun panic message."},
+        {"panic", {Type::Str}, Type::Void, "pp_panic", "Abort with a PunPun panic message."},
         {"numbers", {}, Type::Nums, "pp_numbers_new", "Create an empty nums list."},
         {"push", {Type::Nums, Type::Int}, Type::Void, "pp_push", "Append an integer to nums."},
         {"at", {Type::Nums, Type::Int}, Type::Int, "pp_at", "Read a checked nums element."},

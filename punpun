@@ -7,7 +7,7 @@ VERSION=$(tr -d '\r\n' < "$SCRIPT_DIR/VERSION")
 
 usage() {
     cat <<'TXT'
-Punpun toolchain
+PunPun toolchain
 
 usage:
   pp new <name>
@@ -35,7 +35,7 @@ usage:
   pp lsp
   pp language-info
 
-If file.pp is omitted, Punpun uses ./main.pp and then ./src/main.pp.
+If file.pp is omitted, PunPun uses ./main.pp and then ./src/main.pp.
 `pp new` and `pp init` create Punpun.toml projects without requiring Cargo.
 The source-tree launcher bootstraps build/ppc automatically with make.
 TXT
@@ -182,7 +182,7 @@ run_tests() {
         echo "pp: no tests/*.pp files found" >&2
         exit 1
     fi
-    echo "$passed/$found Punpun tests passed"
+    echo "$passed/$found PunPun tests passed"
 }
 
 install_vscode() {
@@ -196,8 +196,8 @@ install_vscode() {
         for cli in code code-insiders codium code-oss; do
             command -v "$cli" >/dev/null 2>&1 || continue
             if "$cli" --install-extension "$vsix" --force; then
-                echo "installed Punpun VS Code support using $cli"
-                echo "reload the editor; .pp files now use Punpun language tooling"
+                echo "installed PunPun VS Code support using $cli"
+                echo "reload the editor; .pp files now use PunPun language tooling"
                 return
             fi
         done
@@ -206,7 +206,7 @@ install_vscode() {
     mkdir -p "$(dirname "$destination")"
     rm -rf "$destination"
     cp -a "$extension" "$destination"
-    echo "installed Punpun VS Code support -> $destination"
+    echo "installed PunPun VS Code support -> $destination"
     echo "reload VS Code; .pp files now get language tooling"
 }
 

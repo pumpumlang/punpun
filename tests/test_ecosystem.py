@@ -104,7 +104,7 @@ class PpxUnitTests(unittest.TestCase):
             (root/'README.md').write_text('# Demo\n')
             (root/'Punpun.toml').write_text(
                 '[package]\nname="demo_pkg"\nversion="1.2.3"\ndescription="demo"\n'
-                'license="MIT"\nrepository="https://example.invalid/demo"\nreadme="README.md"\n'
+                'license="MIT"\nrepository="https://github.com/example/demo"\nreadme="README.md"\n'
                 'keywords=["demo","math"]\n\n[dependencies]\njson="^0.1.0"\n'
             )
             metadata=self.ppx.manifest_publish_metadata(root)
