@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="50.0 94.0 412.0 324.0" width="32" height="32" role="img" aria-label="PunPun source file">
+  <title>.pp source file</title>
+  <g fill="none" stroke-linecap="round" stroke-linejoin="round" stroke-width="40">
+    <g stroke="#b9ff4a">
+      <path d="M94 138 V374"/>
+      <circle cx="154" cy="198" r="60"/>
+    </g>
+    <g stroke="#66e3ff">
+      <path d="M298 138 V374"/>
+      <circle cx="358" cy="198" r="60"/>
+    </g>
+  </g>
+</svg>

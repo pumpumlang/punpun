@@ -107,7 +107,18 @@
           "description": "Path to PunPun LSP server.js. Empty uses the server bundled with this extension."
         }
       }
-    }
+    },
+    "iconThemes": [
+      {
+        "id": "punpun",
+        "label": "PunPun",
+        "path": "./fileicons/punpun-icon-theme.json"
+      }
+    ]
   },
-  "icon": "assets/punpun-icon-128.png"
+  "icon": "icon.png",
+  "galleryBanner": {
+    "color": "#11151e",
+    "theme": "dark"
+  }
 }

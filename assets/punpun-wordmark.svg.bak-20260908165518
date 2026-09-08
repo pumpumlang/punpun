@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 220" role="img" aria-label="PunPun wordmark">
+  <defs>
+    <linearGradient id="g" x1="20" y1="20" x2="208" y2="200" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#6EE7FF"/><stop offset=".5" stop-color="#7C5CFF"/><stop offset="1" stop-color="#FF4FA3"/>
+    </linearGradient>
+  </defs>
+  <rect x="10" y="10" width="200" height="200" rx="50" fill="#0B1020"/>
+  <path d="M48 50h45c38 0 62 20 62 51 0 23-13 40-36 47l42 51h-42l-37-46h-7v46H48V50Zm34 31v43h12c18 0 29-8 29-22 0-13-11-21-29-21H82Z" fill="url(#g)"/>
+  <path d="m95 155 22-34 22 34-22 41-22-41Z" fill="#6EE7FF"/>
+  <text x="250" y="148" font-family="Inter, ui-sans-serif, system-ui, sans-serif" font-weight="750" font-size="116" letter-spacing="-5" fill="#111827">PunPun</text>
+</svg>
