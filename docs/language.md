@@ -172,3 +172,13 @@ authoritative implementation matrix is in
 [`COMPLETION_REPORT.md`](../COMPLETION_REPORT.md).
 
 Normative 0.6 rules and implementation status are in [`spec/0.6/`](../spec/0.6/).
+
+## 0.6 ownership and slices
+
+Identity objects are move-only. `move(value)` explicitly transfers a binding and `drop(value)` ends it immediately. The compiler also tracks maybe-moved values across branch joins and rejects later use. Normal scope exits destroy supported live move-only object values once.
+
+`nums` intentionally retains its 0.5 shared-handle behavior in 0.6. Use `view(values, start, end)` to create a checked `Slice<int>`; `slice_len(view)` and `slice_get(view, index)` access it. The compiler prevents checked mutation/move of the source while a named slice borrow is live.
+
+## Optional LLVM backend
+
+The default supported Linux x86-64 path is PunPun's direct backend. `--cc-backend` chooses portable C lowering. `--llvm-backend` chooses an optional Clang/LLVM path after the same parser, semantic analysis, ownership checks, typed HIR and verified MIR. `emit-llvm` writes inspectable LLVM IR. The 0.6 LLVM path is native-host only.

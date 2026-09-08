@@ -8,7 +8,7 @@
 </p>
 
 <p align="center">
-  <img alt="Version 0.6 development" src="https://img.shields.io/badge/version-0.6%20development-b9ff4a?style=for-the-badge&labelColor=11151e">
+  <img alt="Version 0.6.0-beta" src="https://img.shields.io/badge/version-0.6.0--beta-b9ff4a?style=for-the-badge&labelColor=11151e">
   <img alt="Linux x86-64" src="https://img.shields.io/badge/Linux-x86--64-66e3ff?style=for-the-badge&labelColor=11151e">
   <img alt="MIT license" src="https://img.shields.io/badge/license-MIT-f6f7fa?style=for-the-badge&labelColor=11151e">
 </p>
@@ -23,19 +23,19 @@
 
 ---
 
-PunPun 0.6 development is an ahead-of-time native language focused on fast edit/check/run cycles, concrete object-oriented programming, value-oriented systems work and clear escape hatches for native interoperability.
+PunPun 0.6.0-beta is an ahead-of-time native language focused on fast edit/check/run cycles, concrete object-oriented programming, value-oriented systems work and clear escape hatches for native interoperability.
 
 ```text
-.pp source → parser + semantics → typed HIR/MIR → x86-64 or C backend → native executable
+.pp source → parser + semantics + ownership → typed HIR → verified MIR → x86-64 / C / optional LLVM → native executable
 ```
 
-Ordinary builds use no interpreter or virtual machine. Linux x86-64 has a direct backend; the portable C backend supports additional toolchains and Windows-oriented builds. Foreign source runs only through explicit `@inject` blocks.
+Ordinary builds use no interpreter or virtual machine. Linux x86-64 has a direct PunPun backend; the portable C backend supports additional toolchains and Windows-oriented builds; `--llvm-backend` optionally uses Clang/LLVM after the same PunPun frontend and MIR pipeline. Foreign source runs only through explicit `@inject` blocks.
 
-> **Development releases keep honest boundaries.** Generics, deterministic monomorphization, algebraic enums, exhaustive matching, `Option`, `Result`, and `?` are executable in this checkpoint. The remaining ownership and backend milestones are still specifications, not completion claims. See [ROADMAP.md](ROADMAP.md) and [COMPLETION_REPORT.md](COMPLETION_REPORT.md).
+> **Beta boundaries stay explicit.** The host-qualified 0.6 language/compiler steps are complete, while Windows installer execution, real Arch/CachyOS package-manager qualification, custom destructors, Machine IR and broader targets remain later/platform-specific work. See [ROADMAP.md](ROADMAP.md) and [COMPLETION_REPORT.md](COMPLETION_REPORT.md).
 
-## 0.6 Steps 1–3
+## 0.6 language/compiler foundation
 
-The first 0.6 milestone removes version drift and turns major language choices into testable contracts:
+The 0.6 cycle removes version drift and turns major language choices into executable, regression-tested compiler stages:
 
 - one canonical [`VERSION`](VERSION) drives the compiler, runtime, PPX, editor, sites, packages and installers;
 - [`spec/0.6/`](spec/0.6/) freezes generics, constraints, monomorphization, enums, `Option`, `Result`, matching, nullability, moves, borrows and deterministic destruction;
@@ -44,6 +44,10 @@ The first 0.6 milestone removes version drift and turns major language choices i
 - algebraic enums support tuple payloads, nested destructuring and compile-time exhaustiveness/reachability checks;
 - prelude `Option<T>` and `Result<T,E>` types plus postfix `?` execute on both native backends;
 - compatibility fixtures keep valid 0.5 modern and migration syntax working;
+- a dedicated ownership pass tracks moved/maybe-moved state, safe borrow conflicts, explicit move/drop and reinitialization;
+- checked `Slice<int>` views borrow legacy `nums` handles and prevent conflicting mutation while live;
+- every successful compile builds and verifies typed HIR and MIR, with deterministic function/body fingerprints;
+- `--llvm-backend` and `emit-llvm` provide an optional Clang/LLVM code-generation path without duplicating PunPun semantics;
 - CI paths derive their artifact names from `VERSION` instead of an old release string.
 
 ## Quick start
@@ -185,7 +189,7 @@ C, C++, Rust and assembly injections are content-addressed and cached. `pp check
 
 | Area | Available now |
 | --- | --- |
-| Compilation | Direct Linux x86-64 backend, portable C backend, assembler/linker integration |
+| Compilation | Direct Linux x86-64 backend, portable C backend, optional Clang/LLVM backend, assembler/linker integration |
 | Language | Functions, generic functions/types/methods, enums, exhaustive matching, `Option`/`Result`, objects, structs, contracts, references, pointers, async tasks, named/default arguments |
 | Correctness | Structured diagnostics, content-hash builds, atomic executable replacement, regression suite |
 | Developer tools | `pp` project CLI, compiler-backed LSP, VS Code extension, formatter and migration helper |
@@ -223,12 +227,23 @@ pp doctor                     inspect SDK dependencies
 pp explain E0201              explain a diagnostic
 pp migrate [file.pp]          migrate common 0.4 syntax
 pp ast | ir | asm             inspect compiler stages
-pp emit-c | emit-asm          emit backend source
+pp emit-c | emit-asm | emit-llvm  emit backend source/IR
 pp toolchain detect           probe installed toolchains
 pp editor install-vscode      install editor support
 ```
 
 Single files work without a manifest. Projects use `Punpun.toml` and a deterministic `Punpun.lock`.
+
+Backend selection for direct compiler use:
+
+```sh
+ppc build main.pp                 # direct x86-64 on supported Linux hosts
+ppc build main.pp --cc-backend    # portable C lowering
+ppc build main.pp --llvm-backend  # optional Clang/LLVM path
+ppc emit-llvm main.pp -o main.ll
+```
+
+Set `PUNPUN_LLVM_CC` when `clang` is not the desired executable.
 
 ## PunPunXPac (PPX)
 

@@ -157,6 +157,18 @@ def main():
         async_out=run([pp,"run"],cwd=project,env=env).stdout
         require("42" in async_out,"installed async example failed")
 
+        clang = shutil.which("clang")
+        if clang:
+            source.write_text('launch { say(42); }\n',encoding="utf-8")
+            llvm_env=env.copy(); llvm_env["PUNPUN_LLVM_CC"]=clang
+            llvm_out=run([pp,"run","--llvm-backend","--no-cache"],cwd=project,env=llvm_env).stdout
+            require(llvm_out.strip()=="42","installed optional LLVM backend failed")
+            llvm_ir=run([prefix/"share/punpun/bin/ppc","emit-llvm",source],cwd=project,env=llvm_env).stdout
+            require("target triple" in llvm_ir and "define" in llvm_ir,"installed emit-llvm produced invalid IR")
+            results.append(("Installed LLVM backend", "PASS", "Clang-backed build/run and LLVM IR emission passed outside source tree"))
+        else:
+            results.append(("Installed LLVM backend", "HOST-LIMITED", "Clang is not installed on this host"))
+
         results.append(("Linux installer", "PASS", "self-extractor installed into isolated HOME and native smoke test passed"))
         results.append(("Installed stale-build regression", "PASS", "one -> two rebuilt correctly even with preserved mtime"))
         results.append(("Installed diagnostics", "PASS", "unknown identifier produced compiler E0201 outside repository"))

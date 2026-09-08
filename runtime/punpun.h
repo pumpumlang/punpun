@@ -5,6 +5,7 @@
 #include <stdint.h>
 
 typedef struct pp_numbers pp_numbers;
+typedef struct pp_i64_slice pp_i64_slice;
 typedef struct pp_task pp_task;
 typedef uintptr_t (*pp_task_entry)(void *context);
 
@@ -27,6 +28,9 @@ void pp_put(pp_numbers *numbers, int64_t index, int64_t value);
 int64_t pp_size(pp_numbers *numbers);
 int64_t pp_pop(pp_numbers *numbers);
 void pp_sort(pp_numbers *numbers);
+pp_i64_slice *pp_numbers_view(pp_numbers *numbers, int64_t start, int64_t end);
+int64_t pp_slice_len_i64(pp_i64_slice *slice);
+int64_t pp_slice_at_i64(pp_i64_slice *slice, int64_t index);
 
 /* Text inputs must be non-NULL, NUL-terminated strings. Bounds are zero-based
  * byte offsets; slice excludes end. read_text rejects embedded NUL bytes. */

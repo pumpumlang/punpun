@@ -30,7 +30,7 @@ runtime/punpun.o: runtime/punpun.c runtime/punpun.h
 runtime/libpunpun.a: runtime/punpun.o
 	ar rcs $@ $^
 
-PPC_SOURCES := compiler/main.cpp compiler/frontend.hpp compiler/diagnostics.hpp compiler/debug_dump.hpp compiler/semantic.hpp compiler/formatter.hpp compiler/process.hpp compiler/hir.hpp compiler/hir_opt.hpp compiler/mir.hpp compiler/builtins.hpp compiler/backend_c.hpp compiler/backend_x86_64.hpp
+PPC_SOURCES := compiler/main.cpp compiler/frontend.hpp compiler/diagnostics.hpp compiler/debug_dump.hpp compiler/semantic.hpp compiler/formatter.hpp compiler/process.hpp compiler/hir.hpp compiler/hir_opt.hpp compiler/mir.hpp compiler/ownership.hpp compiler/pipeline.hpp compiler/builtins.hpp compiler/backend_c.hpp compiler/backend_x86_64.hpp
 
 $(BUILD)/ppc: $(PPC_SOURCES) VERSION runtime/libpunpun.a | $(BUILD)
 	$(CXX) $(CXXFLAGS) -DPP_RUNTIME_DIR='"runtime"' -DPP_VERSION='"$(VERSION)"' compiler/main.cpp -o $@

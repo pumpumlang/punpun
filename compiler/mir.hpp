@@ -14,11 +14,13 @@
 
 #include "hir.hpp"
 
-// PunPun MIR is a target-aware SSA view of typed HIR. It makes virtual
-// registers, liveness intervals, and allocation decisions explicit instead of
-// leaving them implicit in the source-AST backend. The current native emitter
-// is being migrated to consume this representation incrementally; `pp ir`
-// exposes it today for validation and tooling.
+// PunPun MIR is the verified, mandatory middle-end authority between typed
+// HIR and backend scheduling. It makes virtual registers, liveness intervals,
+// allocation decisions, and stable function bodies explicit. The 0.6 native
+// emitters still consult typed source nodes for final instruction/source-detail
+// lowering, while the MIR function set/order and fingerprints are authoritative.
+// 0.7 is reserved for a machine IR that removes that remaining source-detail
+// dependency.
 namespace ppmir {
 
 using VReg = pphir::ValueId;
@@ -114,7 +116,7 @@ class Lowerer {
     static bool float_value(Type type) { return type == Type::Float; }
     static bool register_value(Type type) {
         return type == Type::Int || type == Type::Bool || type == Type::Str || type == Type::Nums ||
-               is_pointer_like_type(type) || is_task_type(type);
+               is_slice_type(type) || is_pointer_like_type(type) || is_task_type(type);
     }
 
     static Function lower_function(const pphir::Function &source) {

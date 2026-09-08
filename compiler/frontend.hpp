@@ -215,6 +215,12 @@ inline bool is_raw_pointer_type(const Type &type) { return type.name.rfind("*", 
 inline bool is_pointer_like_type(const Type &type) { return is_reference_type(type) || is_raw_pointer_type(type); }
 inline bool is_mut_reference_type(const Type &type) { return type.name.rfind("&mut ", 0) == 0; }
 inline bool is_task_type(const Type &type) { return type.name.rfind("@task:", 0) == 0; }
+inline bool is_slice_type(const Type &type) {
+    return type.name.size() > 7 && type.name.rfind("Slice<", 0) == 0 && type.name.back() == '>';
+}
+inline Type slice_element_type(const Type &type) {
+    return is_slice_type(type) ? Type{type.name.substr(6, type.name.size() - 7)} : Type::Infer;
+}
 inline Type task_type(Type result) { return Type{"@task:" + result.name}; }
 inline Type task_result_type(const Type &type) { return is_task_type(type) ? Type{type.name.substr(6)} : Type::Infer; }
 inline Type pointee_type(const Type &type) {
@@ -239,6 +245,9 @@ struct Expr {
     std::vector<Pattern> match_patterns;
     std::string enum_variant;
     Type inferred_type = Type::Infer;
+    // Set by the post-typechecking ownership pass when this expression transfers
+    // a named move-only binding. Backends use it to clear lexical drop flags.
+    bool consumes_value = false;
 };
 
 enum class Visibility { Public, Private, Protected };

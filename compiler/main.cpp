@@ -37,6 +37,8 @@
 #include "hir.hpp"
 #include "hir_opt.hpp"
 #include "mir.hpp"
+#include "ownership.hpp"
+#include "pipeline.hpp"
 #include "toolchain.hpp"
 
 #ifndef PP_RUNTIME_DIR
@@ -139,7 +141,7 @@ static bool host_can_use_direct_x86_backend() {
 static void usage() {
     std::cerr
         << "Punpun compiler " PP_VERSION "\n\n"
-        << "usage: ppc <build|run|go|check|fmt|emit-tokens|emit-ast|emit-hir|emit-ir|emit-c|emit-asm> <file.pp> [options] [-- args...]\n\n"
+        << "usage: ppc <build|run|go|check|fmt|emit-tokens|emit-ast|emit-hir|emit-ir|emit-c|emit-asm|emit-llvm> <file.pp> [options] [-- args...]\n\n"
         << "options:\n"
         << "  -o <path>                    Output executable/source path\n"
         << "  -I <path>                    Add an import root (repeatable)\n"
@@ -148,6 +150,7 @@ static void usage() {
         << "  --target <target>            native | linux-x86_64 | windows-x86_64\n"
         << "  --windows                    Alias for --target windows-x86_64\n"
         << "  --cc-backend                 Force portable C lowering for native builds\n"
+        << "  --llvm-backend               Use Clang/LLVM as the optional native backend\n"
         << "  --toolchain <name>           auto | clang | gcc | zig | mingw | custom executable\n"
         << "  --cc <executable>            Override the C compiler/driver\n"
         << "  --cxx <executable>           Override the C++ compiler for native integrations\n"
@@ -157,6 +160,7 @@ static void usage() {
         << "  --stats                      Print build/cache statistics and timings\n"
         << "  --cache-info                 Explain incremental build cache hits/misses\n"
         << "  --no-cache                   Disable incremental executable reuse\n\n"
+        << "LLVM backend uses PUNPUN_LLVM_CC or clang.\n"
         << "Windows cross builds use PUNPUN_WINDOWS_CC or x86_64-w64-mingw32-gcc.\n";
 }
 
@@ -388,14 +392,14 @@ static std::string hex_hash(uint64_t value) {
 }
 
 static std::string build_fingerprint(const std::vector<Module> &modules, const fs::path &runtime,
-                                     Target target, bool release, bool cc_backend,
+                                     Target target, bool release, bool cc_backend, bool llvm_backend,
                                      const pptoolchain::Config &toolchain) {
     uint64_t hash = UINT64_C(14695981039346656037);
     const auto add = [&](const std::string &value) { hash = fnv1a_append(hash, value); };
     add("PunPun-" PP_VERSION "\n");
     add(target_name(target));
     add(release ? "\nrelease\n" : "\ndebug\n");
-    add(cc_backend ? "cc-backend\n" : "native-backend\n");
+    add(llvm_backend ? "llvm-backend\n" : (cc_backend ? "cc-backend\n" : "native-backend\n"));
     add(pptoolchain::identity(toolchain));
     std::vector<fs::path> sources;
     for (const Module &module : modules) sources.push_back(fs::absolute(module.file).lexically_normal());
@@ -504,12 +508,12 @@ static bool has_cpp_injection(const std::vector<Module> &modules) {
 }
 
 static fs::path cache_record_path(const fs::path &input, const fs::path &output,
-                                  Target target, bool release, bool cc_backend) {
+                                  Target target, bool release, bool cc_backend, bool llvm_backend) {
     uint64_t hash = UINT64_C(14695981039346656037);
     const std::string identity = fs::absolute(input).lexically_normal().string() + "\n" +
                                  fs::absolute(output).lexically_normal().string() + "\n" +
                                  target_name(target) + (release ? "\nrelease" : "\ndebug") +
-                                 (cc_backend ? "\ncc" : "\ndirect");
+                                 (llvm_backend ? "\nllvm" : (cc_backend ? "\ncc" : "\ndirect"));
     hash = fnv1a_append(hash, identity);
     return fs::path(".punpun/cache") / ("build-" + hex_hash(hash) + ".fingerprint");
 }
@@ -562,6 +566,7 @@ static int semantic_worker() {
             }
             std::vector<Module> modules = Driver(std::move(include_paths), std::move(mappings), std::move(overlays)).load_program(path);
             SemanticAnalyzer(modules).analyze();
+            ppownership::Analyzer(modules).analyze();
         } catch (const Error &error) { result = error.what(); }
           catch (const std::exception &error) { result = std::string("error[E9001]: internal semantic worker failure: ") + error.what(); }
         std::cout << "RESULT " << result.size() << "\n";
@@ -626,7 +631,7 @@ int main(int argc, char **argv) {
         const std::string command = std::string(argv[1]) == "go" ? "run" : argv[1];
         if (command != "build" && command != "run" && command != "check" && command != "fmt" &&
             command != "emit-tokens" && command != "emit-ast" && command != "emit-hir" && command != "emit-ir" &&
-            command != "emit-c" && command != "emit-asm") {
+            command != "emit-c" && command != "emit-asm" && command != "emit-llvm") {
             usage();
             return 2;
         }
@@ -639,6 +644,7 @@ int main(int argc, char **argv) {
         bool explicit_output = false;
         bool release = false;
         bool cc_backend = false;
+        bool llvm_backend = false;
         bool format_check = false;
         bool show_timings = false;
         bool show_stats = false;
@@ -662,6 +668,7 @@ int main(int argc, char **argv) {
             else if (argument == "-o" && i + 1 < argc) { output = argv[++i]; explicit_output = true; }
             else if (argument == "--release") release = true;
             else if (argument == "--cc-backend") cc_backend = true;
+            else if (argument == "--llvm-backend") llvm_backend = true;
             else if (argument == "--toolchain" && i + 1 < argc) { toolchain = pptoolchain::profile(argv[++i]); toolchain_cli_override = true; }
             else if (argument == "--cc" && i + 1 < argc) { toolchain.cc = {argv[++i]}; toolchain_cli_override = true; }
             else if (argument == "--cxx" && i + 1 < argc) { toolchain.cxx = {argv[++i]}; toolchain_cli_override = true; }
@@ -687,6 +694,12 @@ int main(int argc, char **argv) {
         }
 
         if (after_separator && command != "run") throw Error("error: program arguments require run or go");
+        if (cc_backend && llvm_backend) throw Error("error: --cc-backend and --llvm-backend are mutually exclusive");
+        if (llvm_backend && target == Target::WindowsX86_64)
+            throw Error("error: the LLVM compatibility backend is native-host only in PunPun 0.6 beta");
+        const std::string llvm_cc = env_or("PUNPUN_LLVM_CC", "clang");
+        if ((llvm_backend || command == "emit-llvm") && !pptoolchain::available({llvm_cc}))
+            throw Error("error: LLVM backend requires Clang; install clang or set PUNPUN_LLVM_CC");
         // Package infrastructure is lazy. Single-file builds never instantiate
         // a resolver. Projects with Punpun.toml load only their local/path graph.
         const fs::path project_root = ppproject::find_root(input);
@@ -785,7 +798,11 @@ int main(int argc, char **argv) {
 
         const auto semantic_started = std::chrono::steady_clock::now();
         SemanticAnalyzer(modules).analyze();
+        ppownership::Analyzer(modules).analyze();
         const auto semantic_finished = std::chrono::steady_clock::now();
+        const auto ir_started = std::chrono::steady_clock::now();
+        pppipeline::Result pipeline = pppipeline::build(modules, release);
+        const auto ir_finished = std::chrono::steady_clock::now();
 
         const auto milliseconds = [](auto start, auto end) {
             return std::chrono::duration<double, std::milli>(end - start).count();
@@ -794,7 +811,8 @@ int main(int argc, char **argv) {
             if (!show_timings) return;
             std::cerr << std::fixed << std::setprecision(3)
                       << "timing load+parse  " << milliseconds(load_started, load_finished) << " ms\n"
-                      << "timing semantic    " << milliseconds(semantic_started, semantic_finished) << " ms\n";
+                      << "timing semantic    " << milliseconds(semantic_started, semantic_finished) << " ms\n"
+                      << "timing HIR+MIR     " << milliseconds(ir_started, ir_finished) << " ms\n";
         };
 
         if (command == "check") {
@@ -812,11 +830,9 @@ int main(int argc, char **argv) {
         }
 
         if (command == "emit-hir" || command == "emit-ir") {
-            pphir::Program hir = pphir::Lowerer(modules).lower();
-            if (release) pphir::optimize(hir);
             const std::string dumped = command == "emit-ir"
-                ? ppmir::dump(ppmir::Lowerer(hir).lower())
-                : pphir::dump(hir);
+                ? ppmir::dump(pipeline.mir)
+                : pphir::dump(pipeline.hir);
             if (!explicit_output) std::cout << dumped;
             else {
                 if (output.has_parent_path()) fs::create_directories(output.parent_path());
@@ -828,7 +844,7 @@ int main(int argc, char **argv) {
         }
 
         if (command == "emit-c") {
-            const std::string generated = CBackend(modules).generate();
+            const std::string generated = CBackend(modules, pipeline.mir).generate();
             if (!explicit_output) std::cout << generated;
             else {
                 if (output.has_parent_path()) fs::create_directories(output.parent_path());
@@ -843,7 +859,7 @@ int main(int argc, char **argv) {
         if (command == "emit-asm") {
             if (target == Target::WindowsX86_64)
                 throw Error("error: emit-asm currently supports the Linux x86-64 backend only");
-            const std::string generated = X86Backend(modules).generate();
+            const std::string generated = X86Backend(modules, pipeline.mir).generate();
             if (!explicit_output) std::cout << generated;
             else {
                 if (output.has_parent_path()) fs::create_directories(output.parent_path());
@@ -855,10 +871,30 @@ int main(int argc, char **argv) {
             return 0;
         }
 
+        if (command == "emit-llvm") {
+            if (target == Target::WindowsX86_64) throw Error("error: emit-llvm is native-host only in PunPun 0.6 beta");
+            const std::string generated = CBackend(modules, pipeline.mir).generate();
+            TemporarySource c_source(".c");
+            { std::ofstream stream(c_source.path); if (!stream) throw Error("error: cannot create temporary C file"); stream << generated; }
+            TemporarySource llvm_output(".ll");
+            std::vector<std::string> llvm{llvm_cc, "-std=c17", "-S", "-emit-llvm", release ? "-O3" : "-O0",
+                                          "-I" + runtime.string(), c_source.path.string(), "-o", llvm_output.path.string()};
+            append_common_warnings(llvm);
+            if (ppprocess::run(llvm) != 0) throw Error("error: LLVM IR emission failed");
+            const std::string ir = read_file(llvm_output.path);
+            if (!explicit_output) std::cout << ir;
+            else {
+                if (output.has_parent_path()) fs::create_directories(output.parent_path());
+                std::ofstream stream(output); if (!stream) throw Error("error: cannot write LLVM IR output"); stream << ir;
+            }
+            return 0;
+        }
+
         if (output.has_parent_path()) fs::create_directories(output.parent_path());
 
-        const fs::path cache_path = cache_record_path(input, output, target, release, cc_backend);
-        const std::string fingerprint = build_fingerprint(modules, runtime, target, release, cc_backend, toolchain);
+        const fs::path cache_path = cache_record_path(input, output, target, release, cc_backend, llvm_backend);
+        std::string fingerprint = build_fingerprint(modules, runtime, target, release, cc_backend, llvm_backend, toolchain);
+        fingerprint += "-" + pipeline.program_hash + (llvm_backend ? ("-llvm-" + llvm_cc) : "");
         bool cache_hit = false;
         std::string cached_fingerprint;
         if (use_cache && fs::is_regular_file(output) && read_cache_fingerprint(cache_path, cached_fingerprint) &&
@@ -905,10 +941,10 @@ int main(int argc, char **argv) {
         std::unique_ptr<TemporarySource> temporary;
         std::vector<std::string> build;
         const bool windows_target = target == Target::WindowsX86_64;
-        const bool direct_native = !windows_target && !cc_backend && host_can_use_direct_x86_backend();
+        const bool direct_native = !windows_target && !cc_backend && !llvm_backend && host_can_use_direct_x86_backend();
 
         if (direct_native) {
-            const std::string generated = X86Backend(modules).generate();
+            const std::string generated = X86Backend(modules, pipeline.mir).generate();
             temporary = std::make_unique<TemporarySource>(".s");
             std::ofstream stream(temporary->path);
             if (!stream) throw Error("error: cannot create temporary assembly file");
@@ -927,14 +963,14 @@ int main(int argc, char **argv) {
             build.push_back("-o");
             build.push_back(staged_output.staging_path.string());
         } else {
-            const std::string generated = CBackend(modules).generate();
+            const std::string generated = CBackend(modules, pipeline.mir).generate();
             temporary = std::make_unique<TemporarySource>(".c");
             std::ofstream stream(temporary->path);
             if (!stream) throw Error("error: cannot create temporary C file");
             stream << generated;
             if (!stream) throw Error("error: failed to write temporary C file");
 
-            build = toolchain.cc;
+            build = llvm_backend ? std::vector<std::string>{llvm_cc} : toolchain.cc;
             if (windows_target && toolchain.profile == "auto") {
                 const std::string configured = env_or("PUNPUN_WINDOWS_CC", "x86_64-w64-mingw32-gcc");
                 build = {configured};

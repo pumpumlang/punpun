@@ -1,9 +1,10 @@
-// Punpun 0.3 native x86-64 backend.
+// PunPun direct x86-64 backend.
 //
 // Emits GNU-assembler (Intel syntax) for System V AMD64 Linux and links against
-// the same C/Rust/asm runtime the C backend uses. The frontend has already been
-// type-checked by the C backend before this runs, so this pass re-derives types
-// only to pick instructions; it assumes a well-formed program.
+// the same native runtime used by the portable and LLVM paths. Parsing, semantic
+// analysis, ownership checks, typed HIR and verified MIR have already completed.
+// MIR is authoritative for the function set; typed source details remain available
+// for final 0.6 instruction/source-location lowering.
 //
 // Conventions
 // -----------
@@ -33,10 +34,12 @@
 
 #include "frontend.hpp"
 #include "builtins.hpp"
+#include "ownership.hpp"
+#include "mir.hpp"
 
 class X86Backend {
   public:
-    explicit X86Backend(const std::vector<Module> &modules) : modules_(modules) {
+    explicit X86Backend(const std::vector<Module> &modules, const ppmir::Program &mir) : modules_(modules), mir_(mir) {
         for (const BuiltinSpec &builtin : punpun_builtins()) is_builtin_.insert(builtin.name);
         for (const auto &module : modules_)
             for (const auto &shape : module.shapes) shapes_[shape.name] = &shape;
@@ -62,8 +65,18 @@ class X86Backend {
             text_ << ".file " << debug_id++ << " \"" << asm_escaped(key) << "\"\n";
         }
         text_ << ".text\n";
-        for (const auto &module : modules_)
-            for (const auto &function : module.functions) if (!function.is_extern_native) generate_function(function);
+        for (const ppmir::Function &mir_function : mir_.functions) {
+            if (mir_function.external_native) continue;
+            const Function *source = nullptr;
+            for (const auto &module : modules_) {
+                for (const auto &function : module.functions) {
+                    if (function.name == mir_function.name) { source = &function; break; }
+                }
+                if (source) break;
+            }
+            if (!source) internal("authoritative MIR references unknown function '" + mir_function.name + "'");
+            generate_function(*source);
+        }
         generate_entry();
         std::ostringstream out;
         out << text_.str();
@@ -91,9 +104,11 @@ class X86Backend {
         Type type;
         int64_t offset;   // rbp-relative for locals, block-relative for params
         bool is_param;
+        int64_t alive_offset = 0; // rbp-relative boolean, 0 when this binding is non-owning
     };
 
     const std::vector<Module> &modules_;
+    const ppmir::Program &mir_;
     std::unordered_set<std::string> is_builtin_;
     std::unordered_map<std::string, const Shape *> shapes_;
     std::unordered_map<std::string, ShapeLayout> layouts_;
@@ -105,7 +120,9 @@ class X86Backend {
     std::ostringstream rodata_;
     std::ostringstream body_;
     std::vector<std::unordered_map<std::string, Var>> scopes_;
-    std::vector<std::pair<std::string, std::string>> loops_;  // {break, continue}
+    std::vector<std::vector<Var>> drop_scopes_;
+    struct LoopInfo { std::string break_label; std::string continue_label; std::size_t scope_base; };
+    std::vector<LoopInfo> loops_;
     Type current_result_ = Type::Void;
     bool result_is_record_ = false;
     std::string ret_label_;
@@ -226,11 +243,95 @@ class X86Backend {
         return nullptr;
     }
 
+    bool needs_drop(const Type &type) const { return ppownership::type_needs_drop(type, shapes_); }
+
+    void load_var_address(const Var &variable) {
+        if (variable.is_param) {
+            emit("mov rcx, " + mem_rbp(args_ptr_off_));
+            emit("lea rax, " + mem("rcx", variable.offset));
+        } else emit("lea rax, " + mem_rbp(variable.offset));
+    }
+
+    // RAX enters as the address of storage holding `type`.
+    void emit_drop_at_address(const Type &type) {
+        if (!needs_drop(type)) return;
+        const int64_t address = alloc(8);
+        emit("mov " + mem_rbp(address) + ", rax");
+        if (type == Type::Nums) {
+            emit("mov rcx, " + mem_rbp(address));
+            emit("mov rdi, " + mem("rcx", 0));
+            emit("call pp_numbers_free@PLT");
+            return;
+        }
+        auto found = shapes_.find(type.name);
+        if (found == shapes_.end()) return;
+        const Shape &shape = *found->second;
+        if (shape.reference_type) {
+            const int64_t object_ptr = alloc(8);
+            emit("mov rcx, " + mem_rbp(address));
+            emit("mov rax, " + mem("rcx", 0));
+            emit("mov " + mem_rbp(object_ptr) + ", rax");
+            const std::string done = new_label();
+            emit("test rax, rax");
+            emit("je " + done);
+            const ShapeLayout &shape_layout = layout(shape.name);
+            for (auto field = shape.fields.rbegin(); field != shape.fields.rend(); ++field) {
+                if (!needs_drop(field->type)) continue;
+                emit("mov rax, " + mem_rbp(object_ptr));
+                const int64_t offset = shape_layout.fields.at(field->name).offset;
+                if (offset) emit("add rax, " + std::to_string(offset));
+                emit_drop_at_address(field->type);
+            }
+            emit("mov rdi, " + mem_rbp(object_ptr));
+            emit("call pp_object_free@PLT");
+            label(done);
+            return;
+        }
+        const ShapeLayout &shape_layout = layout(shape.name);
+        for (auto field = shape.fields.rbegin(); field != shape.fields.rend(); ++field) {
+            if (!needs_drop(field->type)) continue;
+            emit("mov rax, " + mem_rbp(address));
+            const int64_t offset = shape_layout.fields.at(field->name).offset;
+            if (offset) emit("add rax, " + std::to_string(offset));
+            emit_drop_at_address(field->type);
+        }
+    }
+
+    void emit_drop_var(const Var &variable) {
+        if (variable.alive_offset == 0) return;
+        const std::string skip = new_label();
+        emit("cmp qword ptr " + mem_rbp(variable.alive_offset) + ", 0");
+        emit("je " + skip);
+        load_var_address(variable);
+        emit_drop_at_address(variable.type);
+        emit("mov qword ptr " + mem_rbp(variable.alive_offset) + ", 0");
+        label(skip);
+    }
+
+    void emit_scope_drops(std::size_t depth) {
+        if (depth >= drop_scopes_.size()) return;
+        auto &values = drop_scopes_[depth];
+        for (auto it = values.rbegin(); it != values.rend(); ++it) emit_drop_var(*it);
+    }
+
+    void emit_drops_from(std::size_t first_depth) {
+        for (std::size_t depth = drop_scopes_.size(); depth-- > first_depth;) emit_scope_drops(depth);
+    }
+
+    void register_drop(Var &variable) {
+        if (!needs_drop(variable.type)) return;
+        variable.alive_offset = alloc(8);
+        emit("mov qword ptr " + mem_rbp(variable.alive_offset) + ", 1");
+        drop_scopes_.back().push_back(variable);
+    }
+
     // -- function emission --------------------------------------------------
     void generate_function(const Function &function) {
         frame_ = 0;
         scopes_.clear();
+        drop_scopes_.clear();
         scopes_.push_back({});
+        drop_scopes_.push_back({});
         loops_.clear();
         body_.str("");
         body_.clear();
@@ -241,11 +342,16 @@ class X86Backend {
 
         int64_t block_offset = result_is_record_ ? 8 : 0;
         for (const auto &parameter : function.parameters) {
-            scopes_.back()[parameter.name] = {parameter.type, block_offset, true};
+            scopes_.back()[parameter.name] = {parameter.type, block_offset, true, 0};
             block_offset += type_size(parameter.type);
         }
 
+        for (std::size_t i = 0; i < function.parameters.size(); ++i) {
+            if (function.is_method && i == 0) continue;
+            register_drop(scopes_.back().at(function.parameters[i].name));
+        }
         for (const auto &statement : function.body) gen_statement(statement);
+        emit_scope_drops(0);
         if (function.name == "main") emit("xor eax, eax");
 
         const int64_t frame_size = align_up(frame_, 16);
@@ -304,7 +410,8 @@ class X86Backend {
         } else {
             emit("mov " + mem_rbp(slot) + ", rax");
         }
-        scopes_.back()[statement.name] = {type, slot, false};
+        scopes_.back()[statement.name] = {type, slot, false, 0};
+        register_drop(scopes_.back().at(statement.name));
     }
 
     void gen_assign(const Stmt &statement) {
@@ -342,6 +449,19 @@ class X86Backend {
         const int64_t addr_slot = alloc(8);
         emit("mov " + mem_rbp(addr_slot) + ", rax");
         gen_expression(*statement.expression);  // value or record address
+        int64_t owning_value_slot = 0;
+        if (!compound && needs_drop(type)) {
+            owning_value_slot = alloc(8);
+            emit("mov " + mem_rbp(owning_value_slot) + ", rax");
+            if (statement.target->kind == Expr::Kind::Variable) {
+                const Var *target_var = lookup(statement.target->value);
+                if (target_var) emit_drop_var(*target_var);
+            } else {
+                emit("mov rax, " + mem_rbp(addr_slot));
+                emit_drop_at_address(type);
+            }
+            emit("mov rax, " + mem_rbp(owning_value_slot));
+        }
         if (compound) {
             if (type == Type::Int) {
                 emit("mov rsi, rax");
@@ -367,6 +487,11 @@ class X86Backend {
             emit("mov rsi, rax");
             copy_via_rdi_rsi(type_size(type));
         } else emit("mov " + mem("rdi", 0) + ", rax");
+        if (!compound && statement.target->kind == Expr::Kind::Variable) {
+            const Var *target_var = lookup(statement.target->value);
+            if (target_var && target_var->alive_offset != 0)
+                emit("mov qword ptr " + mem_rbp(target_var->alive_offset) + ", 1");
+        }
     }
 
     // Produce the address of an assignable location (scalar slot or record
@@ -420,17 +545,21 @@ class X86Backend {
 
     void gen_return(const Stmt &statement) {
         if (!statement.expression) {
+            emit_drops_from(0);
             emit("jmp " + ret_label_);
             return;
         }
         gen_expression(*statement.expression);
+        const int64_t result_slot = alloc(8);
         if (result_is_record_) {
             emit("mov rcx, " + mem_rbp(args_ptr_off_));
-            emit("mov rdi, " + mem("rcx", 0));  // hidden destination pointer
+            emit("mov rdi, " + mem("rcx", 0));
             emit("mov rsi, rax");
             copy_via_rdi_rsi(type_size(current_result_));
-            emit("mov rax, rdi");
-        }
+            emit("mov " + mem_rbp(result_slot) + ", rdi");
+        } else emit("mov " + mem_rbp(result_slot) + ", rax");
+        emit_drops_from(0);
+        emit("mov rax, " + mem_rbp(result_slot));
         emit("jmp " + ret_label_);
     }
 
@@ -460,7 +589,7 @@ class X86Backend {
         gen_expression(*statement.expression);
         emit("cmp rax, 0");
         emit("je " + end);
-        loops_.push_back({end, top});
+        loops_.push_back({end, top, drop_scopes_.size()});
         gen_block(statement.body);
         loops_.pop_back();
         emit("jmp " + top);
@@ -477,13 +606,16 @@ class X86Backend {
         const std::string top = new_label();
         const std::string cont = new_label();
         const std::string end = new_label();
-        scopes_.push_back({{statement.name, {Type::Int, counter, false}}});
-        loops_.push_back({end, cont});
+        const std::size_t loop_base = drop_scopes_.size();
+        scopes_.push_back({{statement.name, {Type::Int, counter, false, 0}}});
+        drop_scopes_.push_back({});
+        loops_.push_back({end, cont, loop_base});
         label(top);
         emit("mov rax, " + mem_rbp(counter));
         emit("cmp rax, " + mem_rbp(limit));
         emit("jge " + end);
         for (const auto &child : statement.body) gen_statement(child);
+        emit_scope_drops(drop_scopes_.size() - 1);
         label(cont);
         emit("mov rax, " + mem_rbp(counter));
         emit("add rax, 1");
@@ -491,18 +623,23 @@ class X86Backend {
         emit("jmp " + top);
         label(end);
         loops_.pop_back();
+        drop_scopes_.pop_back();
         scopes_.pop_back();
     }
 
     void gen_break_continue(const Stmt &statement) {
         if (loops_.empty()) internal("loop control outside loop");
-        const auto &labels = loops_.back();
-        emit("jmp " + (statement.kind == Stmt::Kind::Break ? labels.first : labels.second));
+        const auto &loop = loops_.back();
+        emit_drops_from(loop.scope_base);
+        emit("jmp " + (statement.kind == Stmt::Kind::Break ? loop.break_label : loop.continue_label));
     }
 
     void gen_block(const std::vector<Stmt> &statements) {
         scopes_.push_back({});
+        drop_scopes_.push_back({});
         for (const auto &statement : statements) gen_statement(statement);
+        emit_scope_drops(drop_scopes_.size() - 1);
+        drop_scopes_.pop_back();
         scopes_.pop_back();
     }
 
@@ -687,6 +824,8 @@ class X86Backend {
             if (is_record(variable->type)) emit("lea rax, " + mem_rbp(variable->offset));
             else emit("mov rax, " + mem_rbp(variable->offset));
         }
+        if (expression.consumes_value && variable->alive_offset != 0)
+            emit("mov qword ptr " + mem_rbp(variable->alive_offset) + ", 0");
         return variable->type;
     }
 
@@ -1101,6 +1240,9 @@ class X86Backend {
         if (name == "at") { load("rdi", 0); load("rsi", 1); emit("call pp_at@PLT"); return Type::Int; }
         if (name == "put") { load("rdi", 0); load("rsi", 1); load("rdx", 2); emit("call pp_put@PLT"); return Type::Void; }
         if (name == "size") { load("rdi", 0); emit("call pp_size@PLT"); return Type::Int; }
+        if (name == "view") { load("rdi", 0); load("rsi", 1); load("rdx", 2); emit("call pp_numbers_view@PLT"); return Type{"Slice<int>"}; }
+        if (name == "slice_len") { load("rdi", 0); emit("call pp_slice_len_i64@PLT"); return Type::Int; }
+        if (name == "slice_get") { load("rdi", 0); load("rsi", 1); emit("call pp_slice_at_i64@PLT"); return Type::Int; }
         if (name == "pop") { load("rdi", 0); emit("call pp_pop@PLT"); return Type::Int; }
         if (name == "sort") { load("rdi", 0); emit("call pp_sort@PLT"); return Type::Void; }
         if (name == "concat") { load("rdi", 0); load("rsi", 1); emit("call pp_concat@PLT"); return Type::Str; }

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import shutil
 import subprocess
 import sys
 import unittest
@@ -95,6 +96,40 @@ class LanguageSurfaceContractTests(unittest.TestCase):
             result = run("run", example, *extra)
             self.assertEqual(result.returncode, 0, result.stderr)
             self.assertEqual(result.stdout, expected)
+
+    def test_safe_slices_execute_on_both_backends(self):
+        expected = "2\n20\n30\n"
+        for extra in ((), ("--cc-backend",)):
+            with self.subTest(backend=extra or ("direct",)):
+                result = run("run", FIXTURES / "slices_run.pp", *extra, "--no-cache")
+                self.assertEqual(result.returncode, 0, result.stderr)
+                self.assertEqual(result.stdout, expected)
+
+    @unittest.skipUnless(shutil.which("clang"), "Clang/LLVM is required for the optional LLVM backend")
+    def test_optional_llvm_backend_and_ir_emission(self):
+        result = run("run", FIXTURES / "slices_run.pp", "--llvm-backend", "--no-cache")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(result.stdout, "2\n20\n30\n")
+        ir = run("emit-llvm", FIXTURES / "generics_run.pp")
+        self.assertEqual(ir.returncode, 0, ir.stderr)
+        self.assertIn("target triple", ir.stdout)
+        self.assertIn("define", ir.stdout)
+
+    def test_move_state_joins_report_maybe_moved(self):
+        result = run("check", FIXTURES / "maybe_moved_error.pp")
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("E0706", result.stderr)
+        self.assertIn("may have been moved", result.stderr)
+
+    def test_live_slice_prevents_owner_mutation(self):
+        result = run("check", FIXTURES / "borrow_mutation_error.pp")
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("E0707", result.stderr)
+
+    def test_local_slice_cannot_escape_owner(self):
+        result = run("check", FIXTURES / "slice_escape_error.pp")
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("E0702", result.stderr)
 
     def test_0_5_modern_and_migration_sources_remain_valid(self):
         for fixture in ("compat_modern.pp", "compat_legacy.pp"):

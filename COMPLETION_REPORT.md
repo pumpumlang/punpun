@@ -1,119 +1,40 @@
-# PunPun 0.6 Steps 2 and 3 engineering report
+# PunPun 0.6.0-beta engineering report
 
 Date: 2026-09-08  
-Version: `0.6.0-dev.3` (from repository `VERSION`)
+Version: `0.6.0-beta` (from repository `VERSION`)
 
-This report is the release gate for the 0.6 Steps 2 and 3 development archive. It distinguishes
-implemented and tested code from platform work that cannot honestly be certified
-on the Linux build host. No placeholder MSI, setup EXE, Arch package-manager
-result, signature, or native binary is represented as a real artifact.
+This report is the local release gate for PunPun 0.6. It distinguishes features actually implemented and executed on the Linux x86-64 release host from platform claims that require Windows or Arch/CachyOS.
 
-## Added in 0.6 Step 1
+## Steps completed
 
-- Added one canonical version source with synchronized runtime/stdlib/editor mirrors and executable consistency tests.
-- Made compiler output, runtime compatibility, cache fingerprints, PPX, registry metadata, static sites, release artifacts, Arch packaging, Windows output names and publishing paths version-driven.
-- Froze normative 0.6 rules for generics, contract constraints, monomorphization, overload resolution, algebraic enums, `Option`, `Result`, matching, nullability, move-state analysis, borrows and deterministic destruction.
-- Added parser/AST scaffolding for generic declaration headers, inline constraints and nested generic types.
-- Reserved future enum, match and propagation syntax behind stable `E0900` diagnostics.
-- Added modern and migration-dialect compatibility fixtures plus version, specification and syntax-contract regression tests.
-- Added checked-in release-truthfulness, privacy and compatibility rules in `AGENTS.md` and the staged release plan in `ROADMAP.md`.
+### Step 1 — release/version foundation
+One canonical version source, generated mirror checks, frozen 0.6 specifications, parser scaffolding, compatibility fixtures and release-truthfulness gates.
 
-## Implemented in this continuation
+### Step 2 — generics
+Generic functions/types/methods, inference and explicit type arguments, constraints, deterministic mangling, bounded specialization and monomorphization deduplication.
 
-- Added inferred and explicit generic calls, generic structs/objects/methods,
-  recursive type substitution, checked constraints, deterministic mangling,
-  deduplicated monomorphization, and bounded specialization work.
-- Added algebraic enums with unit/tuple payloads, generic construction, nested
-  destructuring, literal/binding/wildcard patterns, exhaustiveness and
-  reachability diagnostics.
-- Added prelude `Option<T>` and `Result<T,E>`, postfix `?` with compatible
-  cross-success-type propagation, standard helpers, and a runnable example.
-- Lowered every new construct through typed HIR, direct Linux x86-64, and the
-  portable C17 backend with parity regressions.
+### Step 3 — algebraic data types
+Algebraic enums, payloads, nested patterns, exhaustiveness/reachability diagnostics, `Option<T>`, `Result<T,E>` and postfix `?` across both primary backends.
 
-- Added `selfhost/ppc_self.pp`, a compiler written entirely in PunPun with its
-  own lexer, recursive-descent parser, C type/call lowering, deterministic C17
-  emitter, CLI integration, and documented bootstrap subset.
-- Added a fixed-point bootstrap: the PunPun-built stage-one compiler compiles
-  itself, the resulting stage-two binary compiles itself again, and both C
-  outputs are required to be byte-identical before release.
-- Fixed SysV ABI normalization for `bool` values returned by PunPun functions,
-  native calls, and C runtime builtins.
-- Added checked `move` and explicit deterministic `drop` for owned objects and
-  numeric buffers, including use-after-move diagnostics and reinitialization.
-- Added named and literal-default arguments for free functions, constructors,
-  and methods, with diagnostics for unknown, duplicate, and missing arguments.
-- Added an inspectable MIR with SSA-style virtual registers, CFG verification,
-  liveness intervals, linear-scan physical-register assignments, and spill-slot
-  modeling. `pp emit-ir` exposes it while `pp emit-hir` retains HIR output.
-- Added local load forwarding, value numbering/CSE, dead-store elimination, and
-  dead-value elimination to release optimization.
-- Added cooperative task cancellation and completion queries across semantics,
-  both backends, and the native runtime.
-- Extended `requests` with GET, POST, PUT, PATCH, DELETE, HEAD, headers, timeout,
-  redirects, thread-local status/error state, and owned response cleanup.
-- Added UTF-8 validation/code-point counting plus directory, rename, remove, and
-  path-join runtime/stdlib APIs.
-- Extended injection to C++, Rust, and assembly with compiler discovery,
-  language-specific caching, source mapping, and conditional capability tests.
-- Hardened PPX with stable-by-default prerelease resolution, semantic-version
-  ordering, token expiry/revocation, logout, rate limiting, and security headers.
-- Improved LSP prepare-rename, token-aware references/rename, and missing-stdlib-
-  import quick fixes.
-- Added `.file`/`.loc` native mappings and C `#line` mappings for source-level
-  debugger correlation.
-- Added capability probes for GCC, Clang, Zig, and MinGW families.
-- Added deterministic 10/100/500/1000-module benchmark generation with cold,
-  warm, and one-function-edit measurements.
-- Added Linux, Arch, and Windows release CI definitions. The Windows job builds
-  real binaries and WiX artifacts on Windows; the Arch job performs actual
-  `makepkg`, install, upgrade, smoke, and removal operations.
+### Step 4 — ownership, borrows and slices
+A separate post-typechecking ownership pass tracks initialized/moved/maybe-moved state across control-flow joins, rejects conflicting safe borrows, supports explicit move/drop and reinitialization, inserts lexical destruction for supported identity objects, and checks non-owning `Slice<int>` views tied to `nums` owners. Legacy `nums` assignment/parameter semantics remain shared-handle compatible with 0.5.
 
-## Verified on this host
+### Step 5 — mandatory HIR/MIR pipeline
+Every successful check/build/backend emission constructs typed HIR, optionally optimizes HIR, verifies it, lowers verified MIR, verifies MIR and computes deterministic interface/body/program fingerprints. Backends are scheduled by the authoritative MIR function set. Final 0.6 instruction lowering may still consult typed source-node details; removing that final dependency belongs to 0.7 Machine IR.
 
-- Clean C17/C++17 warnings-as-errors build.
-- Full compiler/runtime/tooling test suite: 164 tests passed; the Rust-injection
-  capability test was skipped because `rustc` is not installed on this host.
-- Direct x86-64 and portable C execution for the new language/runtime features.
-- C, C++, and assembly injection execution; Rust injection remains conditional
-  because `rustc` is unavailable on this host.
-- GCC toolchain capability probe: C17, C++20, assembly, linking, and execution.
-- Native source mappings inspected in generated assembly and ELF debug lines.
-- Benchmark harness smoke-tested with deterministic generated module graphs.
-- Self-hosted stage-one/stage-two fixed point and independently compiled example.
+### Step 5.5 — optional LLVM
+`--llvm-backend` and `emit-llvm` add an optional Clang/LLVM path after the same PunPun frontend, semantic, ownership, HIR and MIR stages. This does not turn ordinary PunPun into a C/C++ transpiler and does not create a second semantic implementation.
 
-## Still not production-complete
+### Step 6 — integration and release qualification
+The language/runtime tests, self-host bootstrap, editor/LSP, PPX, static sites, isolated installer validation, privacy audit, version consistency and artifact validation are part of the release workflow. Release artifacts are produced only after those host-available gates pass.
 
-The following roadmap claims would require substantially larger designs or a
-different native host and are deliberately not mislabeled as finished:
+## Intentional 0.6 boundaries
 
-- Real Windows MSI/setup output, installation/upgrade/uninstallation, PATH/file
-  association checks, Windows native compilation, and real Arch/CachyOS package
-  installation/removal. CI now defines these gates but has not run them here.
-- User-defined overload sets and more advanced generic-body contract checking
-  remain later compiler refinements; 0.6 safe optional values are finalized as
-  `Option<T>` with no safe-language `null` literal.
-- Contract-typed dynamic dispatch/vtables, properties/static members, automatic
-  destruction, devirtualization, and a final inheritance model.
-- Full move/lifetime/escape analysis, lexical `Drop`, slices, allocators/arenas,
-  C-layout attributes, atomics/volatile operations, and complete ABI validation.
-- Native code generation driven end-to-end by MIR/Machine IR. The new MIR and
-  register allocation are inspectable foundations; the direct backend still
-  lowers from the existing frontend representation.
-- Full-language self-hosting. The current compiler is a genuine fixed-point
-  bootstrap seed, but objects, imports, async, inference, and other production
-  language features still require the C++ compiler.
-- Global optimizer work such as SCCP, alias/escape analysis, scalar replacement,
-  loop/vector optimization, LTO, and PGO.
-- An event-driven async reactor, structured concurrency/task groups, async-native
-  sockets/files, scalable timers/wakers, streaming/pooling clients, and complete
-  `Result` integration.
-- A complete stdlib, production PunUI widget/layout/accessibility/native backend,
-  public hosted PPX service with organizations/signing/admin recovery, and full
-  semantic IDE/debugger integration.
-- ARM64/macOS targets, direct PE/COFF emission, Windows PDB information, and
-  function/interface-granular incremental compilation.
+- Custom user-defined destructors, field-level partial moves, lifetime parameter syntax, owned generic collections and allocator/arena APIs remain later work.
+- MIR is mandatory and authoritative for verified program/function identity, but 0.7 will add Machine IR and remove remaining source-detail dependencies from backend instruction selection.
+- The LLVM compatibility backend is optional and native-host only in 0.6.
+- Full-language self-hosting is not claimed; the PunPun-written bootstrap compiler is a verified fixed-point seed.
+- Windows MSI/setup execution and real Arch/CachyOS `pacman` install/upgrade/remove cannot be certified on this Linux host.
+- ARM64/macOS, direct PE/COFF emission, PDBs, advanced devirtualization/escape analysis/vectorization/PGO and a production async reactor remain later milestones.
 
-These boundaries are intentional release truthfulness, not empty stubs. The
-archive contains the implementation, regression tests, platform CI gates, and
-benchmarking needed to continue each area without inventing successful results.
+These are release boundaries, not disguised successes. The beta contains tests and architecture intended to make the next compiler generation possible without restarting the project.

@@ -542,6 +542,13 @@ class SemanticAnalyzer {
             validate_type(inner, token, false);
             return;
         }
+        if (is_slice_type(type)) {
+            const Type inner = slice_element_type(type);
+            if (inner != Type::Int)
+                fail(token, "PunPun 0.6 beta currently supports Slice<int> only",
+                     "use nums + view(...) for the 0.6 slice implementation", "E0710");
+            return;
+        }
         if (type == Type::Int || type == Type::Float || type == Type::Bool || type == Type::Str ||
             type == Type::Nums || shapes_.count(type.name) || (allow_void && type == Type::Void)) return;
         fail(token, "unknown or invalid value type '" + type.name + "'");
@@ -751,22 +758,12 @@ class SemanticAnalyzer {
                     require(value, Type::Int, statement.expression->token, "list element");
                     target.inferred_type = Type::Int;
                 } else {
-                    if (statement.target->kind == Expr::Kind::Variable &&
-                        statement.assignment_op != "=" && statement.assignment_op != "<-") {
-                        if (const SemanticVariable *variable = lookup_mut(statement.target->value); variable && variable->moved)
-                            fail(statement.target->token, "use of moved value '" + statement.target->value + "'",
-                                 "assign a new value before reading this binding", "E0703");
-                    }
                     const Type target = assignment_target(*statement.target);
                     const Type value = expression_type(*statement.expression);
                     require(value, target, statement.expression->token, "assignment");
                     if (statement.assignment_op != "=" && statement.assignment_op != "<-") {
                         if (target != Type::Int && target != Type::Float)
                             fail(statement.token, "compound assignment requires numeric target");
-                    }
-                    if (statement.target->kind == Expr::Kind::Variable) {
-                        SemanticVariable *variable = lookup_mut(statement.target->value);
-                        if (variable) variable->moved = false;
                     }
                 }
                 break;
@@ -860,9 +857,6 @@ class SemanticAnalyzer {
                 }
                 const auto variable = lookup(expression.value);
                 if (!variable) fail(expression.token, "unknown name '" + expression.value + "'", name_help(expression.value), "E0201");
-                if (variable->moved)
-                    fail(expression.token, "use of moved value '" + expression.value + "'",
-                         "assign a new owning value before using this binding again", "E0703");
                 return variable->type;
             }
             case Expr::Kind::Member:
@@ -900,7 +894,14 @@ class SemanticAnalyzer {
                     return task_result_type(task);
                 }
                 if (expression.value == "-" && expression.children[0]->kind == Expr::Kind::Integer &&
-                    expression.children[0]->value == "9223372036854775808") return Type::Int;
+                    expression.children[0]->value == "9223372036854775808") {
+                    // The magnitude is one past INT64_MAX, but the full unary
+                    // expression is exactly INT64_MIN. Mark the child typed so
+                    // mandatory HIR/MIR verification can represent the syntax;
+                    // native backends already lower this pair as INT64_MIN.
+                    expression.children[0]->inferred_type = Type::Int;
+                    return Type::Int;
+                }
                 if (expression.value == "&" || expression.value == "&mut" || expression.value == "&raw") {
                     Expr &target = *expression.children[0];
                     const Type inner = lvalue_type(target);
@@ -1402,15 +1403,11 @@ class SemanticAnalyzer {
                      "bind the value to a local variable first", "E0704");
             SemanticVariable *variable = lookup_mut(argument.value);
             if (!variable) fail(argument.token, "unknown name '" + argument.value + "'", name_help(argument.value), "E0201");
-            if (variable->moved)
-                fail(argument.token, "use of moved value '" + argument.value + "'",
-                     "an owning binding can only be moved or dropped once", "E0703");
             const bool owning = variable->type == Type::Nums || is_object(variable->type);
             if (!owning)
                 fail(argument.token, expression.value + " requires an owning object or nums value, got " +
                      type_name(variable->type), "scalar and value-struct values are copied", "E0704");
             argument.inferred_type = variable->type;
-            variable->moved = true;
             return expression.value == "move" ? argument.inferred_type : Type::Void;
         }
         if (auto shape = shapes_.find(expression.value); shape != shapes_.end()) {

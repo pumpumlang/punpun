@@ -17,6 +17,8 @@
 
 #include "builtins.hpp"
 #include "frontend.hpp"
+#include "ownership.hpp"
+#include "mir.hpp"
 
 struct Generated {
     Type type;
@@ -25,7 +27,7 @@ struct Generated {
 
 class CBackend {
   public:
-    explicit CBackend(const std::vector<Module> &modules) : modules_(modules) {
+    explicit CBackend(const std::vector<Module> &modules, const ppmir::Program &mir) : modules_(modules), mir_(mir) {
         for (const BuiltinSpec &builtin : punpun_builtins()) {
             builtin_specs_[builtin.name] = &builtin;
             if (!builtin.runtime_symbol.empty()) builtin_symbols_[builtin.name] = builtin.runtime_symbol;
@@ -57,8 +59,11 @@ class CBackend {
             for (const Function &function : module.functions) prototype(function);
         out_ << "\n";
 
-        for (const Module &module : modules_)
-            for (const Function &function : module.functions) generate_function(function);
+        for (const ppmir::Function &mir_function : mir_.functions) {
+            auto found = functions_.find(mir_function.name);
+            if (found == functions_.end()) internal("authoritative MIR references unknown function '" + mir_function.name + "'");
+            generate_function(*found->second);
+        }
 
         out_ << "int main(int argc, char **argv) {\n"
                 "    pp_runtime_init(argc, argv);\n";
@@ -77,9 +82,11 @@ class CBackend {
     struct Variable {
         Type type;
         std::string c_name;
+        std::string alive_flag;
     };
 
     const std::vector<Module> &modules_;
+    const ppmir::Program &mir_;
     std::unordered_map<std::string, const BuiltinSpec *> builtin_specs_;
     std::unordered_map<std::string, std::string> builtin_symbols_;
     std::unordered_map<std::string, const Shape *> shapes_;
@@ -87,6 +94,8 @@ class CBackend {
     std::unordered_set<std::string> emitted_shapes_;
     std::unordered_set<std::string> emitting_shapes_;
     std::vector<std::unordered_map<std::string, Variable>> scopes_;
+    std::vector<std::vector<Variable>> drop_scopes_;
+    std::vector<std::size_t> loop_scope_bases_;
     std::ostringstream out_;
     std::size_t unique_ = 0;
     int indent_ = 0;
@@ -128,6 +137,7 @@ class CBackend {
         if (type == Type::Bool) return "bool";
         if (type == Type::Str) return "const char *";
         if (type == Type::Nums) return "pp_numbers *";
+        if (is_slice_type(type)) return "pp_i64_slice *";
         if (is_task_type(type)) return "pp_task *";
         if (is_pointer_like_type(type)) return c_type(pointee_type(type)) + " *";
         if (auto found = shapes_.find(type.name); found != shapes_.end()) {
@@ -230,10 +240,57 @@ class CBackend {
         out_ << ");\n";
     }
 
+    bool needs_drop(Type type) const { return ppownership::type_needs_drop(type, shapes_); }
+
+    void emit_drop_value(Type type, const std::string &code) {
+        if (!needs_drop(type)) return;
+        if (type == Type::Nums) { line("pp_numbers_free(" + code + ");"); return; }
+        auto found = shapes_.find(type.name);
+        if (found == shapes_.end()) return;
+        const Shape &shape = *found->second;
+        const std::string access = shape.reference_type ? "->" : ".";
+        for (auto field = shape.fields.rbegin(); field != shape.fields.rend(); ++field) {
+            if (!needs_drop(field->type)) continue;
+            emit_drop_value(field->type, "(" + code + ")" + access + "pp_f_" + sanitize(field->name));
+        }
+        if (shape.reference_type) line("pp_object_free((void *)(" + code + "));");
+    }
+
+    void emit_scope_drops(std::size_t depth) {
+        if (depth >= drop_scopes_.size()) return;
+        auto &values = drop_scopes_[depth];
+        for (auto it = values.rbegin(); it != values.rend(); ++it) {
+            if (it->alive_flag.empty()) continue;
+            line("if (" + it->alive_flag + ") {");
+            ++indent_;
+            emit_drop_value(it->type, it->c_name);
+            line(it->alive_flag + " = false;");
+            --indent_;
+            line("}");
+        }
+    }
+
+    void emit_drops_from(std::size_t first_depth) {
+        for (std::size_t depth = drop_scopes_.size(); depth-- > first_depth;) emit_scope_drops(depth);
+    }
+
+    void register_drop(Variable variable) {
+        if (!needs_drop(variable.type)) return;
+        if (variable.alive_flag.empty()) variable.alive_flag = "pp_alive_" + std::to_string(unique_++);
+        line("bool " + variable.alive_flag + " = true;");
+        drop_scopes_.back().push_back(variable);
+        // Keep the scope's copy synchronized so moves can clear the same flag.
+        for (auto &[name, entry] : scopes_.back()) {
+            if (entry.c_name == variable.c_name) { entry.alive_flag = variable.alive_flag; break; }
+        }
+    }
+
     void generate_function_body(const Function &function, const std::string &symbol) {
         current_result_ = function.result;
         scopes_.clear();
+        drop_scopes_.clear();
         scopes_.push_back({});
+        drop_scopes_.push_back({});
 
         out_ << c_type(function.result) << " " << symbol << "(";
         if (function.parameters.empty()) out_ << "void";
@@ -242,11 +299,16 @@ class CBackend {
             const Parameter &parameter = function.parameters[i];
             const std::string name = "pp_v_" + sanitize(parameter.name);
             out_ << c_type(parameter.type) << " " << name;
-            scopes_.back()[parameter.name] = {parameter.type, name};
+            scopes_.back()[parameter.name] = {parameter.type, name, ""};
         }
         out_ << ") {\n";
         ++indent_;
+        for (std::size_t i = 0; i < function.parameters.size(); ++i) {
+            if (function.is_method && i == 0) continue;
+            register_drop(scopes_.back().at(function.parameters[i].name));
+        }
         for (const Stmt &statement : function.body) generate_statement(statement);
+        emit_scope_drops(0);
         if (function.result == Type::Void) line("return;");
         else if (function.name == "main") line("return 0;");
         --indent_;
@@ -325,9 +387,12 @@ class CBackend {
 
     void generate_block(const std::vector<Stmt> &statements) {
         scopes_.push_back({});
+        drop_scopes_.push_back({});
         ++indent_;
         for (const Stmt &statement : statements) generate_statement(statement);
+        emit_scope_drops(drop_scopes_.size() - 1);
         --indent_;
+        drop_scopes_.pop_back();
         scopes_.pop_back();
     }
 
@@ -369,7 +434,8 @@ class CBackend {
                 const Type type = statement.declared_type == Type::Infer ? value.type : statement.declared_type;
                 const std::string name = "pp_local_" + std::to_string(unique_++);
                 line(c_type(type) + " " + name + " = " + value.code + ";");
-                scopes_.back()[statement.name] = {type, name};
+                scopes_.back()[statement.name] = {type, name, ""};
+                register_drop(scopes_.back().at(statement.name));
                 break;
             }
             case Stmt::Kind::Assign: {
@@ -391,7 +457,19 @@ class CBackend {
                 const std::string target = lvalue(*statement.target);
                 Generated value = generate_expression(*statement.expression);
                 if (statement.assignment_op == "=" || statement.assignment_op == "<-") {
+                    if (statement.target->kind == Expr::Kind::Variable) {
+                        const Variable *target_var = lookup(statement.target->value);
+                        if (target_var && !target_var->alive_flag.empty()) {
+                            line("if (" + target_var->alive_flag + ") {");
+                            ++indent_; emit_drop_value(target_var->type, target_var->c_name); --indent_;
+                            line("}");
+                        }
+                    }
                     line(target + " = " + value.code + ";");
+                    if (statement.target->kind == Expr::Kind::Variable) {
+                        const Variable *target_var = lookup(statement.target->value);
+                        if (target_var && !target_var->alive_flag.empty()) line(target_var->alive_flag + " = true;");
+                    }
                 } else {
                     const std::string op = statement.assignment_op.substr(0, 1);
                     if (statement.target->inferred_type == Type::Int) {
@@ -417,10 +495,17 @@ class CBackend {
                 else internal("non-scalar say reached C backend");
                 break;
             }
-            case Stmt::Kind::Return:
-                if (!statement.expression) line("return;");
-                else line("return " + generate_expression(*statement.expression).code + ";");
+            case Stmt::Kind::Return: {
+                if (!statement.expression) {
+                    emit_drops_from(0);
+                    line("return;");
+                } else {
+                    Generated value = freeze(generate_expression(*statement.expression));
+                    emit_drops_from(0);
+                    line("return " + value.code + ";");
+                }
                 break;
+            }
             case Stmt::Kind::If: {
                 Generated condition = generate_expression(*statement.expression);
                 line("if (" + condition.code + ") {");
@@ -438,12 +523,18 @@ class CBackend {
                 // helper temporaries emitted by the expression sit in the loop
                 // body, preserving side effects and short-circuit semantics.
                 line("for (;;) {");
+                const std::size_t loop_base = drop_scopes_.size();
                 scopes_.push_back({});
+                drop_scopes_.push_back({});
+                loop_scope_bases_.push_back(loop_base);
                 ++indent_;
                 Generated condition = generate_expression(*statement.expression);
                 line("if (!(" + condition.code + ")) break;");
                 for (const Stmt &child : statement.body) generate_statement(child);
+                emit_scope_drops(drop_scopes_.size() - 1);
                 --indent_;
+                loop_scope_bases_.pop_back();
+                drop_scopes_.pop_back();
                 scopes_.pop_back();
                 line("}");
                 break;
@@ -453,16 +544,25 @@ class CBackend {
                 Generated end = freeze(generate_expression(*statement.upper));
                 const std::string name = "pp_range_" + std::to_string(unique_++);
                 line("for (int64_t " + name + " = " + start.code + "; " + name + " < " + end.code + "; ++" + name + ") {");
-                scopes_.push_back({{statement.name, {Type::Int, name}}});
+                const std::size_t loop_base = drop_scopes_.size();
+                scopes_.push_back({{statement.name, {Type::Int, name, ""}}});
+                drop_scopes_.push_back({});
+                loop_scope_bases_.push_back(loop_base);
                 ++indent_;
                 for (const Stmt &child : statement.body) generate_statement(child);
+                emit_scope_drops(drop_scopes_.size() - 1);
                 --indent_;
+                loop_scope_bases_.pop_back();
+                drop_scopes_.pop_back();
                 scopes_.pop_back();
                 line("}");
                 break;
             }
-            case Stmt::Kind::Break: line("break;"); break;
-            case Stmt::Kind::Continue: line("continue;"); break;
+            case Stmt::Kind::Break:
+            case Stmt::Kind::Continue:
+                if (!loop_scope_bases_.empty()) emit_drops_from(loop_scope_bases_.back());
+                line(statement.kind == Stmt::Kind::Break ? "break;" : "continue;");
+                break;
             case Stmt::Kind::Unsafe:
                 line("{");
                 generate_block(statement.body);
@@ -482,7 +582,9 @@ class CBackend {
             case Expr::Kind::Variable: {
                 const Variable *variable = lookup(expression.value);
                 if (!variable) internal("unknown variable '" + expression.value + "'");
-                return {variable->type, variable->c_name};
+                Generated result{variable->type, variable->c_name};
+                if (expression.consumes_value && !variable->alive_flag.empty()) line(variable->alive_flag + " = false;");
+                return result;
             }
             case Expr::Kind::Member: return member(expression);
             case Expr::Kind::Index: {
@@ -534,21 +636,21 @@ class CBackend {
 
     std::string pattern_condition(const Pattern &pattern, Type type, const std::string &code) {
         if (pattern.kind == Pattern::Kind::Wildcard || pattern.kind == Pattern::Kind::Binding) return "true";
-        if (pattern.kind == Pattern::Kind::Integer) return "(" + code + " == INT64_C(" + pattern.value + "))";
-        if (pattern.kind == Pattern::Kind::Boolean) return "(" + code + " == " + (pattern.value == "yes" ? "true" : "false") + ")";
+        if (pattern.kind == Pattern::Kind::Integer) return code + " == INT64_C(" + pattern.value + ")";
+        if (pattern.kind == Pattern::Kind::Boolean) return pattern.value == "yes" ? code : "!(" + code + ")";
         if (pattern.kind == Pattern::Kind::String) return "pp_str_eq(" + code + ", " + c_string(pattern.value) + ")";
         const Shape &shape = *shapes_.at(type.name);
-        std::string condition = "(" + code + ".pp_f___tag == INT64_C(" + std::to_string(pattern.variant_index) + "))";
+        std::string condition = code + ".pp_f___tag == INT64_C(" + std::to_string(pattern.variant_index) + ")";
         for (std::size_t i = 0; i < pattern.children.size(); ++i) {
             const std::string payload = code + ".pp_f___v" + std::to_string(pattern.variant_index) + "_" + std::to_string(i);
             condition += " && " + pattern_condition(pattern.children[i], shape.enum_variants[pattern.variant_index].payload[i], payload);
         }
-        return "(" + condition + ")";
+        return condition;
     }
 
     void bind_pattern_variables(const Pattern &pattern, Type type, const std::string &code) {
         if (pattern.kind == Pattern::Kind::Binding) {
-            scopes_.back()[pattern.value] = {type, code};
+            scopes_.back()[pattern.value] = {type, code, ""};
             return;
         }
         if (pattern.kind != Pattern::Kind::Variant) return;
@@ -564,7 +666,7 @@ class CBackend {
         Generated subject = freeze(generate_expression(*expression.children[0]));
         const std::string result_name = "pp_match_" + std::to_string(unique_++);
         const std::string end = "pp_match_end_" + std::to_string(unique_++);
-        if (expression.inferred_type != Type::Void) line(c_type(expression.inferred_type) + " " + result_name + ";");
+        if (expression.inferred_type != Type::Void) line(c_type(expression.inferred_type) + " " + result_name + " = {0};");
         for (std::size_t i = 0; i < expression.match_patterns.size(); ++i) {
             const Pattern &pattern = expression.match_patterns[i];
             line("if (" + pattern_condition(pattern, subject.type, subject.code) + ") {");

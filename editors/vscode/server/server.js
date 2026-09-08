@@ -195,11 +195,11 @@ function indexDocument(uri, text) {
     symbols.push({ name, kind, uri, range: { start: positionAt(text, start), end: positionAt(text, start + name.length) }, ...extra });
   };
 
-  for (const match of text.matchAll(/\b(async\s+)?(fn)\s+([A-Za-z_][A-Za-z0-9_]*)\s*(<[^>{}]*>)?\s*\(([^)]*)\)\s*(?:->\s*([^\s{;]+))?/g)) {
+  for (const match of text.matchAll(/\b(async\s+)?(fn)\s+([A-Za-z_][A-Za-z0-9_]*)\s*\(([^)]*)\)\s*(?:->\s*([^\s{;]+))?/g)) {
     const name = match[3], start = match.index + match[0].indexOf(name);
-    add(name, 'function', start, { async: !!match[1], signature: `${match[1] ? 'async ' : ''}${name}${match[4] || ''}(${match[5].trim()})${match[6] ? ` -> ${match[6]}` : ''}`, parameters: parseParameters(match[5]), resultType: match[6] || 'void' });
+    add(name, 'function', start, { async: !!match[1], signature: `${match[1] ? 'async ' : ''}${name}(${match[4].trim()})${match[5] ? ` -> ${match[5]}` : ''}`, parameters: parseParameters(match[4]), resultType: match[5] || 'void' });
   }
-  for (const match of text.matchAll(/\b(object|struct|contract|enum)\s+([A-Za-z_][A-Za-z0-9_]*)/g)) {
+  for (const match of text.matchAll(/\b(object|struct|contract)\s+([A-Za-z_][A-Za-z0-9_]*)/g)) {
     const kind = match[1], name = match[2], start = match.index + match[0].lastIndexOf(name);
     add(name, kind, start);
     types.set(name, { name, kind, fields: [], methods: [], constructor: null, start });
@@ -227,16 +227,10 @@ function indexDocument(uri, text) {
       const field = { name: fieldName, kind: 'field', type: match[4], visibility: match[1] || (type.kind === 'object' ? 'private' : 'public'), mutable: !!match[2], uri, range: { start: positionAt(text, start), end: positionAt(text, start + fieldName.length) } };
       type.fields.push(field); symbols.push(field);
     }
-    for (const match of body.matchAll(/\b(public|private|protected)?\s*(async\s+)?fn\s+([A-Za-z_][A-Za-z0-9_]*)\s*(<[^>{}]*>)?\s*\(([^)]*)\)\s*(?:->\s*([^\s{;]+))?/g)) {
+    for (const match of body.matchAll(/\b(public|private|protected)?\s*(async\s+)?fn\s+([A-Za-z_][A-Za-z0-9_]*)\s*\(([^)]*)\)\s*(?:->\s*([^\s{;]+))?/g)) {
       const methodName = match[3], start = bodyOffset + match.index + match[0].indexOf(methodName);
-      const method = { name: methodName, kind: 'method', owner: name, async: !!match[2], visibility: match[1] || (type.kind === 'object' ? 'private' : 'public'), signature: `${match[2] ? 'async ' : ''}${methodName}${match[4] || ''}(${match[5].trim()})${match[6] ? ` -> ${match[6]}` : ''}`, parameters: parseParameters(match[5]), resultType: match[6] || 'void', uri, range: { start: positionAt(text, start), end: positionAt(text, start + methodName.length) } };
+      const method = { name: methodName, kind: 'method', owner: name, async: !!match[2], visibility: match[1] || (type.kind === 'object' ? 'private' : 'public'), signature: `${match[2] ? 'async ' : ''}${methodName}(${match[4].trim()})${match[5] ? ` -> ${match[5]}` : ''}`, parameters: parseParameters(match[4]), resultType: match[5] || 'void', uri, range: { start: positionAt(text, start), end: positionAt(text, start + methodName.length) } };
       type.methods.push(method); symbols.push(method);
-    }
-    if (type.kind === 'enum') {
-      for (const match of body.matchAll(/\b([A-Z][A-Za-z0-9_]*)\s*(?:\([^)]*\))?\s*(?:,|;|$)/gm)) {
-        const variantName = match[1], start = bodyOffset + match.index + match[0].indexOf(variantName);
-        symbols.push({ name: variantName, kind: 'enumMember', owner: name, uri, range: { start: positionAt(text, start), end: positionAt(text, start + variantName.length) } });
-      }
     }
     const init = /\b(public|private|protected)?\s*init\s*\(([^)]*)\)/g.exec(body);
     if (init) type.constructor = { name, signature: `${name}(${init[2].trim()})`, parameters: parseParameters(init[2]), resultType: name };
@@ -521,7 +515,7 @@ function semanticTokenData(document) {
     if (!range || range.start.line !== range.end.line) return;
     entries.push({ line: range.start.line, char: range.start.character, length: Math.max(1, range.end.character - range.start.character), type, modifiers });
   };
-  const kindMap = { object: 'class', struct: 'struct', contract: 'interface', enum: 'type', enumMember: 'enumMember', function: 'function', method: 'method', field: 'property', parameter: 'parameter', variable: 'variable', constant: 'variable' };
+  const kindMap = { object: 'class', struct: 'struct', contract: 'interface', function: 'function', method: 'method', field: 'property', parameter: 'parameter', variable: 'variable', constant: 'variable' };
   for (const symbol of index.symbols) {
     const typeName = kindMap[symbol.kind];
     if (typeName) { const modifiers = (symbol.kind === 'constant' ? (1 << 2) : (1 << 0)) | (symbol.async ? (1 << 6) : 0); addRange(symbol.range, tokenTypes.indexOf(typeName), modifiers); }

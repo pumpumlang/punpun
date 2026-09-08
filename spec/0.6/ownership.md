@@ -1,19 +1,22 @@
 # PunPun 0.6 ownership and destruction
 
+Status: implemented for the 0.6 beta vertical slice.
+
 ## Value categories
 
-Every type is either `Copy` or move-only.
+Every value is classified as `Copy`, shared-handle, borrowed, or move-only.
 
-- Primitive numbers, booleans and immutable safe references are `Copy`.
-- A struct is `Copy` only when every field is `Copy` and the type has no destructor.
-- Owned objects, buffers, strings and values with destructors are move-only.
-- Raw pointers are `Copy` but dereferencing them is unsafe.
+- Primitive numbers, booleans, strings, raw pointers and immutable safe references are `Copy`/borrow-like values for 0.6 purposes.
+- A value struct is `Copy` only when every field is `Copy` or a legacy shared handle.
+- Identity `object` values are move-only and receive deterministic lexical destruction.
+- `nums` remains the 0.5-compatible shared list handle in 0.6: ordinary assignment and parameter passing alias the same list. This is intentional source/behavior compatibility, not a claim that all future collections will be shared handles.
+- `move(value)` explicitly transfers a move-only value and may also explicitly end the source binding for a `nums` handle.
 
-Assignment and by-value parameter passing copy `Copy` values and move move-only values. `move(value)` remains accepted as explicit documentation but is not required when the context is unambiguously consuming.
+Future owned collection types may use move-by-default semantics without silently changing the legacy `nums` contract.
 
 ## Move-state analysis
 
-The compiler tracks each local as initialized, moved or maybe moved across control-flow joins. Reading, borrowing, moving or dropping a moved/maybe-moved value is rejected. A mutable local may become initialized again through whole-value assignment.
+The compiler tracks each local as initialized, moved or maybe moved across control-flow joins. Reading, borrowing, moving or dropping a moved/maybe-moved binding is rejected. A mutable local may become initialized again through whole-value assignment.
 
 Partial moves from fields and indexed elements are rejected in 0.6. This keeps destruction deterministic until field-level move paths are specified.
 
@@ -26,16 +29,16 @@ Partial moves from fields and indexed elements are rejected in 0.6. This keeps d
 - Async tasks cannot capture a non-static borrow in 0.6.
 - Raw pointers do not extend a lifetime and do not weaken safe-reference checks.
 
-The compiler may shorten a borrow to its last use. Diagnostics must identify the borrow creation, conflicting operation and later use.
+The checked `Slice<int>` view is non-owning. `view(nums, start, end)` ties the slice lifetime to its source list. While a named slice is live, moving or mutating that source through checked operations is rejected. `slice_len` and `slice_get` perform bounds-safe access.
 
-## Deterministic `Drop`
+## Deterministic `Drop` and lexical destruction
 
-Move-only locals that remain initialized are dropped exactly once in reverse declaration order at every normal scope exit, including `return`, `break` and `continue`. Fields are dropped in reverse declaration order after the type's own `drop` method runs.
+Move-only object locals that remain initialized are destroyed exactly once in reverse declaration order at normal scope exit, including normal `return`, `break`, and `continue` paths. Explicit `drop(value)` ends the binding lifetime immediately. Reinitializing a moved mutable binding creates a new lifetime.
 
-`drop(value)` ends the value's lifetime immediately and changes its state to moved. Destructors cannot be overloaded by return type, cannot be async, and cannot move `self` after field destruction begins.
+PunPun 0.6 aborts on panic and does not promise stack unwinding, so lexical destruction is guaranteed on normal control flow, not after an aborting panic.
 
-PunPun 0.6 aborts on panic and does not promise stack unwinding. Consequently, lexical destructors are guaranteed on normal control flow, not after an aborting panic. This limitation must remain visible in documentation.
+Custom user-defined destructor hooks are not part of the 0.6 beta grammar. The compiler/runtime currently perform structural/runtime destruction for supported owning values. User-defined destructor methods are later work and must not be inferred from this specification.
 
 ## Allocation policy
 
-Ownership is independent of allocator choice. Ordinary owned values use the runtime allocator; allocator parameters, arenas and placement APIs are later work. Reference counting is provided by explicit library types rather than being the default object model.
+Ownership is independent of allocator choice. Ordinary identity objects use the runtime allocator. Allocator parameters, arenas, placement APIs, owned generic collections, and reference-counted library types are later work.

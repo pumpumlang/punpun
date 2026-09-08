@@ -30,6 +30,13 @@ struct pp_numbers {
     struct pp_numbers *next;
 };
 
+struct pp_i64_slice {
+    pp_numbers *owner;
+    size_t start;
+    size_t length;
+    struct pp_i64_slice *next;
+};
+
 struct owned_text {
     char *value;
     struct owned_text *next;
@@ -56,6 +63,7 @@ struct pp_task {
 };
 
 static pp_numbers *owned_numbers;
+static pp_i64_slice *owned_slices;
 static struct owned_text *owned_strings;
 static struct owned_object *owned_objects;
 static pp_task *owned_tasks;
@@ -139,6 +147,11 @@ void pp_runtime_cleanup(void) {
         if (task == NULL) break;
         pp_task_join(task);
         free(task);
+    }
+    while (owned_slices != NULL) {
+        pp_i64_slice *next = owned_slices->next;
+        free(owned_slices);
+        owned_slices = next;
     }
     while (owned_numbers != NULL) {
         pp_numbers *next = owned_numbers->next;
@@ -287,6 +300,32 @@ void pp_sort(pp_numbers *numbers) {
     if (numbers == NULL) pp_panic("null numbers list");
     if (numbers->length > 1)
         qsort(numbers->values, numbers->length, sizeof(*numbers->values), compare_numbers);
+}
+
+pp_i64_slice *pp_numbers_view(pp_numbers *numbers, int64_t start, int64_t end) {
+    if (numbers == NULL) pp_panic("null numbers list");
+    if (start < 0 || end < start || (uintmax_t)end > (uintmax_t)numbers->length)
+        pp_panic("slice bounds out of range");
+    pp_i64_slice *slice = malloc(sizeof(*slice));
+    if (slice == NULL) pp_panic("out of memory");
+    *slice = (pp_i64_slice){.owner = numbers, .start = (size_t)start, .length = (size_t)(end - start)};
+    pp_lock_registry();
+    slice->next = owned_slices;
+    owned_slices = slice;
+    pp_unlock_registry();
+    return slice;
+}
+
+int64_t pp_slice_len_i64(pp_i64_slice *slice) {
+    if (slice == NULL) pp_panic("null slice");
+    return (int64_t)slice->length;
+}
+
+int64_t pp_slice_at_i64(pp_i64_slice *slice, int64_t index) {
+    if (slice == NULL) pp_panic("null slice");
+    if (index < 0 || (uintmax_t)index >= (uintmax_t)slice->length)
+        pp_panic("slice index out of bounds");
+    return pp_at(slice->owner, (int64_t)(slice->start + (size_t)index));
 }
 
 static char *own_text(char *value) {

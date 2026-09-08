@@ -1,3 +1,10 @@
+## 0.6.0-beta — 2026-09-08
+
+- Completed Steps 4–6: move-state/borrow analysis, checked slices, lexical object destruction, mandatory verified HIR/MIR, deterministic compiler fingerprints, release qualification and compatibility gates.
+- Added optional `--llvm-backend` and `emit-llvm` using Clang/LLVM after the shared PunPun frontend/MIR pipeline.
+- Preserved 0.5 `nums` shared-handle behavior while keeping explicit `move(nums)` available for binding-lifetime transfer.
+- Fixed Step 3 portable-backend match warnings, method-receiver ownership, minimum-int HIR typing, and regressions exposed by mandatory MIR verification.
+
 # Changelog
 
 ## PunPun 0.6 development — Steps 2 and 3
