@@ -28,9 +28,10 @@ usage:
   pp clean
   pp emit-tokens [file.pp] [-o output.txt]
   pp emit-ast    [file.pp] [-o output.txt]
+  pp emit-machine-ir [file.pp] [-o output.txt]
   pp emit-c      [file.pp] [-o output.c]
   pp emit-asm    [file.pp] [-o output.s]
-  pp ast|ir|asm  [file.pp]
+  pp ast|ir|machine-ir|asm  [file.pp]
   pp editor install-vscode
   pp lsp
   pp language-info
@@ -397,6 +398,7 @@ case "$command_name" in
         ;;
     ast) command_name=emit-ast ;;
     ir) command_name=emit-ir ;;
+    machine-ir) command_name=emit-machine-ir ;;
     asm) command_name=emit-asm ;;
     language-info)
         [ $# -eq 0 ] || { echo "pp: language-info accepts no arguments" >&2; exit 2; }
@@ -421,7 +423,7 @@ case "$command_name" in
         [ $# -eq 0 ] || { echo "pp: $command_name accepts no arguments" >&2; exit 2; }
         exec "$(compiler)" "package-$command_name"
         ;;
-    build|run|go|check|fmt|emit-tokens|emit-ast|emit-hir|emit-ir|emit-c|emit-asm)
+    build|run|go|check|fmt|emit-tokens|emit-ast|emit-hir|emit-ir|emit-machine-ir|emit-c|emit-asm)
         ;;
     *)
         echo "pp: unknown command '$command_name'" >&2

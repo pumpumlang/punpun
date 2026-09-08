@@ -20,6 +20,7 @@ python3 scripts/check_links.py README.md docs docs-site/content examples editors
 python3 docs-site/build.py
 python3 ppx-site/build.py
 python3 scripts/package_vsix.py
+./build/ppc emit-machine-ir main.pp
 ```
 
 Release assembly additionally requires Pillow because `scripts/build_brand.py` regenerates all PP raster/ICO assets from the canonical geometry before packaging.
@@ -31,8 +32,8 @@ A language feature is not complete at parsing. A normal vertical change should c
 1. syntax/parser;
 2. semantic/type checking;
 3. ownership/borrow behavior;
-4. HIR and MIR lowering/verification;
-5. every supported backend affected by the feature;
+4. HIR, MIR, and Machine IR lowering/verification where the feature reaches target code;
+5. every supported backend affected by the feature, consuming Machine IR rather than rebuilding ABI facts independently;
 6. diagnostics and negative cases;
 7. runnable tests/examples;
 8. specification and learning documentation.

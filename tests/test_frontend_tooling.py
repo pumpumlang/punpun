@@ -183,3 +183,38 @@ class HirTests(unittest.TestCase):
         self.assertIn("mir.func @sum8", mir.stdout)
         self.assertIn("liveness:", mir.stdout)
         self.assertRegex(mir.stdout, r"v\d+:int@(r1[0-5]|spill\[\d+\])")
+
+    def test_emit_machine_ir_has_explicit_abi_and_call_safe_allocation(self):
+        self.write("""
+            fn plus_one(value:i64) -> i64 { return value + 1; }
+            fn keep_across_call(value:i64) -> i64 {
+                return (value + 10) + plus_one(2);
+            }
+            launch { say(keep_across_call(5)); }
+        """)
+        machine = self.run_ppc("emit-machine-ir", "flow.pp")
+        self.assertEqual(machine.returncode, 0, machine.stderr)
+        self.assertIn("machine.target x86_64-sysv", machine.stdout)
+        self.assertIn("machine.func @keep_across_call cc=punpun-block", machine.stdout)
+        self.assertIn("arg0 value:int -> argblock+0 size=8", machine.stdout)
+        self.assertIn("call plus_one", machine.stdout)
+        self.assertIn("[cc=punpun-block args=8]", machine.stdout)
+        call_live_lines = [line for line in machine.stdout.splitlines() if "call-live=yes" in line]
+        self.assertTrue(call_live_lines, machine.stdout)
+        for line in call_live_lines:
+            self.assertNotRegex(line, r"-> (r10|r11|r8|r9|rcx|rdx|xmm\d+)$")
+
+    def test_machine_ir_spills_and_sizes_large_argument_block(self):
+        self.write("""
+            fn sum12(a:i64,b:i64,c:i64,d:i64,e:i64,f:i64,g:i64,h:i64,i:i64,j:i64,k:i64,l:i64) -> i64 {
+                return a+b+c+d+e+f+g+h+i+j+k+l;
+            }
+            launch { say(sum12(1,2,3,4,5,6,7,8,9,10,11,12)); }
+        """)
+        machine = self.run_ppc("emit-machine-ir", "flow.pp")
+        self.assertEqual(machine.returncode, 0, machine.stderr)
+        self.assertIn("machine.func @sum12 cc=punpun-block", machine.stdout)
+        self.assertIn("abi args=96 hidden-result=no", machine.stdout)
+        self.assertIn("arg11 l:int -> argblock+88 size=8", machine.stdout)
+        self.assertRegex(machine.stdout, r"frame slots=[1-9]\d* bytes=[1-9]\d*")
+        self.assertRegex(machine.stdout, r"v\d+:int@stack\[\d+\]")

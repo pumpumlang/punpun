@@ -141,7 +141,7 @@ static bool host_can_use_direct_x86_backend() {
 static void usage() {
     std::cerr
         << "PunPun compiler " PP_VERSION "\n\n"
-        << "usage: ppc <build|run|go|check|fmt|emit-tokens|emit-ast|emit-hir|emit-ir|emit-c|emit-asm|emit-llvm> <file.pp> [options] [-- args...]\n\n"
+        << "usage: ppc <build|run|go|check|fmt|emit-tokens|emit-ast|emit-hir|emit-ir|emit-machine-ir|emit-c|emit-asm|emit-llvm> <file.pp> [options] [-- args...]\n\n"
         << "options:\n"
         << "  -o <path>                    Output executable/source path\n"
         << "  -I <path>                    Add an import root (repeatable)\n"
@@ -631,6 +631,7 @@ int main(int argc, char **argv) {
         const std::string command = std::string(argv[1]) == "go" ? "run" : argv[1];
         if (command != "build" && command != "run" && command != "check" && command != "fmt" &&
             command != "emit-tokens" && command != "emit-ast" && command != "emit-hir" && command != "emit-ir" &&
+            command != "emit-machine-ir" &&
             command != "emit-c" && command != "emit-asm" && command != "emit-llvm") {
             usage();
             return 2;
@@ -696,7 +697,7 @@ int main(int argc, char **argv) {
         if (after_separator && command != "run") throw Error("error: program arguments require run or go");
         if (cc_backend && llvm_backend) throw Error("error: --cc-backend and --llvm-backend are mutually exclusive");
         if (llvm_backend && target == Target::WindowsX86_64)
-            throw Error("error: the LLVM compatibility backend is native-host only in PunPun 0.6 beta");
+            throw Error("error: the LLVM compatibility backend is currently native-host only");
         const std::string llvm_cc = env_or("PUNPUN_LLVM_CC", "clang");
         if ((llvm_backend || command == "emit-llvm") && !pptoolchain::available({llvm_cc}))
             throw Error("error: LLVM backend requires Clang; install clang or set PUNPUN_LLVM_CC");
@@ -812,7 +813,7 @@ int main(int argc, char **argv) {
             std::cerr << std::fixed << std::setprecision(3)
                       << "timing load+parse  " << milliseconds(load_started, load_finished) << " ms\n"
                       << "timing semantic    " << milliseconds(semantic_started, semantic_finished) << " ms\n"
-                      << "timing HIR+MIR     " << milliseconds(ir_started, ir_finished) << " ms\n";
+                      << "timing HIR+MIR+MIR2 " << milliseconds(ir_started, ir_finished) << " ms\n";
         };
 
         if (command == "check") {
@@ -829,10 +830,10 @@ int main(int argc, char **argv) {
             return 0;
         }
 
-        if (command == "emit-hir" || command == "emit-ir") {
-            const std::string dumped = command == "emit-ir"
-                ? ppmir::dump(pipeline.mir)
-                : pphir::dump(pipeline.hir);
+        if (command == "emit-hir" || command == "emit-ir" || command == "emit-machine-ir") {
+            const std::string dumped = command == "emit-machine-ir"
+                ? ppmachine::dump(pipeline.machine)
+                : (command == "emit-ir" ? ppmir::dump(pipeline.mir) : pphir::dump(pipeline.hir));
             if (!explicit_output) std::cout << dumped;
             else {
                 if (output.has_parent_path()) fs::create_directories(output.parent_path());
@@ -844,7 +845,7 @@ int main(int argc, char **argv) {
         }
 
         if (command == "emit-c") {
-            const std::string generated = CBackend(modules, pipeline.mir).generate();
+            const std::string generated = CBackend(modules, pipeline.machine).generate();
             if (!explicit_output) std::cout << generated;
             else {
                 if (output.has_parent_path()) fs::create_directories(output.parent_path());
@@ -859,7 +860,7 @@ int main(int argc, char **argv) {
         if (command == "emit-asm") {
             if (target == Target::WindowsX86_64)
                 throw Error("error: emit-asm currently supports the Linux x86-64 backend only");
-            const std::string generated = X86Backend(modules, pipeline.mir).generate();
+            const std::string generated = X86Backend(modules, pipeline.machine).generate();
             if (!explicit_output) std::cout << generated;
             else {
                 if (output.has_parent_path()) fs::create_directories(output.parent_path());
@@ -872,8 +873,8 @@ int main(int argc, char **argv) {
         }
 
         if (command == "emit-llvm") {
-            if (target == Target::WindowsX86_64) throw Error("error: emit-llvm is native-host only in PunPun 0.6 beta");
-            const std::string generated = CBackend(modules, pipeline.mir).generate();
+            if (target == Target::WindowsX86_64) throw Error("error: emit-llvm is currently native-host only");
+            const std::string generated = CBackend(modules, pipeline.machine).generate();
             TemporarySource c_source(".c");
             { std::ofstream stream(c_source.path); if (!stream) throw Error("error: cannot create temporary C file"); stream << generated; }
             TemporarySource llvm_output(".ll");
@@ -944,7 +945,7 @@ int main(int argc, char **argv) {
         const bool direct_native = !windows_target && !cc_backend && !llvm_backend && host_can_use_direct_x86_backend();
 
         if (direct_native) {
-            const std::string generated = X86Backend(modules, pipeline.mir).generate();
+            const std::string generated = X86Backend(modules, pipeline.machine).generate();
             temporary = std::make_unique<TemporarySource>(".s");
             std::ofstream stream(temporary->path);
             if (!stream) throw Error("error: cannot create temporary assembly file");
@@ -963,7 +964,7 @@ int main(int argc, char **argv) {
             build.push_back("-o");
             build.push_back(staged_output.staging_path.string());
         } else {
-            const std::string generated = CBackend(modules, pipeline.mir).generate();
+            const std::string generated = CBackend(modules, pipeline.machine).generate();
             temporary = std::make_unique<TemporarySource>(".c");
             std::ofstream stream(temporary->path);
             if (!stream) throw Error("error: cannot create temporary C file");

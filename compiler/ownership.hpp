@@ -268,7 +268,7 @@ class Analyzer {
             return;
         }
         if (expression.kind == Expr::Kind::Member || expression.kind == Expr::Kind::Index)
-            fail(token, "partial moves from fields and indexed elements are not supported in PunPun 0.6",
+            fail(token, "partial moves from fields and indexed elements are not supported in safe PunPun",
                  "move the whole owning value instead", "E0709");
         // A temporary owning expression is already uniquely owned by its consumer.
     }

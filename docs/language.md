@@ -1,4 +1,4 @@
-# PunPun 0.6 development language reference
+# PunPun 0.7 development language reference
 
 PunPun is a statically typed, ahead-of-time compiled language. The normal Linux
 x86-64 build uses the direct native backend; a portable C backend supports
@@ -155,21 +155,22 @@ server. See [injection/README.md](injection/README.md).
 ## Diagnostics and current boundaries
 
 The frontend uses source spans and stable diagnostic codes. `pp explain CODE`
-shows extended guidance. `pp emit-hir` and `pp emit-ir` expose typed HIR and MIR
-for compiler work.
+shows extended guidance. `pp emit-hir`, `pp emit-ir`, and `ppc emit-machine-ir` expose typed HIR, verified MIR, and target-aware Machine IR for compiler work.
 
 The distribution also includes a PunPun-written fixed-point compiler for the
 documented bootstrap subset. Run `make selfhost` or use
 `pp selfhost input.pp output.c`; see [`selfhost/README.md`](../selfhost/README.md).
 
-The 0.6 Steps 2 and 3 frontend executes inferred and explicit generic calls,
-deterministically monomorphizes generic types and methods, and checks algebraic
-enum patterns for reachability and exhaustiveness. Prelude `Option<T>` and
-`Result<T,E>` values support postfix `?`. The beta does not yet include
-contract-typed dynamic dispatch, automatic lexical destruction,
-closures/first-class functions, or a complete Machine IR code generator. The
-authoritative implementation matrix is in
-[`COMPLETION_REPORT.md`](../COMPLETION_REPORT.md).
+The 0.6 language foundation executes inferred and explicit generic calls,
+deterministically monomorphizes generic types and methods, checks algebraic
+enum patterns for reachability/exhaustiveness, and supports `Option<T>`,
+`Result<T,E>`, postfix `?`, ownership/borrow checks and lexical destruction for
+supported owning values. PunPun 0.7 development now includes a verified Machine
+IR foundation with explicit ABI and allocation metadata. Detailed direct-x86
+instruction selection is still being migrated from typed AST helpers into
+Machine IR during Step 7. Contract-typed dynamic dispatch and closures/first-
+class functions remain later work. The authoritative implementation matrix is
+in [`COMPLETION_REPORT.md`](../COMPLETION_REPORT.md).
 
 Normative 0.6 rules and implementation status are in [`spec/0.6/`](../spec/0.6/).
 
@@ -181,4 +182,4 @@ Identity objects are move-only. `move(value)` explicitly transfers a binding and
 
 ## Optional LLVM backend
 
-The default supported Linux x86-64 path is PunPun's direct backend. `--cc-backend` chooses portable C lowering. `--llvm-backend` chooses an optional Clang/LLVM path after the same parser, semantic analysis, ownership checks, typed HIR and verified MIR. `emit-llvm` writes inspectable LLVM IR. The 0.6 LLVM path is native-host only.
+The default supported Linux x86-64 path is PunPun's direct backend. `--cc-backend` chooses portable C lowering. `--llvm-backend` chooses an optional Clang/LLVM path after the same parser, semantic analysis, ownership checks, typed HIR, verified MIR and Machine IR authority chain. `emit-llvm` writes inspectable LLVM IR. The LLVM compatibility path remains native-host only for the currently supported development host.

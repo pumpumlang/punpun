@@ -1,3 +1,16 @@
+## 0.7.0-dev.1 — 2026-09-08
+
+- Started Step 7 with a verified target-aware Machine IR below MIR.
+- Added explicit PunPun argument-block and SysV AMD64 ABI descriptions.
+- Added record hidden-result-pointer layout and byte-accurate parameter offsets.
+- Added call-barrier-aware liveness and stronger linear-scan allocation with callee-saved placement, farthest-end eviction and spill slots.
+- Added Machine IR allocation/control-flow verification and `ppc emit-machine-ir`.
+- Direct x86-64 lowering now consumes Machine IR function/ABI authority; portable C emission is scheduled from the Machine IR function set.
+- Function body fingerprints now include Machine IR ABI/allocation identity as groundwork for granular incremental compilation.
+- Added Step 7 Machine IR specification and regression tests for ABI layout, call-live register safety and register-pressure spills.
+- Corrected the Arch workflow dependency from the Debian-style `libcurl` package name to Arch's `curl` package.
+- Kept beta.1 release promotion gated: a failed platform qualification remains a release blocker, not a fake success.
+
 ## 0.6.0-beta.1 — 2026-09-08
 
 - Canonicalized the new PP brand so Linux MIME icons, VS Code marketplace/file icons, favicons, social artwork and Windows ICOs are generated from one source.

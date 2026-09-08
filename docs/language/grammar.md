@@ -1,4 +1,4 @@
-# PunPun 0.6 development grammar overview
+# PunPun 0.7 development grammar overview
 
 PunPun 0.5 uses structured brace blocks and semicolon-terminated ordinary
 statements. During the beta the compiler can still parse the 0.4 migration

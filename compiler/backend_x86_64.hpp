@@ -2,9 +2,10 @@
 //
 // Emits GNU-assembler (Intel syntax) for System V AMD64 Linux and links against
 // the same native runtime used by the portable and LLVM paths. Parsing, semantic
-// analysis, ownership checks, typed HIR and verified MIR have already completed.
-// MIR is authoritative for the function set; typed source details remain available
-// for final 0.6 instruction/source-location lowering.
+// analysis, ownership checks, typed HIR, verified MIR and Machine IR have already completed.
+// Machine IR is authoritative for function scheduling, ABI layout and allocation
+// metadata. The 0.7 dev.1 emitter still consults typed source nodes for detailed
+// expression instruction selection while that final lowering boundary is migrated.
 //
 // Conventions
 // -----------
@@ -35,12 +36,13 @@
 #include "frontend.hpp"
 #include "builtins.hpp"
 #include "ownership.hpp"
-#include "mir.hpp"
+#include "machine_ir.hpp"
 
 class X86Backend {
   public:
-    explicit X86Backend(const std::vector<Module> &modules, const ppmir::Program &mir) : modules_(modules), mir_(mir) {
+    explicit X86Backend(const std::vector<Module> &modules, const ppmachine::Program &machine) : modules_(modules), machine_(machine) {
         for (const BuiltinSpec &builtin : punpun_builtins()) is_builtin_.insert(builtin.name);
+        for (const ppmachine::Function &function : machine_.functions) machine_functions_[function.name] = &function;
         for (const auto &module : modules_)
             for (const auto &shape : module.shapes) shapes_[shape.name] = &shape;
         for (const auto &module : modules_)
@@ -65,17 +67,20 @@ class X86Backend {
             text_ << ".file " << debug_id++ << " \"" << asm_escaped(key) << "\"\n";
         }
         text_ << ".text\n";
-        for (const ppmir::Function &mir_function : mir_.functions) {
-            if (mir_function.external_native) continue;
+        for (const ppmachine::Function &machine_function : machine_.functions) {
+            if (machine_function.external_native) continue;
             const Function *source = nullptr;
             for (const auto &module : modules_) {
                 for (const auto &function : module.functions) {
-                    if (function.name == mir_function.name) { source = &function; break; }
+                    if (function.name == machine_function.name) { source = &function; break; }
                 }
                 if (source) break;
             }
-            if (!source) internal("authoritative MIR references unknown function '" + mir_function.name + "'");
-            generate_function(*source);
+            if (!source) internal("authoritative Machine IR references unknown function '" + machine_function.name + "'");
+            if (can_generate_machine_body(*source, machine_function))
+                generate_machine_function(machine_function);
+            else
+                generate_function(*source, machine_function);
         }
         generate_entry();
         std::ostringstream out;
@@ -108,7 +113,8 @@ class X86Backend {
     };
 
     const std::vector<Module> &modules_;
-    const ppmir::Program &mir_;
+    const ppmachine::Program &machine_;
+    std::unordered_map<std::string, const ppmachine::Function *> machine_functions_;
     std::unordered_set<std::string> is_builtin_;
     std::unordered_map<std::string, const Shape *> shapes_;
     std::unordered_map<std::string, ShapeLayout> layouts_;
@@ -192,6 +198,13 @@ class X86Backend {
             }
         }
         return result;
+    }
+
+    const ppmachine::Function &machine_function(const std::string &name) const {
+        const auto found = machine_functions_.find(name);
+        if (found == machine_functions_.end())
+            internal("Machine IR has no function '" + name + "'");
+        return *found->second;
     }
 
     const ShapeLayout &layout(const std::string &name) {
@@ -325,8 +338,351 @@ class X86Backend {
         drop_scopes_.back().push_back(variable);
     }
 
+    // -- Machine-IR body emission -------------------------------------------
+    // Step 7.2 migrates ordinary scalar/control-flow functions off the typed
+    // source AST. The selection predicate is intentionally conservative:
+    // unsupported aggregate/ownership/short-circuit operations stay on the
+    // legacy emitter until their semantics are explicit in Machine IR.
+    static bool machine_scalar_type(const Type &type) {
+        return type == Type::Int || type == Type::Float || type == Type::Bool ||
+               type == Type::Str || type == Type::Void;
+    }
+
+    static void collect_declared_names(const std::vector<Stmt> &statements,
+                                       std::unordered_set<std::string> &names,
+                                       bool &duplicate) {
+        for (const Stmt &statement : statements) {
+            if (statement.kind == Stmt::Kind::Variable || statement.kind == Stmt::Kind::Each) {
+                if (!names.insert(statement.name).second) duplicate = true;
+            }
+            collect_declared_names(statement.body, names, duplicate);
+            collect_declared_names(statement.alternative, names, duplicate);
+        }
+    }
+
+    bool can_generate_machine_body(const Function &source,
+                                   const ppmachine::Function &function) const {
+        if (source.is_async || function.is_async || function.external_native) return false;
+        if (!machine_scalar_type(function.result) || function.abi.hidden_result_pointer) return false;
+        if (function.abi.convention != ppmachine::CallingConvention::PunPunBlock) return false;
+        for (const auto &[name, type] : function.parameters) {
+            (void)name;
+            if (!machine_scalar_type(type) || type == Type::Void) return false;
+        }
+
+        // HIR still exposes source storage names. Reject lexical shadowing until
+        // canonical binding IDs move into the IR, otherwise two bindings with
+        // the same spelling could accidentally share a machine local.
+        std::unordered_set<std::string> declared;
+        for (const Parameter &parameter : source.parameters) declared.insert(parameter.name);
+        bool duplicate = false;
+        collect_declared_names(source.body, declared, duplicate);
+        if (duplicate) return false;
+
+        std::unordered_map<ppmachine::VReg, Type> types;
+        for (const auto &block : function.blocks) {
+            for (const auto &instruction : block.instructions) {
+                if (instruction.result != ppmachine::NoValue) types[instruction.result] = instruction.type;
+                if (!machine_scalar_type(instruction.type)) return false;
+                switch (instruction.op) {
+                    case pphir::Op::Parameter:
+                    case pphir::Op::Constant:
+                    case pphir::Op::Load:
+                    case pphir::Op::Store:
+                    case pphir::Op::Unary:
+                    case pphir::Op::Binary:
+                    case pphir::Op::Say:
+                        break;
+                    case pphir::Op::Call:
+                        if (!instruction.call.known_function ||
+                            instruction.call.convention != ppmachine::CallingConvention::PunPunBlock ||
+                            instruction.call.hidden_result_pointer)
+                            return false;
+                        for (const auto &argument : instruction.call.arguments)
+                            if (!machine_scalar_type(argument.type) || argument.type == Type::Void) return false;
+                        if (!machine_scalar_type(instruction.call.result.type)) return false;
+                        break;
+                    default:
+                        return false;
+                }
+                if (instruction.op == pphir::Op::Binary &&
+                    (instruction.detail == "and" || instruction.detail == "or"))
+                    return false;
+                for (ppmachine::VReg operand : instruction.operands) {
+                    const auto found = types.find(operand);
+                    if (found == types.end() || !machine_scalar_type(found->second)) return false;
+                }
+            }
+        }
+        return true;
+    }
+
+    struct MachineFramePlan {
+        int64_t frame = 0;
+        int64_t args_pointer = 0;
+        int64_t call_area = 0;
+        std::size_t call_area_size = 0;
+        std::unordered_map<ppmachine::VReg, int64_t> values;
+        std::unordered_map<std::string, int64_t> locals;
+        std::unordered_map<ppmachine::VReg, Type> types;
+        std::unordered_map<ppmachine::VReg, std::string> integer_constants;
+    };
+
+    static int64_t plan_alloc(MachineFramePlan &plan, std::size_t bytes) {
+        const std::size_t aligned = (bytes + 7) / 8 * 8;
+        plan.frame += static_cast<int64_t>(aligned);
+        return -plan.frame;
+    }
+
+    MachineFramePlan plan_machine_frame(const ppmachine::Function &function) {
+        MachineFramePlan plan;
+        plan.args_pointer = plan_alloc(plan, 8);
+        for (const auto &block : function.blocks) {
+            for (const auto &instruction : block.instructions) {
+                if (instruction.result != ppmachine::NoValue) {
+                    plan.values[instruction.result] = plan_alloc(plan, 8);
+                    plan.types[instruction.result] = instruction.type;
+                    if (instruction.op == pphir::Op::Constant && instruction.type == Type::Int)
+                        plan.integer_constants[instruction.result] = instruction.detail;
+                }
+                if (instruction.op == pphir::Op::Store && !plan.locals.count(instruction.detail))
+                    plan.locals[instruction.detail] = plan_alloc(plan, 8);
+                if (instruction.op == pphir::Op::Call && instruction.call.known_function)
+                    plan.call_area_size = std::max(plan.call_area_size, instruction.call.argument_block_size);
+            }
+        }
+        if (plan.call_area_size != 0) plan.call_area = plan_alloc(plan, plan.call_area_size);
+        return plan;
+    }
+
+    void machine_load(const MachineFramePlan &plan, ppmachine::VReg value, const std::string &reg) {
+        const auto found = plan.values.find(value);
+        if (found == plan.values.end()) internal("Machine IR value has no frame home");
+        emit("mov " + reg + ", " + mem_rbp(found->second));
+    }
+
+    void machine_store(const MachineFramePlan &plan, ppmachine::VReg value, const std::string &reg = "rax") {
+        const auto found = plan.values.find(value);
+        if (found == plan.values.end()) internal("Machine IR value has no frame home");
+        emit("mov " + mem_rbp(found->second) + ", " + reg);
+    }
+
+    Type machine_value_type(const MachineFramePlan &plan, ppmachine::VReg value) const {
+        const auto found = plan.types.find(value);
+        if (found == plan.types.end()) internal("Machine IR value has no type");
+        return found->second;
+    }
+
+    void emit_machine_constant(const ppmachine::Instruction &instruction,
+                               const MachineFramePlan &plan) {
+        if (instruction.type == Type::Int) {
+            unsigned long long bits = 0;
+            try {
+                if (!instruction.detail.empty() && instruction.detail.front() == '-')
+                    bits = static_cast<unsigned long long>(std::stoll(instruction.detail));
+                else
+                    bits = std::stoull(instruction.detail);
+            } catch (...) {
+                internal("invalid integer constant reached Machine IR x86 lowering");
+            }
+            emit("movabs rax, " + hex_u64(static_cast<uint64_t>(bits)));
+        } else if (instruction.type == Type::Float) {
+            const double value = std::stod(instruction.detail);
+            uint64_t bits = 0;
+            std::memcpy(&bits, &value, sizeof(bits));
+            emit("movabs rax, " + hex_u64(bits));
+        } else if (instruction.type == Type::Bool) {
+            if (instruction.detail == "yes") emit("mov eax, 1");
+            else emit("xor eax, eax");
+        } else if (instruction.type == Type::Str) {
+            emit("lea rax, [rip + " + add_string(instruction.detail) + "]");
+        } else internal("unsupported Machine IR constant type");
+        machine_store(plan, instruction.result);
+    }
+
+    void emit_machine_unary(const ppmachine::Instruction &instruction,
+                            const MachineFramePlan &plan) {
+        machine_load(plan, instruction.operands.at(0), "rax");
+        const Type operand = machine_value_type(plan, instruction.operands.at(0));
+        if (instruction.detail == "not") emit("xor rax, 1");
+        else if (instruction.detail == "~") emit("not rax");
+        else if (instruction.detail == "-") {
+            if (operand == Type::Int) {
+                const auto literal = plan.integer_constants.find(instruction.operands.at(0));
+                if (literal == plan.integer_constants.end() || literal->second != "9223372036854775808") {
+                    emit("mov rdi, rax");
+                    emit("call pp_neg_i64@PLT");
+                }
+            }
+            else if (operand == Type::Float) { emit("movabs rdi, 0x8000000000000000"); emit("xor rax, rdi"); }
+            else internal("invalid unary minus in Machine IR");
+        } else internal("unsupported Machine IR unary operation '" + instruction.detail + "'");
+        machine_store(plan, instruction.result);
+    }
+
+    void emit_machine_binary(const ppmachine::Instruction &instruction,
+                             const MachineFramePlan &plan) {
+        const auto left_value = instruction.operands.at(0);
+        const auto right_value = instruction.operands.at(1);
+        const Type left = machine_value_type(plan, left_value);
+        const Type right = machine_value_type(plan, right_value);
+        const std::string &op = instruction.detail;
+        machine_load(plan, left_value, "rax");
+        machine_load(plan, right_value, "rdi");
+
+        if (op == "==" || op == "!=") {
+            if (left == Type::Str) {
+                emit("mov rsi, rdi"); emit("mov rdi, rax"); emit("call pp_str_eq@PLT");
+                if (op == "!=") emit("xor rax, 1");
+            } else if (left == Type::Float && right == Type::Float) {
+                emit("movq xmm0, rax"); emit("movq xmm1, rdi"); emit("ucomisd xmm0, xmm1");
+                if (op == "==") { emit("sete al"); emit("setnp dil"); emit("and al, dil"); }
+                else { emit("setne al"); emit("setp dil"); emit("or al, dil"); }
+                emit("movzx eax, al");
+            } else {
+                emit("cmp rax, rdi"); emit(op == "==" ? "sete al" : "setne al"); emit("movzx eax, al");
+            }
+            machine_store(plan, instruction.result); return;
+        }
+        if (op == "<" || op == "<=" || op == ">" || op == ">=") {
+            if (left == Type::Float && right == Type::Float) {
+                emit("movq xmm0, rax"); emit("movq xmm1, rdi");
+                if (op == "<") { emit("ucomisd xmm1, xmm0"); emit("seta al"); }
+                else if (op == "<=") { emit("ucomisd xmm1, xmm0"); emit("setae al"); }
+                else if (op == ">") { emit("ucomisd xmm0, xmm1"); emit("seta al"); }
+                else { emit("ucomisd xmm0, xmm1"); emit("setae al"); }
+                emit("movzx eax, al");
+            } else {
+                emit("cmp rax, rdi");
+                if (op == "<") emit("setl al"); else if (op == "<=") emit("setle al");
+                else if (op == ">") emit("setg al"); else emit("setge al");
+                emit("movzx eax, al");
+            }
+            machine_store(plan, instruction.result); return;
+        }
+        if (left == Type::Int && right == Type::Int) {
+            if (op == "&" || op == "|" || op == "^")
+                emit(std::string(op == "&" ? "and" : op == "|" ? "or" : "xor") + " rax, rdi");
+            else if (op == "<<" || op == ">>") {
+                emit("mov rcx, rdi"); emit(std::string(op == "<<" ? "shl" : "sar") + " rax, cl");
+            } else {
+                emit("mov rsi, rdi"); emit("mov rdi, rax");
+                static const std::unordered_map<std::string, std::string> ops = {
+                    {"+", "pp_add_i64"}, {"-", "pp_sub_i64"}, {"*", "pp_mul_i64"},
+                    {"/", "pp_div_i64"}, {"%", "pp_mod_i64"}};
+                const auto found = ops.find(op);
+                if (found == ops.end()) internal("unsupported integer Machine IR binary operation '" + op + "'");
+                emit("call " + found->second + "@PLT");
+            }
+        } else if (left == Type::Str && right == Type::Str && op == "+") {
+            emit("mov rsi, rdi"); emit("mov rdi, rax"); emit("call pp_concat@PLT");
+        } else if (left == Type::Float && right == Type::Float) {
+            emit("movq xmm0, rax"); emit("movq xmm1, rdi");
+            if (op == "+") emit("addsd xmm0, xmm1"); else if (op == "-") emit("subsd xmm0, xmm1");
+            else if (op == "*") emit("mulsd xmm0, xmm1"); else if (op == "/") emit("divsd xmm0, xmm1");
+            else internal("unsupported float Machine IR binary operation '" + op + "'");
+            emit("movq rax, xmm0");
+        } else internal("unsupported Machine IR binary operand types");
+        machine_store(plan, instruction.result);
+    }
+
+    void emit_machine_call(const ppmachine::Instruction &instruction,
+                           const MachineFramePlan &plan) {
+        if (instruction.operands.size() != instruction.call.arguments.size())
+            internal("Machine IR call argument count mismatch");
+        for (std::size_t i = 0; i < instruction.operands.size(); ++i) {
+            const auto &argument = instruction.call.arguments[i];
+            if (argument.location.kind != ppmachine::AbiLocationKind::ArgumentBlock)
+                internal("PunPun call argument is not in argument block");
+            machine_load(plan, instruction.operands[i], "rax");
+            emit("mov " + mem_rbp(plan.call_area + static_cast<int64_t>(argument.location.offset)) + ", rax");
+        }
+        if (instruction.call.argument_block_size == 0) emit("xor edi, edi");
+        else emit("lea rdi, " + mem_rbp(plan.call_area));
+        emit("call " + function_symbol(instruction.detail));
+        if (instruction.result != ppmachine::NoValue) machine_store(plan, instruction.result);
+    }
+
+    void emit_machine_instruction(const ppmachine::Instruction &instruction,
+                                  const ppmachine::Function &function,
+                                  const MachineFramePlan &plan) {
+        debug_location(instruction.token);
+        switch (instruction.op) {
+            case pphir::Op::Parameter: {
+                std::size_t parameter = function.parameters.size();
+                for (std::size_t i = 0; i < function.parameters.size(); ++i)
+                    if (function.parameters[i].first == instruction.detail) { parameter = i; break; }
+                if (parameter == function.parameters.size()) internal("unknown Machine IR parameter '" + instruction.detail + "'");
+                const auto &abi = function.abi.parameters.at(parameter);
+                emit("mov rax, " + mem_rbp(plan.args_pointer));
+                emit("mov rax, " + mem("rax", static_cast<int64_t>(abi.location.offset)));
+                machine_store(plan, instruction.result); return;
+            }
+            case pphir::Op::Constant: emit_machine_constant(instruction, plan); return;
+            case pphir::Op::Load: {
+                const auto found = plan.locals.find(instruction.detail);
+                if (found == plan.locals.end()) internal("Machine IR load references unknown local '" + instruction.detail + "'");
+                emit("mov rax, " + mem_rbp(found->second)); machine_store(plan, instruction.result); return;
+            }
+            case pphir::Op::Store: {
+                const auto found = plan.locals.find(instruction.detail);
+                if (found == plan.locals.end()) internal("Machine IR store references unknown local '" + instruction.detail + "'");
+                machine_load(plan, instruction.operands.at(0), "rax"); emit("mov " + mem_rbp(found->second) + ", rax"); return;
+            }
+            case pphir::Op::Call: emit_machine_call(instruction, plan); return;
+            case pphir::Op::Unary: emit_machine_unary(instruction, plan); return;
+            case pphir::Op::Binary: emit_machine_binary(instruction, plan); return;
+            case pphir::Op::Say: {
+                const auto value = instruction.operands.at(0);
+                const Type type = machine_value_type(plan, value);
+                machine_load(plan, value, "rax");
+                if (type == Type::Float) { emit("movq xmm0, rax"); emit("call pp_println_float@PLT"); }
+                else if (type == Type::Bool) { emit("mov rdi, rax"); emit("call pp_println_bool@PLT"); }
+                else if (type == Type::Str) { emit("mov rdi, rax"); emit("call pp_println_str@PLT"); }
+                else { emit("mov rdi, rax"); emit("call pp_println_int@PLT"); }
+                return;
+            }
+            default: internal("unsupported operation reached Machine IR body emitter");
+        }
+    }
+
+    void generate_machine_function(const ppmachine::Function &function) {
+        MachineFramePlan plan = plan_machine_frame(function);
+        body_.str(""); body_.clear(); ret_label_ = new_label();
+        const int64_t frame_size = align_up(plan.frame, 16);
+        const std::string symbol = function_symbol(function.name);
+        text_ << "# body-lowering: machine-ir @" << function.name << "\n";
+        text_ << ".type " << symbol << ", @function\n" << symbol << ":\n";
+        text_ << "    push rbp\n    mov rbp, rsp\n    sub rsp, " << frame_size << "\n";
+        text_ << "    mov " << mem_rbp(plan.args_pointer) << ", rdi\n";
+        for (const auto &block : function.blocks) {
+            const std::string block_label = ".Lmir_" + function_symbol(function.name) + "_bb" + std::to_string(block.id);
+            body_ << block_label << ":\n";
+            for (const auto &instruction : block.instructions) emit_machine_instruction(instruction, function, plan);
+            const auto &term = block.terminator;
+            if (term.kind == pphir::Terminator::Kind::Jump)
+                emit("jmp .Lmir_" + function_symbol(function.name) + "_bb" + std::to_string(term.first));
+            else if (term.kind == pphir::Terminator::Kind::Branch) {
+                machine_load(plan, term.value, "rax"); emit("cmp rax, 0");
+                emit("jne .Lmir_" + function_symbol(function.name) + "_bb" + std::to_string(term.first));
+                emit("jmp .Lmir_" + function_symbol(function.name) + "_bb" + std::to_string(term.second));
+            } else if (term.kind == pphir::Terminator::Kind::Return) {
+                if (term.value != ppmachine::NoValue) machine_load(plan, term.value, "rax");
+                emit("jmp " + ret_label_);
+            } else if (term.kind == pphir::Terminator::Kind::Unreachable) emit("ud2");
+            else internal("unterminated Machine IR block reached x86 body emitter");
+        }
+        text_ << body_.str() << ret_label_ << ":\n    leave\n    ret\n";
+        text_ << "    .size " << symbol << ", .-" << symbol << "\n";
+    }
+
     // -- function emission --------------------------------------------------
-    void generate_function(const Function &function) {
+    void generate_function(const Function &function, const ppmachine::Function &machine_function) {
+        if (machine_function.abi.convention != ppmachine::CallingConvention::PunPunBlock)
+            internal("non-native PunPun function reached x86 emitter with wrong Machine IR calling convention");
+        if (machine_function.abi.parameters.size() != function.parameters.size())
+            internal("Machine IR/source parameter count mismatch for '" + function.name + "'");
+
         frame_ = 0;
         scopes_.clear();
         drop_scopes_.clear();
@@ -336,14 +692,18 @@ class X86Backend {
         body_.str("");
         body_.clear();
         current_result_ = function.result;
-        result_is_record_ = is_record(function.result);
+        result_is_record_ = machine_function.abi.hidden_result_pointer;
         args_ptr_off_ = alloc(8);
         ret_label_ = new_label();
 
-        int64_t block_offset = result_is_record_ ? 8 : 0;
-        for (const auto &parameter : function.parameters) {
-            scopes_.back()[parameter.name] = {parameter.type, block_offset, true, 0};
-            block_offset += type_size(parameter.type);
+        for (std::size_t i = 0; i < function.parameters.size(); ++i) {
+            const auto &parameter = function.parameters[i];
+            const auto &abi_parameter = machine_function.abi.parameters[i];
+            if (abi_parameter.location.kind != ppmachine::AbiLocationKind::ArgumentBlock)
+                internal("PunPun parameter is not in Machine IR argument block for '" + function.name + "'");
+            scopes_.back()[parameter.name] = {
+                parameter.type, static_cast<int64_t>(abi_parameter.location.offset), true, 0
+            };
         }
 
         for (std::size_t i = 0; i < function.parameters.size(); ++i) {
@@ -356,6 +716,7 @@ class X86Backend {
 
         const int64_t frame_size = align_up(frame_, 16);
         const std::string symbol = function_symbol(function.name);
+        text_ << "# body-lowering: legacy-source @" << function.name << "\n";
         text_ << ".type " << symbol << ", @function\n";
         text_ << symbol << ":\n";
         text_ << "    push rbp\n";
@@ -1091,19 +1452,18 @@ class X86Backend {
         const int64_t object_slot = alloc(8);
         emit("mov " + mem_rbp(object_slot) + ", rax");
         if (!definition->initializer_name.empty()) {
-            const Signature &signature = user_signatures_.at(definition->initializer_name);
-            int64_t block_size = 0;
-            std::vector<int64_t> offsets;
-            for (const Type &parameter : signature.parameters) {
-                offsets.push_back(block_size);
-                block_size += type_size(parameter);
-            }
+            const ppmachine::Function &machine = machine_function(definition->initializer_name);
+            if (machine.abi.convention != ppmachine::CallingConvention::PunPunBlock)
+                internal("initializer has non-PunPun Machine IR ABI");
+            if (machine.abi.parameters.size() != expression.children.size() + 1)
+                internal("initializer Machine IR ABI parameter mismatch");
+            const int64_t block_size = static_cast<int64_t>(machine.abi.argument_block_size);
             const int64_t block_off = alloc(align_up(block_size, 8));
             emit("mov rax, " + mem_rbp(object_slot));
-            emit("mov " + mem_rbp(block_off + offsets[0]) + ", rax");
+            emit("mov " + mem_rbp(block_off + static_cast<int64_t>(machine.abi.parameters[0].location.offset)) + ", rax");
             for (size_t i = 0; i < expression.children.size(); ++i) {
                 const Type value_type = gen_expression(*expression.children[i]);
-                const int64_t destination = block_off + offsets[i + 1];
+                const int64_t destination = block_off + static_cast<int64_t>(machine.abi.parameters[i + 1].location.offset);
                 if (is_record(value_type)) {
                     emit("mov rsi, rax");
                     copy_rsi_to_frame(destination, type_size(value_type));
@@ -1118,17 +1478,26 @@ class X86Backend {
 
     Type gen_native_call(const Expr &expression) {
         const Signature &signature = user_signatures_.at(expression.value);
-        static const char *registers[] = {"rdi", "rsi", "rdx", "rcx", "r8", "r9"};
-        if (expression.children.size() > 6) internal("extern native call exceeded current scalar SysV argument limit");
+        const ppmachine::Function &machine = machine_function(expression.value);
+        if (machine.abi.convention != ppmachine::CallingConvention::SysVAMD64)
+            internal("extern native function has non-SysV Machine IR ABI");
+        if (machine.abi.parameters.size() != expression.children.size())
+            internal("extern native Machine IR ABI parameter mismatch");
         std::vector<int64_t> slots;
         for (const auto &child : expression.children) {
             const Type type = gen_expression(*child);
-            if (is_record(type) || type == Type::Float) internal("unsupported direct native ABI value after semantic analysis");
+            if (is_record(type) || type == Type::Float)
+                internal("unsupported direct native ABI value after semantic analysis");
             const int64_t slot = alloc(8);
             emit("mov " + mem_rbp(slot) + ", rax");
             slots.push_back(slot);
         }
-        for (std::size_t i = 0; i < slots.size(); ++i) emit(std::string("mov ") + registers[i] + ", " + mem_rbp(slots[i]));
+        for (std::size_t i = 0; i < slots.size(); ++i) {
+            const auto &location = machine.abi.parameters[i].location;
+            if (location.kind != ppmachine::AbiLocationKind::Register || location.name.empty())
+                internal("direct x86 native call requires register-passed scalar ABI arguments");
+            emit("mov " + location.name + ", " + mem_rbp(slots[i]));
+        }
         emit("call " + native_symbols_.at(expression.value) + "@PLT");
         if (signature.result == Type::Bool) emit("movzx eax, al");
         return signature.result;
@@ -1136,14 +1505,14 @@ class X86Backend {
 
     Type gen_user_call(const Expr &expression) {
         const Signature &signature = user_signatures_.at(expression.value);
-        const bool returns_record = is_record(signature.result);
+        const ppmachine::Function &machine = machine_function(expression.value);
+        if (machine.abi.convention != ppmachine::CallingConvention::PunPunBlock)
+            internal("user function has non-PunPun Machine IR ABI");
+        if (machine.abi.parameters.size() != expression.children.size())
+            internal("user call Machine IR ABI parameter mismatch");
 
-        int64_t block_size = returns_record ? 8 : 0;
-        std::vector<int64_t> offsets;
-        for (const Type &parameter : signature.parameters) {
-            offsets.push_back(block_size);
-            block_size += type_size(parameter);
-        }
+        const bool returns_record = machine.abi.hidden_result_pointer;
+        const int64_t block_size = static_cast<int64_t>(machine.abi.argument_block_size);
 
         int64_t dest_slot = 0;
         if (returns_record) dest_slot = alloc(type_size(signature.result));
@@ -1151,13 +1520,18 @@ class X86Backend {
         if (block_size > 0) block_off = alloc(align_up(block_size, 8));
 
         if (returns_record) {
+            if (machine.abi.result.location.kind != ppmachine::AbiLocationKind::HiddenResultPointer)
+                internal("record-returning user function lacks Machine IR hidden result pointer");
             emit("lea rax, " + mem_rbp(dest_slot));
-            emit("mov " + mem_rbp(block_off) + ", rax");
+            emit("mov " + mem_rbp(block_off + static_cast<int64_t>(machine.abi.result.location.offset)) + ", rax");
         }
         for (size_t i = 0; i < expression.children.size(); ++i) {
             const Type value_type = gen_expression(*expression.children[i]);
             const Type expected = signature.parameters[i];
-            const int64_t destination = block_off + offsets[i];
+            const auto &parameter_abi = machine.abi.parameters[i];
+            if (parameter_abi.location.kind != ppmachine::AbiLocationKind::ArgumentBlock)
+                internal("user-call parameter is not in Machine IR argument block");
+            const int64_t destination = block_off + static_cast<int64_t>(parameter_abi.location.offset);
             if (is_reference_type(expected) && is_record(value_type)) {
                 // Record expressions already produce their address. A method
                 // self-reference therefore costs one pointer store, not a copy.

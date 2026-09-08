@@ -48,7 +48,7 @@ jobs:
       - name: Refresh keys and install build tools
         run: |
           pacman -Sy --noconfirm archlinux-keyring
-          pacman -Syu --noconfirm --needed base-devel gcc python python-pillow nodejs zstd libcurl git sudo
+          pacman -Syu --noconfirm --needed base-devel gcc python python-pillow nodejs zstd curl git sudo
       - uses: actions/checkout@v7
       - name: Read release version
         run: echo "PUNPUN_VERSION=$(tr -d '\r\n' < VERSION)" >> "$GITHUB_ENV"

@@ -20,27 +20,59 @@ The normative 0.6 decisions live in [`spec/0.6/`](spec/0.6/). Platform-specific 
 
 - **Direct PunPun x86-64:** default Linux x86-64 path and the project-owned native backend.
 - **Portable C:** `--cc-backend`, useful for portability/toolchain integration.
-- **Optional LLVM:** `--llvm-backend` uses Clang/LLVM after the same PunPun parser, semantic, ownership, HIR and MIR pipeline. `emit-llvm` exposes generated LLVM IR. In 0.6 this path is native-host only.
+- **Optional LLVM:** `--llvm-backend` uses Clang/LLVM after the same PunPun parser, semantic, ownership, HIR and MIR pipeline. In 0.6 this path is native-host only.
 
 LLVM is an alternative code-generation path, not a replacement parser/type checker and not the ordinary PunPun compilation pipeline.
 
-## Pre-Step-7 quality gate
+## 0.6.0-beta.1 release-hardening status
 
-`0.6.0-beta.1` is the cleanup/qualification candidate between Step 6 and Step 7. It canonicalizes the PP brand, rejects source/release debris, fixes packaging metadata, adds continuous CI and governance files, repairs platform setup, and changes publication to **build → qualify → promote**. Step 7 does not begin until the candidate's Linux, Arch and Windows qualification jobs are green.
+`0.6.0-beta.1` repaired the PP brand pipeline, source/release hygiene, package metadata, continuous CI, governance files and build → qualify → promote publishing gate. Its source is the clean baseline for 0.7 development.
+
+The beta.1 promotion gate is intentionally separate from compiler development. The first Arch qualification attempt failed before package qualification completed, so beta.1 must not be described as fully platform-qualified. The release publisher correctly blocks promotion when any required platform job fails. Development may continue on `main` while that platform-specific release issue is repaired; release claims remain conservative.
 
 ## Step 7 / PunPun 0.7 — compiler scalability and backend maturity
 
-Step 7 is now formally defined as the 0.7 architecture milestone:
+Step 7 is the 0.7 architecture milestone.
 
-1. introduce Machine IR below verified MIR;
-2. define explicit ABI lowering into Machine IR;
-3. make native backends consume Machine IR rather than source-detail escape hatches;
-4. strengthen register allocation and spill handling;
-5. deepen optimization with correctness-first verification;
-6. add function/module-granular incremental compilation with dependency fingerprints;
-7. improve diagnostics/fix-its, module/API visibility, FFI/ABI documentation, formatter/linter gates, and PPX reproducibility without destabilizing core semantics.
+### Phase 7.1 — Machine IR and explicit ABI (`0.7.0-dev.1`) — complete
 
-The acceptance gate for Step 7 includes deterministic brand generation, debris-free source archives, green fast CI, green Linux/Arch/Windows qualification, exact release provenance, and publication blocked on failed qualification.
+- Introduced verified target-aware **Machine IR** below MIR (`compiler/machine_ir.hpp`).
+- Added explicit PunPun argument-block and SysV AMD64 ABI descriptions for parameters and return values.
+- Added record-return hidden-result-pointer layout and byte-accurate PunPun argument-block offsets.
+- Added call-barrier-aware liveness and a stronger linear-scan allocator with callee-saved register preference for call-live values, farthest-end eviction and spill slots.
+- Added Machine IR allocation verification for overlapping registers/stack slots, invalid block targets, call-clobber violations and frame alignment.
+- Direct x86-64 emission now consumes Machine IR as the function/ABI authority rather than recomputing PunPun call layouts independently.
+- Portable C emission is scheduled from the authoritative Machine IR function set.
+- Added `ppc emit-machine-ir <file.pp>` for inspectable ABI/allocation output.
+- Function body fingerprints now include Machine IR ABI/allocation identity, preparing granular incremental compilation for later Step 7 phases.
+
+### Phase 7.2 — complete backend decoupling — next
+
+- Move remaining direct x86 instruction selection from typed AST/source-detail helpers into Machine IR operations.
+- Make Machine IR the sole backend body representation for ordinary PunPun functions.
+- Add explicit machine-level copies, loads/stores, call argument moves, spill/reload pseudos and lowered control-flow edges where required.
+- Keep portable C/LLVM semantics on the same verified program authority while avoiding a second semantic implementation.
+
+### Phase 7.3 — granular incremental compilation
+
+- Persist function/module dependency fingerprints rather than only whole-program executable fingerprints.
+- Rebuild only invalidated functions/modules and reuse stable native objects where safe.
+- Surface precise cache reasons in `--cache-info` and rebuilt/reused counts in `--stats`.
+- Keep toolchain, ABI, runtime, target and optimization configuration in cache identity.
+
+### Phase 7.4 — optimizer and allocation maturity
+
+- Add Machine IR copy propagation, dead-move elimination and branch cleanup with verifier checks between passes.
+- Improve spill/reload placement and stack-slot reuse.
+- Add call-aware register constraints and explicit callee-save emission once Machine IR drives final instruction emission.
+- Expand correctness tests under high register pressure, loops, calls, records and async boundaries.
+
+### Phase 7.5 — everyday compiler ergonomics
+
+- Richer diagnostics and machine-applicable fix-its.
+- Module/API visibility hardening and stable FFI/ABI documentation.
+- Formatter/linter quality gates and reproducible PPX behavior.
+- Benchmark and compatibility gates for large projects before 0.7 beta promotion.
 
 ## Later releases
 
@@ -48,4 +80,4 @@ The acceptance gate for Step 7 includes deterministic brand generation, debris-f
 - **0.9:** ecosystem/security hardening, fuzzing, compatibility suites, generated API docs/doctests, long-running benchmarks, and carefully reviewed metaprogramming/performance features.
 - **1.0:** stable specification, compatibility guarantees, stable package/ABI policy, platform support tiers, and fully reproducible qualified releases.
 
-Hosted registry operations, ARM/macOS, complete GUI infrastructure, inheritance, SIMD/PGO and full-language self-hosting remain outside 0.6 unless separately promoted with tests and design review.
+Hosted registry operations, ARM/macOS, complete GUI infrastructure, inheritance, SIMD/PGO and full-language self-hosting remain outside the current Step 7 phase unless separately promoted with tests and design review.

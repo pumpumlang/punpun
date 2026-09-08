@@ -18,7 +18,7 @@
 #include "builtins.hpp"
 #include "frontend.hpp"
 #include "ownership.hpp"
-#include "mir.hpp"
+#include "machine_ir.hpp"
 
 struct Generated {
     Type type;
@@ -27,7 +27,7 @@ struct Generated {
 
 class CBackend {
   public:
-    explicit CBackend(const std::vector<Module> &modules, const ppmir::Program &mir) : modules_(modules), mir_(mir) {
+    explicit CBackend(const std::vector<Module> &modules, const ppmachine::Program &machine) : modules_(modules), machine_(machine) {
         for (const BuiltinSpec &builtin : punpun_builtins()) {
             builtin_specs_[builtin.name] = &builtin;
             if (!builtin.runtime_symbol.empty()) builtin_symbols_[builtin.name] = builtin.runtime_symbol;
@@ -59,9 +59,9 @@ class CBackend {
             for (const Function &function : module.functions) prototype(function);
         out_ << "\n";
 
-        for (const ppmir::Function &mir_function : mir_.functions) {
-            auto found = functions_.find(mir_function.name);
-            if (found == functions_.end()) internal("authoritative MIR references unknown function '" + mir_function.name + "'");
+        for (const ppmachine::Function &machine_function : machine_.functions) {
+            auto found = functions_.find(machine_function.name);
+            if (found == functions_.end()) internal("authoritative Machine IR references unknown function '" + machine_function.name + "'");
             generate_function(*found->second);
         }
 
@@ -86,7 +86,7 @@ class CBackend {
     };
 
     const std::vector<Module> &modules_;
-    const ppmir::Program &mir_;
+    const ppmachine::Program &machine_;
     std::unordered_map<std::string, const BuiltinSpec *> builtin_specs_;
     std::unordered_map<std::string, std::string> builtin_symbols_;
     std::unordered_map<std::string, const Shape *> shapes_;

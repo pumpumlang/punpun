@@ -9,7 +9,7 @@ fn main() {
     let values = [5, 8, 13, 21, 34];
     let reversed = nums_reverse(values);
 
-    println("PunPun 0.6 native compiler is alive.");
+    println("PunPun 0.7 development compiler is alive.");
     println("sum = " + text(stats_sum(values)));
     println("mean = ");
     println(stats_mean(values));

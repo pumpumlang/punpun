@@ -14,13 +14,12 @@
 
 #include "hir.hpp"
 
-// PunPun MIR is the verified, mandatory middle-end authority between typed
-// HIR and backend scheduling. It makes virtual registers, liveness intervals,
-// allocation decisions, and stable function bodies explicit. The 0.6 native
-// emitters still consult typed source nodes for final instruction/source-detail
-// lowering, while the MIR function set/order and fingerprints are authoritative.
-// 0.7 is reserved for a machine IR that removes that remaining source-detail
-// dependency.
+// PunPun MIR is the verified, mandatory target-independent middle-end between
+// typed HIR and the target-aware Machine IR introduced in 0.7. The legacy MIR
+// liveness/allocation annotations remain inspectable for compatibility while
+// Machine IR owns target ABI and call-clobber-aware physical allocation. Future
+// Step 7 cleanup can simplify these legacy MIR annotations once downstream
+// tooling has migrated to `emit-machine-ir`.
 namespace ppmir {
 
 using VReg = pphir::ValueId;
@@ -64,9 +63,11 @@ struct Block {
 
 struct Function {
     std::string name;
+    std::string native_symbol;
     Type result = Type::Void;
     bool external_native = false;
     bool is_async = false;
+    std::vector<std::pair<std::string, Type>> parameters;
     std::vector<Block> blocks;
     std::vector<Interval> intervals;
     std::unordered_map<VReg, Location> locations;
@@ -122,9 +123,11 @@ class Lowerer {
     static Function lower_function(const pphir::Function &source) {
         Function result;
         result.name = source.name;
+        result.native_symbol = source.native_symbol;
         result.result = source.result;
         result.external_native = source.external_native;
         result.is_async = source.is_async;
+        result.parameters = source.parameters;
         for (const pphir::Block &source_block : source.blocks) {
             Block block;
             block.id = source_block.id;
@@ -209,7 +212,12 @@ inline std::string location_name(const Location &location) {
 inline std::string dump(const Program &program) {
     std::ostringstream out;
     for (const Function &function : program.functions) {
-        out << "mir.func @" << function.name << " -> " << type_name(function.result);
+        out << "mir.func @" << function.name << "(";
+        for (std::size_t i = 0; i < function.parameters.size(); ++i) {
+            if (i) out << ", ";
+            out << function.parameters[i].first << ":" << type_name(function.parameters[i].second);
+        }
+        out << ") -> " << type_name(function.result);
         if (function.is_async) out << " async";
         if (function.external_native) { out << " extern-native\n"; continue; }
         out << " spills=" << function.spill_slots << " {\n";

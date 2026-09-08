@@ -545,7 +545,7 @@ class SemanticAnalyzer {
         if (is_slice_type(type)) {
             const Type inner = slice_element_type(type);
             if (inner != Type::Int)
-                fail(token, "PunPun 0.6 beta currently supports Slice<int> only",
+                fail(token, "PunPun currently supports Slice<int> only",
                      "use nums + view(...) for the 0.6 slice implementation", "E0710");
             return;
         }

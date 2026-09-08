@@ -1,4 +1,4 @@
-# Async tasks in PunPun 0.6 development
+# Async tasks in PunPun 0.7 development
 
 PunPun retains a native `async fn` / `await` foundation in the 0.6 development cycle. Async calls create native tasks and return immediately; `await` joins the task and yields its typed result.
 

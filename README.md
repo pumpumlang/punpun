@@ -8,7 +8,7 @@
 </p>
 
 <p align="center">
-  <img alt="PunPun 0.6.0-beta" src="https://img.shields.io/badge/version-0.6.0--beta-b9ff4a?style=for-the-badge&labelColor=11151e">
+  <img alt="PunPun 0.7.0-dev.1" src="https://img.shields.io/badge/version-0.7.0--dev.1-b9ff4a?style=for-the-badge&labelColor=11151e">
   <img alt="Linux x86-64 qualified" src="https://img.shields.io/badge/qualified-Linux%20x86--64-66e3ff?style=for-the-badge&labelColor=11151e">
   <img alt="MIT license" src="https://img.shields.io/badge/license-MIT-f6f7fa?style=for-the-badge&labelColor=11151e">
 </p>
@@ -39,6 +39,8 @@ typed HIR
    ↓
 verified MIR
    ↓
+Machine IR (ABI + allocation)
+   ↓
 ┌─────────────────────────────┐
 │ direct PunPun x86-64 backend│
 │ portable C backend          │
@@ -50,7 +52,14 @@ native executable
 
 The project values measurable compiler/runtime behavior over benchmark folklore. If a number is not measured for a named workload, it is not presented as a universal performance claim.
 
-### 0.6 beta highlights
+### 0.7 development snapshot
+
+- New verified **Machine IR** below MIR with explicit PunPun/SysV ABI layout, call-aware liveness, physical allocation and spill verification.
+- `ppc emit-machine-ir` exposes target ABI, frame, call-barrier and register/stack decisions for compiler work.
+- The direct x86-64 backend now consumes Machine IR as its function and ABI authority; complete Machine-IR-only instruction selection is the next Step 7 phase.
+- Function fingerprints include Machine IR ABI/allocation identity as groundwork for function/module-granular incremental compilation.
+
+The 0.6 language-foundation features remain available:
 
 - Generic functions, structs, objects, and methods with deterministic specialization.
 - Algebraic enums with payloads, exhaustive `match`, `Option<T>`, `Result<T,E>`, and postfix `?`.
@@ -63,9 +72,11 @@ The project values measurable compiler/runtime behavior over benchmark folklore.
 - PPX package search, install, authenticated publishing/upload, immutable downloads, checksums, and yanking.
 - A PunPun-written bootstrap compiler with fixed-point verification for its documented self-hosting subset.
 
-> **Beta means boundaries are explicit.** Linux x86-64 is the host-qualified release target here. Windows WiX installer source is included, while actual MSI/Setup qualification belongs to Windows CI/VM execution. Broader targets, Machine IR, richer dynamic dispatch, and deeper optimizer work remain on the roadmap.
+> **Development boundaries are explicit.** `main` is now the 0.7 development line. Linux x86-64 remains the currently host-qualified release target from the 0.6 line. Windows/Arch release claims still require their real CI gates. Machine IR exists now, but complete Machine-IR-only backend lowering, granular object reuse, and deeper optimization remain Step 7 work.
 
 ## Install
+
+The commands below refer to the latest published 0.6 beta release artifacts. A source checkout of `main` is the newer `0.7.0-dev.1` development line.
 
 ### Linux x86-64 installer
 
@@ -325,7 +336,7 @@ python3 -m http.server 8000 --directory docs-site/dist
 ## Repository layout
 
 ```text
-compiler/         parser, semantics, ownership, HIR, MIR, backends
+compiler/         parser, semantics, ownership, HIR, MIR, Machine IR, backends
 runtime/          native runtime pieces
 stdlib/           standard-library source
 packages/         first-party PPX packages
