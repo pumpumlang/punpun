@@ -39,6 +39,7 @@
 #include "mir.hpp"
 #include "ownership.hpp"
 #include "pipeline.hpp"
+#include "stability.hpp"
 #include "toolchain.hpp"
 
 #ifndef PP_RUNTIME_DIR
@@ -308,6 +309,14 @@ static std::string json_escape(const std::string &value) {
 
 static void print_language_info() {
     std::cout << "{\n  \"compiler_version\": \"" PP_VERSION "\",\n";
+    std::cout << "  \"language_version\": \"" << ppstability::LANGUAGE_VERSION << "\",\n";
+    std::cout << "  \"language_stability\": \"" << ppstability::LANGUAGE_STABILITY << "\",\n";
+    std::cout << "  \"edition\": \"" << ppstability::DEFAULT_EDITION << "\",\n";
+    std::cout << "  \"abi_version\": " << ppstability::ABI_VERSION << ",\n";
+    std::cout << "  \"runtime_abi_version\": " << ppstability::RUNTIME_ABI_VERSION << ",\n";
+    std::cout << "  \"lockfile_format\": " << ppstability::LOCKFILE_FORMAT << ",\n";
+    std::cout << "  \"package_format\": " << ppstability::PACKAGE_FORMAT << ",\n";
+    std::cout << "  \"compatibility_policy\": \"semver-1.x\",\n";
     std::cout << "  \"types\": [\"i64\",\"i32\",\"u64\",\"u32\",\"f64\",\"f32\",\"bool\",\"String\",\"nums\",\"void\"],\n";
     std::cout << "  \"keywords\": [\"bring\",\"launch\",\"say\",\"fn\",\"struct\",\"object\",\"contract\",\"meets\",\"sealed\",\"init\",\"let\",\"mut\",\"const\",\"return\",\"if\",\"else\",\"while\",\"for\",\"in\",\"break\",\"continue\",\"import\",\"true\",\"false\",\"unsafe\",\"raw\",\"public\",\"private\",\"protected\",\"extern\",\"native\",\"self\",\"async\",\"await\",\"enum\",\"match\",\"case\",\"where\"],\n";
     std::cout << "  \"legacy_keywords\": [\"craft\",\"gives\",\"as\",\"shape\",\"done\",\"pin\",\"keep\",\"give\",\"when\",\"otherwise\",\"whilst\",\"each\",\"from\",\"until\",\"leave\",\"next\",\"yes\",\"no\",\"and\",\"or\",\"not\"],\n";

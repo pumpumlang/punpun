@@ -138,3 +138,26 @@ Source: [`stdlib/std/testing.pp`](../stdlib/std/testing.pp).
 
 The testing module is intentionally tiny. Failures use the built-in `assert`, so a
 failing expectation prints a PunPun panic and aborts the process.
+
+## `std.async`
+
+Source: [`stdlib/std/async.pp`](../stdlib/std/async.pp).
+
+`delay_ms`, `delayed_i64`, and `delayed_text` remain small task helpers.
+`read_text_async` and `write_text_async` move filesystem work onto native PunPun
+workers. Structured task lifetime is controlled by the built-in `task_group_*`
+operations documented in [`docs/language/structured-async.md`](language/structured-async.md).
+
+## Generated API reference
+
+The compiler repository generates first-party API documentation from checked-in
+PunPun sources:
+
+```sh
+pp doc
+pp doc --check
+pp test --doc
+```
+
+The generated reference is [`docs/api/REFERENCE.md`](api/REFERENCE.md), with a
+machine-readable companion at [`docs/api/index.json`](api/index.json).

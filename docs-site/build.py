@@ -11,9 +11,9 @@ VERSION=(ROOT.parent/'VERSION').read_text(encoding='utf-8').strip()
 
 NAV_GROUPS=[
     ('Start here',['index','getting-started','language','functions','control-flow']),
-    ('Intermediate',['objects','generics-results','packages','ppx-publishing','memory','errors']),
+    ('Intermediate',['objects','generics-results','packages','ppx-publishing','ppx-security','memory','errors']),
     ('Build real things',['requests','json','gui','async']),
-    ('Advanced',['toolchains','injection','performance','self-hosting','editor-icons']),
+    ('Advanced',['toolchains','injection','performance','self-hosting','editor-icons','api-reference']),
 ]
 LEARNING_ORDER=['index','getting-started','language','functions','control-flow','objects','generics-results','packages','memory']
 LEVELS={

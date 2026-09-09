@@ -1,6 +1,6 @@
 # PunPun for Visual Studio Code
 
-Official `.pp` language support for PunPun 0.7 development (compatible with the 0.6 language-foundation line). The extension uses the compiler-backed language server rather than maintaining a second, approximate parser inside the editor.
+Official `.pp` language support for PunPun 0.9 development (compatible with the 0.6+ language-foundation line). The extension uses the compiler-backed language server rather than maintaining a second, approximate parser inside the editor.
 
 ## Features
 

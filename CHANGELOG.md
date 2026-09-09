@@ -1,3 +1,21 @@
+## 0.9.0-dev.5 — 2026-09-08
+
+- Completed Step 9 ecosystem/security/production hardening on the Linux x86-64 development host.
+- Added deterministic PPX per-file integrity manifests, `ppx verify`, HTTPS-by-default registry policy and dependency `ppx audit` injection checks.
+- Added generated stdlib/first-party API documentation, `pp doc --check`, explicit PunPun doctests and `pp test --doc`.
+- Added deterministic frontend mutation fuzzing, direct/C/LLVM compatibility checks and repeated structured-async stress testing.
+- Added portable-C profile-guided optimization through `pp pgo`; direct-x86 PGO is deliberately not claimed.
+- Integrated the new documentation, fuzz, compatibility and stress gates into Makefile and CI/release qualification.
+
+## 0.8.0-dev.5 — 2026-09-08
+
+- Completed Step 8 structured async/networking/debugging work on the Linux x86-64 development host.
+- Added runtime task groups with wait, timed wait, pending/done, cancellation and deterministic close operations.
+- Made sleep a cooperative cancellation safe point and added regression coverage for prompt cancellation wake-up.
+- Added async stdlib file helpers and first-party requests async wrappers that compose with task groups.
+- Added deterministic source debug maps and GDB/LLDB launch support through `pp debug-map` / `pp debug`.
+- Reworked Arch release qualification to run package operations in an explicit current Arch Docker environment while keeping platform success dependent on a real green workflow.
+
 ## 0.7.0-dev.5 — 2026-09-08
 
 - Completed all planned Step 7 / 0.7 compiler architecture phases on the Linux x86-64 development host.

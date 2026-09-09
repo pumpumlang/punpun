@@ -1,0 +1,1165 @@
+{
+  "abi_version": 1,
+  "builtins": [
+    {
+      "documentation": "Checked absolute value of an integer.",
+      "name": "abs",
+      "parameters": [
+        "int"
+      ],
+      "result": "int"
+    },
+    {
+      "documentation": "Return a program argument by index.",
+      "name": "arg",
+      "parameters": [
+        "int"
+      ],
+      "result": "str"
+    },
+    {
+      "documentation": "Return the number of program arguments.",
+      "name": "arg_count",
+      "parameters": [],
+      "result": "int"
+    },
+    {
+      "documentation": "Panic when a condition is no.",
+      "name": "assert",
+      "parameters": [
+        "bool",
+        "str"
+      ],
+      "result": "void"
+    },
+    {
+      "documentation": "Read a checked nums element.",
+      "name": "at",
+      "parameters": [
+        "nums",
+        "int"
+      ],
+      "result": "int"
+    },
+    {
+      "documentation": "Request cooperative cancellation of a task.",
+      "name": "cancel",
+      "parameters": [
+        "inferred"
+      ],
+      "result": "void"
+    },
+    {
+      "documentation": "Test cancellation from inside the current async task.",
+      "name": "cancelled",
+      "parameters": [],
+      "result": "bool"
+    },
+    {
+      "documentation": "Return monotonic milliseconds.",
+      "name": "clock_ms",
+      "parameters": [],
+      "result": "int"
+    },
+    {
+      "documentation": "Concatenate strings.",
+      "name": "concat",
+      "parameters": [
+        "str",
+        "str"
+      ],
+      "result": "str"
+    },
+    {
+      "documentation": "Case-sensitive substring test.",
+      "name": "contains",
+      "parameters": [
+        "str",
+        "str"
+      ],
+      "result": "bool"
+    },
+    {
+      "documentation": "Return the current working directory.",
+      "name": "current_dir",
+      "parameters": [],
+      "result": "str"
+    },
+    {
+      "documentation": "Convert int to float.",
+      "name": "decimal",
+      "parameters": [
+        "int"
+      ],
+      "result": "float"
+    },
+    {
+      "documentation": "Destroy an object immediately and invalidate the source binding.",
+      "name": "drop",
+      "parameters": [
+        "inferred"
+      ],
+      "result": "void"
+    },
+    {
+      "documentation": "Test whether an environment variable exists.",
+      "name": "env_has",
+      "parameters": [
+        "str"
+      ],
+      "result": "bool"
+    },
+    {
+      "documentation": "Return an environment value or fallback.",
+      "name": "env_or",
+      "parameters": [
+        "str",
+        "str"
+      ],
+      "result": "str"
+    },
+    {
+      "documentation": "Test whether a regular file exists.",
+      "name": "file_exists",
+      "parameters": [
+        "str"
+      ],
+      "result": "bool"
+    },
+    {
+      "documentation": "Return the byte length of a string.",
+      "name": "len",
+      "parameters": [
+        "str"
+      ],
+      "result": "int"
+    },
+    {
+      "documentation": "Create one directory, returning false when it already exists or fails.",
+      "name": "make_dir",
+      "parameters": [
+        "str"
+      ],
+      "result": "bool"
+    },
+    {
+      "documentation": "Transfer an owning value and invalidate the source binding.",
+      "name": "move",
+      "parameters": [
+        "inferred"
+      ],
+      "result": "inferred"
+    },
+    {
+      "documentation": "Create an empty nums list.",
+      "name": "numbers",
+      "parameters": [],
+      "result": "nums"
+    },
+    {
+      "documentation": "Abort with a PunPun panic message.",
+      "name": "panic",
+      "parameters": [
+        "str"
+      ],
+      "result": "void"
+    },
+    {
+      "documentation": "Parse a decimal string as int.",
+      "name": "parse_int",
+      "parameters": [
+        "str"
+      ],
+      "result": "int"
+    },
+    {
+      "documentation": "Join two path segments using the platform separator.",
+      "name": "path_join",
+      "parameters": [
+        "str",
+        "str"
+      ],
+      "result": "str"
+    },
+    {
+      "documentation": "Return the current platform name.",
+      "name": "platform",
+      "parameters": [],
+      "result": "str"
+    },
+    {
+      "documentation": "Remove and return the last nums element.",
+      "name": "pop",
+      "parameters": [
+        "nums"
+      ],
+      "result": "int"
+    },
+    {
+      "documentation": "Print a scalar without a newline.",
+      "name": "print",
+      "parameters": [
+        "inferred"
+      ],
+      "result": "void"
+    },
+    {
+      "documentation": "Print a scalar followed by a newline.",
+      "name": "println",
+      "parameters": [
+        "inferred"
+      ],
+      "result": "void"
+    },
+    {
+      "documentation": "Append an integer to nums.",
+      "name": "push",
+      "parameters": [
+        "nums",
+        "int"
+      ],
+      "result": "void"
+    },
+    {
+      "documentation": "Replace a checked nums element.",
+      "name": "put",
+      "parameters": [
+        "nums",
+        "int",
+        "int"
+      ],
+      "result": "void"
+    },
+    {
+      "documentation": "Read one line from standard input.",
+      "name": "read_line",
+      "parameters": [],
+      "result": "str"
+    },
+    {
+      "documentation": "Read an entire text file.",
+      "name": "read_text",
+      "parameters": [
+        "str"
+      ],
+      "result": "str"
+    },
+    {
+      "documentation": "Remove a regular file.",
+      "name": "remove_file",
+      "parameters": [
+        "str"
+      ],
+      "result": "bool"
+    },
+    {
+      "documentation": "Rename or move a file.",
+      "name": "rename_file",
+      "parameters": [
+        "str",
+        "str"
+      ],
+      "result": "bool"
+    },
+    {
+      "documentation": "Return nums length.",
+      "name": "size",
+      "parameters": [
+        "nums"
+      ],
+      "result": "int"
+    },
+    {
+      "documentation": "Sleep for a nonnegative number of milliseconds.",
+      "name": "sleep_ms",
+      "parameters": [
+        "int"
+      ],
+      "result": "void"
+    },
+    {
+      "documentation": "Copy string bytes in [start, end).",
+      "name": "slice",
+      "parameters": [
+        "str",
+        "int",
+        "int"
+      ],
+      "result": "str"
+    },
+    {
+      "documentation": "Read a checked element from a Slice<int>.",
+      "name": "slice_get",
+      "parameters": [
+        "Slice<int>",
+        "int"
+      ],
+      "result": "int"
+    },
+    {
+      "documentation": "Return the number of elements in a Slice<int>.",
+      "name": "slice_len",
+      "parameters": [
+        "Slice<int>"
+      ],
+      "result": "int"
+    },
+    {
+      "documentation": "Sort nums ascending in place.",
+      "name": "sort",
+      "parameters": [
+        "nums"
+      ],
+      "result": "void"
+    },
+    {
+      "documentation": "Test whether a task has completed.",
+      "name": "task_done",
+      "parameters": [
+        "inferred"
+      ],
+      "result": "bool"
+    },
+    {
+      "documentation": "Create a structured task group and return its opaque handle.",
+      "name": "task_group",
+      "parameters": [],
+      "result": "int"
+    },
+    {
+      "documentation": "Attach a Task to a structured task group.",
+      "name": "task_group_add",
+      "parameters": [
+        "int",
+        "inferred"
+      ],
+      "result": "void"
+    },
+    {
+      "documentation": "Request cooperative cancellation of every task in a group.",
+      "name": "task_group_cancel",
+      "parameters": [
+        "int"
+      ],
+      "result": "void"
+    },
+    {
+      "documentation": "Wait for and close a task group.",
+      "name": "task_group_close",
+      "parameters": [
+        "int"
+      ],
+      "result": "void"
+    },
+    {
+      "documentation": "Test whether every task in a group has completed.",
+      "name": "task_group_done",
+      "parameters": [
+        "int"
+      ],
+      "result": "bool"
+    },
+    {
+      "documentation": "Count unfinished tasks in a group.",
+      "name": "task_group_pending",
+      "parameters": [
+        "int"
+      ],
+      "result": "int"
+    },
+    {
+      "documentation": "Wait for every task in a group.",
+      "name": "task_group_wait",
+      "parameters": [
+        "int"
+      ],
+      "result": "void"
+    },
+    {
+      "documentation": "Wait up to a timeout for a group to finish.",
+      "name": "task_group_wait_for",
+      "parameters": [
+        "int",
+        "int"
+      ],
+      "result": "bool"
+    },
+    {
+      "documentation": "Convert int to str.",
+      "name": "text",
+      "parameters": [
+        "int"
+      ],
+      "result": "str"
+    },
+    {
+      "documentation": "Count Unicode scalar values in validated UTF-8 text.",
+      "name": "utf8_len",
+      "parameters": [
+        "str"
+      ],
+      "result": "int"
+    },
+    {
+      "documentation": "Validate UTF-8 text.",
+      "name": "utf8_valid",
+      "parameters": [
+        "str"
+      ],
+      "result": "bool"
+    },
+    {
+      "documentation": "Create a checked borrowed Slice<int> over nums.",
+      "name": "view",
+      "parameters": [
+        "nums",
+        "int",
+        "int"
+      ],
+      "result": "Slice<int>"
+    },
+    {
+      "documentation": "Truncate float to int.",
+      "name": "whole",
+      "parameters": [
+        "float"
+      ],
+      "result": "int"
+    },
+    {
+      "documentation": "Write an entire text file.",
+      "name": "write_text",
+      "parameters": [
+        "str",
+        "str"
+      ],
+      "result": "void"
+    }
+  ],
+  "keywords": [
+    "async",
+    "await",
+    "break",
+    "bring",
+    "case",
+    "const",
+    "continue",
+    "contract",
+    "else",
+    "enum",
+    "extern",
+    "false",
+    "fn",
+    "for",
+    "if",
+    "import",
+    "in",
+    "init",
+    "launch",
+    "let",
+    "match",
+    "meets",
+    "mut",
+    "native",
+    "object",
+    "private",
+    "protected",
+    "public",
+    "raw",
+    "return",
+    "say",
+    "sealed",
+    "self",
+    "struct",
+    "true",
+    "unsafe",
+    "where",
+    "while"
+  ],
+  "language_version": "1.0",
+  "lockfile_format": 1,
+  "package_format": 1,
+  "runtime_abi_version": 1,
+  "schema": 1,
+  "stdlib_symbols": [
+    {
+      "module": "std.async",
+      "name": "cancellable_delay_ms",
+      "parameters": [
+        {
+          "name": "delay",
+          "type": "int"
+        }
+      ],
+      "result": "bool"
+    },
+    {
+      "module": "std.async",
+      "name": "delay_ms",
+      "parameters": [
+        {
+          "name": "delay",
+          "type": "int"
+        }
+      ],
+      "result": "void"
+    },
+    {
+      "module": "std.async",
+      "name": "delayed_i64",
+      "parameters": [
+        {
+          "name": "value",
+          "type": "int"
+        },
+        {
+          "name": "delay",
+          "type": "int"
+        }
+      ],
+      "result": "int"
+    },
+    {
+      "module": "std.async",
+      "name": "delayed_text",
+      "parameters": [
+        {
+          "name": "value",
+          "type": "str"
+        },
+        {
+          "name": "delay",
+          "type": "int"
+        }
+      ],
+      "result": "str"
+    },
+    {
+      "module": "std.async",
+      "name": "read_text_async",
+      "parameters": [
+        {
+          "name": "path",
+          "type": "str"
+        }
+      ],
+      "result": "str"
+    },
+    {
+      "module": "std.async",
+      "name": "write_text_async",
+      "parameters": [
+        {
+          "name": "path",
+          "type": "str"
+        },
+        {
+          "name": "value",
+          "type": "str"
+        }
+      ],
+      "result": "void"
+    },
+    {
+      "module": "std.fs",
+      "name": "fs_exists",
+      "parameters": [
+        {
+          "name": "path",
+          "type": "str"
+        }
+      ],
+      "result": "bool"
+    },
+    {
+      "module": "std.fs",
+      "name": "fs_join",
+      "parameters": [
+        {
+          "name": "left",
+          "type": "str"
+        },
+        {
+          "name": "right",
+          "type": "str"
+        }
+      ],
+      "result": "str"
+    },
+    {
+      "module": "std.fs",
+      "name": "fs_make_dir",
+      "parameters": [
+        {
+          "name": "path",
+          "type": "str"
+        }
+      ],
+      "result": "bool"
+    },
+    {
+      "module": "std.fs",
+      "name": "fs_read",
+      "parameters": [
+        {
+          "name": "path",
+          "type": "str"
+        }
+      ],
+      "result": "str"
+    },
+    {
+      "module": "std.fs",
+      "name": "fs_remove",
+      "parameters": [
+        {
+          "name": "path",
+          "type": "str"
+        }
+      ],
+      "result": "bool"
+    },
+    {
+      "module": "std.fs",
+      "name": "fs_rename",
+      "parameters": [
+        {
+          "name": "source",
+          "type": "str"
+        },
+        {
+          "name": "destination",
+          "type": "str"
+        }
+      ],
+      "result": "bool"
+    },
+    {
+      "module": "std.fs",
+      "name": "fs_write",
+      "parameters": [
+        {
+          "name": "path",
+          "type": "str"
+        },
+        {
+          "name": "contents",
+          "type": "str"
+        }
+      ],
+      "result": "void"
+    },
+    {
+      "module": "std.io",
+      "name": "io_read_line",
+      "parameters": [],
+      "result": "str"
+    },
+    {
+      "module": "std.math",
+      "name": "clamp",
+      "parameters": [
+        {
+          "name": "value",
+          "type": "int"
+        },
+        {
+          "name": "lower",
+          "type": "int"
+        },
+        {
+          "name": "upper",
+          "type": "int"
+        }
+      ],
+      "result": "int"
+    },
+    {
+      "module": "std.math",
+      "name": "factorial",
+      "parameters": [
+        {
+          "name": "n",
+          "type": "int"
+        }
+      ],
+      "result": "int"
+    },
+    {
+      "module": "std.math",
+      "name": "gcd",
+      "parameters": [
+        {
+          "name": "left",
+          "type": "int"
+        },
+        {
+          "name": "right",
+          "type": "int"
+        }
+      ],
+      "result": "int"
+    },
+    {
+      "module": "std.math",
+      "name": "integer_power",
+      "parameters": [
+        {
+          "name": "base",
+          "type": "int"
+        },
+        {
+          "name": "exponent",
+          "type": "int"
+        }
+      ],
+      "result": "int"
+    },
+    {
+      "module": "std.math",
+      "name": "maximum",
+      "parameters": [
+        {
+          "name": "left",
+          "type": "int"
+        },
+        {
+          "name": "right",
+          "type": "int"
+        }
+      ],
+      "result": "int"
+    },
+    {
+      "module": "std.math",
+      "name": "minimum",
+      "parameters": [
+        {
+          "name": "left",
+          "type": "int"
+        },
+        {
+          "name": "right",
+          "type": "int"
+        }
+      ],
+      "result": "int"
+    },
+    {
+      "module": "std.nums",
+      "name": "nums_contains",
+      "parameters": [
+        {
+          "name": "values",
+          "type": "nums"
+        },
+        {
+          "name": "needle",
+          "type": "int"
+        }
+      ],
+      "result": "bool"
+    },
+    {
+      "module": "std.nums",
+      "name": "nums_copy",
+      "parameters": [
+        {
+          "name": "values",
+          "type": "nums"
+        }
+      ],
+      "result": "nums"
+    },
+    {
+      "module": "std.nums",
+      "name": "nums_count",
+      "parameters": [
+        {
+          "name": "values",
+          "type": "nums"
+        },
+        {
+          "name": "needle",
+          "type": "int"
+        }
+      ],
+      "result": "int"
+    },
+    {
+      "module": "std.nums",
+      "name": "nums_equal",
+      "parameters": [
+        {
+          "name": "left",
+          "type": "nums"
+        },
+        {
+          "name": "right",
+          "type": "nums"
+        }
+      ],
+      "result": "bool"
+    },
+    {
+      "module": "std.nums",
+      "name": "nums_index_of",
+      "parameters": [
+        {
+          "name": "values",
+          "type": "nums"
+        },
+        {
+          "name": "needle",
+          "type": "int"
+        }
+      ],
+      "result": "int"
+    },
+    {
+      "module": "std.nums",
+      "name": "nums_reverse",
+      "parameters": [
+        {
+          "name": "values",
+          "type": "nums"
+        }
+      ],
+      "result": "nums"
+    },
+    {
+      "module": "std.option",
+      "name": "option_is_none",
+      "parameters": [
+        {
+          "name": "value",
+          "type": "Option<T>"
+        }
+      ],
+      "result": "bool"
+    },
+    {
+      "module": "std.option",
+      "name": "option_is_some",
+      "parameters": [
+        {
+          "name": "value",
+          "type": "Option<T>"
+        }
+      ],
+      "result": "bool"
+    },
+    {
+      "module": "std.option",
+      "name": "option_unwrap_or",
+      "parameters": [
+        {
+          "name": "value",
+          "type": "Option<T>"
+        },
+        {
+          "name": "fallback",
+          "type": "T"
+        }
+      ],
+      "result": "T"
+    },
+    {
+      "module": "std.result",
+      "name": "result_is_error",
+      "parameters": [
+        {
+          "name": "value",
+          "type": "Result<T,E>"
+        }
+      ],
+      "result": "bool"
+    },
+    {
+      "module": "std.result",
+      "name": "result_is_ok",
+      "parameters": [
+        {
+          "name": "value",
+          "type": "Result<T,E>"
+        }
+      ],
+      "result": "bool"
+    },
+    {
+      "module": "std.result",
+      "name": "result_unwrap_or",
+      "parameters": [
+        {
+          "name": "value",
+          "type": "Result<T,E>"
+        },
+        {
+          "name": "fallback",
+          "type": "T"
+        }
+      ],
+      "result": "T"
+    },
+    {
+      "module": "std.stats",
+      "name": "stats_max",
+      "parameters": [
+        {
+          "name": "values",
+          "type": "nums"
+        }
+      ],
+      "result": "int"
+    },
+    {
+      "module": "std.stats",
+      "name": "stats_mean",
+      "parameters": [
+        {
+          "name": "values",
+          "type": "nums"
+        }
+      ],
+      "result": "float"
+    },
+    {
+      "module": "std.stats",
+      "name": "stats_min",
+      "parameters": [
+        {
+          "name": "values",
+          "type": "nums"
+        }
+      ],
+      "result": "int"
+    },
+    {
+      "module": "std.stats",
+      "name": "stats_sorted",
+      "parameters": [
+        {
+          "name": "values",
+          "type": "nums"
+        }
+      ],
+      "result": "nums"
+    },
+    {
+      "module": "std.stats",
+      "name": "stats_sum",
+      "parameters": [
+        {
+          "name": "values",
+          "type": "nums"
+        }
+      ],
+      "result": "int"
+    },
+    {
+      "module": "std.system",
+      "name": "system_current_dir",
+      "parameters": [],
+      "result": "str"
+    },
+    {
+      "module": "std.system",
+      "name": "system_env_has",
+      "parameters": [
+        {
+          "name": "name",
+          "type": "str"
+        }
+      ],
+      "result": "bool"
+    },
+    {
+      "module": "std.system",
+      "name": "system_env_or",
+      "parameters": [
+        {
+          "name": "name",
+          "type": "str"
+        },
+        {
+          "name": "fallback",
+          "type": "str"
+        }
+      ],
+      "result": "str"
+    },
+    {
+      "module": "std.system",
+      "name": "system_platform",
+      "parameters": [],
+      "result": "str"
+    },
+    {
+      "module": "std.testing",
+      "name": "expect_bool",
+      "parameters": [
+        {
+          "name": "actual",
+          "type": "bool"
+        },
+        {
+          "name": "expected",
+          "type": "bool"
+        }
+      ],
+      "result": "void"
+    },
+    {
+      "module": "std.testing",
+      "name": "expect_int",
+      "parameters": [
+        {
+          "name": "actual",
+          "type": "int"
+        },
+        {
+          "name": "expected",
+          "type": "int"
+        }
+      ],
+      "result": "void"
+    },
+    {
+      "module": "std.testing",
+      "name": "expect_str",
+      "parameters": [
+        {
+          "name": "actual",
+          "type": "str"
+        },
+        {
+          "name": "expected",
+          "type": "str"
+        }
+      ],
+      "result": "void"
+    },
+    {
+      "module": "std.text",
+      "name": "text_codepoints",
+      "parameters": [
+        {
+          "name": "value",
+          "type": "str"
+        }
+      ],
+      "result": "int"
+    },
+    {
+      "module": "std.text",
+      "name": "text_ends_with",
+      "parameters": [
+        {
+          "name": "value",
+          "type": "str"
+        },
+        {
+          "name": "suffix",
+          "type": "str"
+        }
+      ],
+      "result": "bool"
+    },
+    {
+      "module": "std.text",
+      "name": "text_is_utf8",
+      "parameters": [
+        {
+          "name": "value",
+          "type": "str"
+        }
+      ],
+      "result": "bool"
+    },
+    {
+      "module": "std.text",
+      "name": "text_repeat",
+      "parameters": [
+        {
+          "name": "value",
+          "type": "str"
+        },
+        {
+          "name": "count",
+          "type": "int"
+        }
+      ],
+      "result": "str"
+    },
+    {
+      "module": "std.text",
+      "name": "text_starts_with",
+      "parameters": [
+        {
+          "name": "value",
+          "type": "str"
+        },
+        {
+          "name": "prefix",
+          "type": "str"
+        }
+      ],
+      "result": "bool"
+    },
+    {
+      "module": "std.text",
+      "name": "text_trim",
+      "parameters": [
+        {
+          "name": "value",
+          "type": "str"
+        }
+      ],
+      "result": "str"
+    },
+    {
+      "module": "std.time",
+      "name": "deadline_after_ms",
+      "parameters": [
+        {
+          "name": "duration",
+          "type": "int"
+        }
+      ],
+      "result": "int"
+    },
+    {
+      "module": "std.time",
+      "name": "deadline_reached",
+      "parameters": [
+        {
+          "name": "deadline",
+          "type": "int"
+        }
+      ],
+      "result": "bool"
+    },
+    {
+      "module": "std.time",
+      "name": "delay_ms",
+      "parameters": [
+        {
+          "name": "duration",
+          "type": "int"
+        }
+      ],
+      "result": "void"
+    },
+    {
+      "module": "std.time",
+      "name": "elapsed_ms",
+      "parameters": [
+        {
+          "name": "start",
+          "type": "int"
+        }
+      ],
+      "result": "int"
+    }
+  ]
+}

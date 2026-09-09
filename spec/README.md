@@ -9,3 +9,7 @@ This directory records normative language decisions separately from implementati
 - [`0.6/compatibility.md`](0.6/compatibility.md) defines the 0.5-to-0.6 source-compatibility gate.
 
 Keywords or grammar may be recognized before their semantics are enabled. Such syntax must fail with a stable diagnostic and must never silently compile with placeholder behavior.
+
+## Stable 1.x contract
+
+The normative stable compatibility contract is in [`1.0/`](1.0/).

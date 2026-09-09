@@ -8,7 +8,7 @@
 </p>
 
 <p align="center">
-  <img alt="PunPun 0.7.0-dev.5" src="https://img.shields.io/badge/version-0.7.0--dev.5-b9ff4a?style=for-the-badge&labelColor=11151e">
+  <img alt="PunPun 1.0.0" src="https://img.shields.io/badge/version-1.0.0-b9ff4a?style=for-the-badge&labelColor=11151e">
   <img alt="Linux x86-64 validated" src="https://img.shields.io/badge/validated-Linux%20x86--64-66e3ff?style=for-the-badge&labelColor=11151e">
   <img alt="MIT license" src="https://img.shields.io/badge/license-MIT-f6f7fa?style=for-the-badge&labelColor=11151e">
 </p>
@@ -52,39 +52,31 @@ native executable
 
 The project values measurable compiler/runtime behavior over benchmark folklore. If a number is not measured for a named workload, it is not presented as a universal performance claim.
 
-### 0.7 Step 7 completion snapshot
+### PunPun 1.0 stable compatibility snapshot
 
-- Verified **Machine IR** below MIR owns target ABI layout, call barriers, physical allocation, spill ranges and direct-native function-body instruction selection.
-- `ppc emit-machine-ir` exposes frame/allocation decisions; `ppc emit-abi` exposes the implemented PunPun/SysV ABI contract.
-- Direct Linux x86-64 function bodies no longer fall back to typed-source emission: aggregates, enum/match, ownership drops/moves, address/index/list/await and short-circuit CFG all reach the backend through Machine IR.
-- Direct-native builds cache independent function objects using per-function interface/body/direct-dependency fingerprints, with exact rebuild/reuse statistics and a CI scalability gate.
-- Machine IR optimization, call-safe allocation, callee-save emission, diagnostics/fix-its, module-private boundaries, lint gates and deterministic PPX publishing complete the planned Step 7 phases.
+PunPun 1.0 keeps the completed compiler/runtime work from Steps 1-9 and adds the first enforceable stable compatibility contract:
 
-The 0.6 language-foundation features remain available:
+- **Language stability:** language epoch `1.0`, semantic-versioning/deprecation policy, and `pp stable-check` against the frozen builtin/stdlib surface.
+- **ABI/package stability:** language ABI 1, runtime ABI 1, package format 1, and lockfile format 1 are explicit compiler metadata and project requirements.
+- **Stable projects:** new manifests record `language = "1.0"` and `abi = 1`; incompatible requirements fail before compilation.
+- **Platform promises:** `pp platform-info` exposes Tier 1 Linux x86-64, Tier 2 Arch/Windows x86-64, and unsupported Tier 3 targets without pretending one platform's success proves another.
+- **Release provenance:** deterministic release inputs, SHA-256 checksums, source SBOM/provenance, and optional detached Ed25519 release signatures.
+- **PPX publisher identity:** deterministic package manifests remain, with optional detached Ed25519 package signatures and local public-key trust roots.
 
-- Generic functions, structs, objects, and methods with deterministic specialization.
-- Algebraic enums with payloads, exhaustive `match`, `Option<T>`, `Result<T,E>`, and postfix `?`.
-- Objects, value-oriented structs, constructors, visibility, and compile-time contracts.
-- Move-state analysis, safe-reference rules, explicit raw pointers/`unsafe`, and checked slice foundations.
-- Mandatory typed HIR → verified MIR pipeline for successful compilation.
-- Direct Linux x86-64 native code generation plus portable C and optional LLVM/Clang backends.
-- Compiler-backed LSP and VS Code diagnostics, completion, navigation, rename, formatting, and semantic highlighting.
-- `.pp` language/file icons for VS Code, Linux MIME-aware file managers, and Windows MSI file association.
-- PPX package search, install, authenticated publishing/upload, immutable downloads, checksums, and yanking.
-- A PunPun-written bootstrap compiler with fixed-point verification for its documented self-hosting subset.
+The earlier foundations remain available: generics, algebraic enums, `Option`/`Result`, exhaustive match, ownership/borrows, checked slices, typed HIR → verified MIR → verified Machine IR, per-function native caching, direct Linux x86-64, portable C, optional LLVM, structured async/cancellation, source debugging, LSP/VS Code, PPX, docs/doctests, fuzz/compat/stress gates, PGO and self-host bootstrap verification.
 
-> **Development boundaries are explicit.** `main` is the 0.7 development line and Step 7 implementation is complete in `0.7.0-dev.5` on the Linux x86-64 development host. Windows/Arch release claims still require their real CI gates, so this development snapshot is not presented as a promoted 0.7 beta.
+> **Stable does not mean imaginary platform support.** Linux x86-64 is the Tier-1 1.0 implementation/validation host. Arch and Windows x86-64 are Tier 2 and are called qualified for a particular release only when their real release-tag workflows pass. Async HTTP still uses worker-task concurrency around synchronous libcurl, and portable-C PGO is not direct-x86 PGO.
 
 ## Install
 
-The commands below refer to the `0.7.0-dev.5` Step 7-complete development release. It is published as a prerelease because Arch and Windows promotion gates are still separate from the Linux-host compiler milestone.
+The commands below refer to the `1.0.0` stable source/release line. Platform-specific artifacts remain subject to the support tiers and real release-tag qualification gates.
 
 ### Linux x86-64 installer
 
 Use the self-extracting release installer:
 
 ```sh
-bash PunPun-0.7.0-dev.5-Linux-x86_64-Installer.run
+bash PunPun-1.0.0-Linux-x86_64-Installer.run
 ```
 
 It installs the SDK under `~/.local/share/punpun`, command wrappers under `~/.local/bin`, VS Code support when an editor CLI is available, and the `.pp` Linux MIME/file icon association.
@@ -101,18 +93,18 @@ pp doctor
 Install the generated package with pacman:
 
 ```sh
-sudo pacman -U punpun-0.7.0_dev.5-1-x86_64.pkg.tar.zst
+sudo pacman -U punpun-1.0.0-1-x86_64.pkg.tar.zst
 ```
 
 The package includes the PunPun MIME definition and hicolor file icons for `.pp` source files.
 
 ### Portable SDK
 
-Extract `PunPun-0.7.0-dev.5-linux-x86_64-SDK.zip` or `PunPun-0.7.0-dev.5-linux-x86_64.tar.zst` and invoke the commands from its `bin/` directory.
+Extract `PunPun-1.0.0-linux-x86_64-SDK.zip` or `PunPun-1.0.0-linux-x86_64.tar.zst` and invoke the commands from its `bin/` directory.
 
 ### Windows
 
-The repository includes a WiX v4 MSI/Burn installer project under [`installers/windows/`](installers/windows/). It owns PATH and `.pp` file-type/icon registration so upgrade/uninstall remain reversible. This Linux-built beta does not pretend an untested Windows binary exists.
+The repository includes a WiX v4 MSI/Burn installer project under [`installers/windows/`](installers/windows/). It owns PATH and `.pp` file-type/icon registration so upgrade/uninstall remain reversible. The source tree includes the Windows installer project; a Windows binary is considered release-qualified only when the Tier-2 Windows workflow actually builds/installs/uninstalls it successfully.
 
 ## Quickstart
 
@@ -247,7 +239,14 @@ Useful commands:
 pp check [file.pp]              parse + type/ownership check
 pp build [file.pp]              compile a native executable
 pp run [file.pp]                build and run
-pp test                         run project tests
+pp test [--doc]                 run project tests and optional doctests
+pp doc [--check]                generate/check API documentation
+pp debug-map [file.pp]          emit deterministic source debug mapping
+pp debug [file.pp]              launch GDB/LLDB for a debug build
+pp fuzz                         deterministic frontend mutation fuzzing
+pp compat                       compare supported backend behavior
+pp stress                       repeat structured async/compiler workloads
+pp pgo [file.pp]                train a portable-C PGO build
 pp fmt [file.pp]                format PunPun source
 pp clean                        clear project build cache
 
@@ -291,7 +290,7 @@ ppx login developer
 ppx publish
 ```
 
-`ppx upload` runs the same upload flow. Registry versions are immutable. Package identity/dependency metadata is checked against the uploaded `Punpun.toml`, and downloaded archives are SHA-256 verified before installation.
+`ppx upload` runs the same upload flow. Registry versions are immutable. Package identity/dependency metadata is checked against the uploaded `Punpun.toml`; downloaded archives are SHA-256 verified; new archives also contain a deterministic internal per-file integrity manifest. Use `ppx verify <archive>` for offline verification and `ppx audit --deny-injection` to enforce a no-native-injection dependency policy. Non-loopback registries are HTTPS-by-default.
 
 Download without changing a project:
 
@@ -323,6 +322,9 @@ Other useful references:
 - [0.6 language specification](spec/0.6/)
 - [Editor and file icons](docs-site/content/editor-icons.md)
 - [PPX publishing](docs-site/content/ppx-publishing.md)
+- [Structured async](docs/language/structured-async.md)
+- [PPX security](docs-site/content/ppx-security.md)
+- [Generated API reference](docs/api/REFERENCE.md)
 - [Release status](PROJECT_STATUS.txt)
 - [Roadmap](ROADMAP.md)
 - [Release notes](RELEASE_NOTES.md)
@@ -373,6 +375,11 @@ python3 scripts/privacy_audit.py .
 python3 docs-site/build.py
 python3 ppx-site/build.py
 python3 scripts/package_vsix.py
+python3 scripts/docgen.py --check
+python3 scripts/doctest.py --ppc ./build/ppc
+python3 scripts/compat_matrix.py --quick
+python3 scripts/fuzz_frontend.py --iterations 60 --seed 20560
+python3 scripts/stress.py --quick
 ```
 
 ## Contributing

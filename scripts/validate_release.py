@@ -178,7 +178,8 @@ def main():
         run([ppc_self,prefix/"share/punpun/selfhost/examples/hello.pp",self_c],env=env)
         require("pp_self_greeting" in self_c.read_text(encoding="utf-8"),"installed self-hosted compiler emitted invalid C")
         results.append(("Installed self-hosted compiler", "PASS", "installed PunPun-written compiler translated a source program"))
-        results.append(("Installed performance", "MEASURED", f"median pp --version {version_med:.2f} ms; check {check_med:.2f} ms; no-change build {build_med:.2f} ms; run {run_med:.2f} ms"))
+        print(f"measured performance (not embedded in reproducible report): pp --version {version_med:.2f} ms; check {check_med:.2f} ms; no-change build {build_med:.2f} ms; run {run_med:.2f} ms")
+        results.append(("Installed performance", "MEASURED", "timing smoke completed; measurements are intentionally not embedded in reproducible artifacts"))
 
         un=run([uninstall],env=env)
         require(not (prefix/"share/punpun").exists(),"uninstaller left SDK directory")

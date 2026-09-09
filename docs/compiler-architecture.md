@@ -1,4 +1,4 @@
-# Compiler architecture (0.7 development)
+# Compiler architecture (0.9 development)
 
 PunPun keeps one direction of semantic authority. Backends do not re-parse or re-typecheck the language.
 
@@ -83,3 +83,12 @@ That conservative rule is intentional: block storage order is not dominance orde
 ## LLVM
 
 The optional LLVM path still reuses `backend_c.hpp` as a portable lowering and asks Clang to produce LLVM/native code. It goes through the same parser, semantic, ownership, HIR, MIR and Machine IR authority chain before backend emission.
+
+
+## Step 8/9 runtime and quality surfaces
+
+Step 8 does not insert a second compiler IR layer. Structured task groups are runtime operations surfaced as typed built-ins; `async fn`/`await` continue through the normal frontend/HIR/MIR/Machine-IR pipeline. Cancellation is cooperative, with runtime safe points such as `sleep_ms`.
+
+Source debugging reuses direct-backend assembler `.file`/`.loc` directives. `scripts/debug_map.py` converts those mappings into deterministic JSON, while `pp debug` delegates interactive debugging to GDB/LLDB.
+
+Step 9 production gates sit around the compiler rather than changing language semantics: generated API docs/doctests, deterministic frontend mutation fuzzing, backend compatibility execution, structured-async stress and portable-C PGO. PPX package manifests add archive-content integrity without changing the compiler's trust model or claiming publisher-signature authentication.

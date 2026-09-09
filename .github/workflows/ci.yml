@@ -30,7 +30,22 @@ jobs:
           python3 docs-site/build.py
           python3 ppx-site/build.py
           python3 scripts/package_vsix.py
+      - name: Generated API docs and doctests
+        run: |
+          python3 scripts/docgen.py --check
+          python3 scripts/doctest.py --ppc ./build/ppc
+      - name: Backend compatibility matrix
+        run: python3 scripts/compat_matrix.py --quick --ppc ./build/ppc
+      - name: Frontend mutation fuzz gate
+        run: python3 scripts/fuzz_frontend.py --iterations 60 --seed 20560 --ppc ./build/ppc
+      - name: Structured async stress smoke
+        run: python3 scripts/stress.py --quick --ppc ./build/ppc
       - name: Incremental compilation gate
         run: python3 scripts/benchmark_projects.py --modules 10 --rounds 1 --gate --output benchmarks/ci.json
+      - name: Stable 1.0 compatibility gate
+        run: |
+          python3 scripts/stability.py check --ppc ./build/ppc
+          python3 scripts/abi_check.py --ppc ./build/ppc
+          python3 scripts/platform_policy.py --check
       - name: Source privacy and hygiene
         run: python3 scripts/privacy_audit.py .

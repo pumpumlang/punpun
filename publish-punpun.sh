@@ -171,6 +171,7 @@ wait_for_platform_qualification() {
     if ! gh run watch "$run_id" --repo "$GH_ACCOUNT/$SOURCE_REPO" --exit-status; then
         die "platform qualification failed; release downloads and sites were NOT promoted"
     fi
+    QUALIFICATION_RUN_ID="$run_id"
     ok "exact candidate $sha passed platform qualification"
 }
 
@@ -221,30 +222,41 @@ ensure_candidate_tag "$SOURCE_CHECKOUT" "$SOURCE_SHA"
 wait_for_platform_qualification "$SOURCE_SHA"
 
 # Nothing below this line runs unless the exact tagged candidate is qualified.
-step "Promoting release downloads"
-shopt -s nullglob
+step "Collecting exact qualified platform artifacts"
+QUALIFIED="$WORK/qualified"
+PROMOTE="$WORK/promote"
+mkdir -p "$QUALIFIED" "$PROMOTE"
+gh run download "$QUALIFICATION_RUN_ID" --repo "$GH_ACCOUNT/$SOURCE_REPO" --dir "$QUALIFIED"
+
+# Start from the deterministic publisher artifacts, then let the exact green CI
+# run override host-specific files with the artifacts it actually qualified.
+for candidate in "$ROOT"/linux/* "$ROOT"/arch/* "$ROOT"/editor/* "$ROOT"/windows/* "$ROOT"/websites/*.zip "$ROOT"/reports/* "$ROOT/SHA256SUMS"; do
+    [[ -f "$candidate" ]] || continue
+    cp -f "$candidate" "$PROMOTE/$(basename -- "$candidate")"
+done
+while IFS= read -r -d '' candidate; do
+    case "$(basename -- "$candidate")" in
+        *.msi|*.exe|*.run|*.zip|*.zst|*.vsix|PKGBUILD|RELEASE_VALIDATION.md|release-manifest.json|SOURCE_SBOM.spdx.json|RELEASE_PROVENANCE.json|RELEASE_SIGNATURES.json|SHA256SUMS)
+            cp -f "$candidate" "$PROMOTE/$(basename -- "$candidate")" ;;
+    esac
+done < <(find "$QUALIFIED" -type f -print0)
 PUBLISH_SCRIPT="$ROOT/publish-punpun.sh"
 [[ -f "$PUBLISH_SCRIPT" ]] || PUBLISH_SCRIPT="$SCRIPT_PATH"
-assets=(
-    "$ROOT"/linux/*
-    "$ROOT"/arch/*
-    "$ROOT"/editor/*
-    "$ROOT"/windows/*
-    "$ROOT"/websites/*.zip
-    "$ROOT"/reports/*
-    "$ROOT/SHA256SUMS"
-    "$PUBLISH_SCRIPT"
-)
+cp -f "$PUBLISH_SCRIPT" "$PROMOTE/publish-punpun.sh"
+mapfile -d '' assets < <(find "$PROMOTE" -maxdepth 1 -type f -print0 | sort -z)
 (( ${#assets[@]} > 1 )) || die "release assets are missing"
+
+step "Promoting stable release downloads"
+release_args=(--repo "$GH_ACCOUNT/$SOURCE_REPO" --title "PunPun $VERSION" --notes-file "$ROOT/RELEASE_NOTES.md")
+# A clean X.Y.Z is stable. Pre-release identifiers remain prereleases.
+if [[ "$VERSION" == *-* ]]; then release_args+=(--prerelease); fi
 if gh release view "$TAG" --repo "$GH_ACCOUNT/$SOURCE_REPO" >/dev/null 2>&1; then
     prune_release_assets "$GH_ACCOUNT/$SOURCE_REPO" "$TAG" "${assets[@]}"
-    gh release edit "$TAG" --repo "$GH_ACCOUNT/$SOURCE_REPO" \
-        --title "PunPun $VERSION" --notes-file "$ROOT/RELEASE_NOTES.md" --prerelease >/dev/null
+    gh release edit "$TAG" "${release_args[@]}" >/dev/null
     gh release upload "$TAG" "${assets[@]}" --repo "$GH_ACCOUNT/$SOURCE_REPO" --clobber
     ok "updated qualified release $TAG"
 else
-    gh release create "$TAG" "${assets[@]}" --repo "$GH_ACCOUNT/$SOURCE_REPO" \
-        --verify-tag --title "PunPun $VERSION" --notes-file "$ROOT/RELEASE_NOTES.md" --prerelease
+    gh release create "$TAG" "${assets[@]}" "${release_args[@]}" --verify-tag
     ok "created qualified release $TAG"
 fi
 

@@ -4,15 +4,19 @@
 #include <stdbool.h>
 #include <stdint.h>
 
+#define PUNPUN_RUNTIME_ABI_VERSION 1
+
 typedef struct pp_numbers pp_numbers;
 typedef struct pp_i64_slice pp_i64_slice;
 typedef struct pp_task pp_task;
+typedef struct pp_task_group pp_task_group;
 typedef uintptr_t (*pp_task_entry)(void *context);
 
 /* Runtime-owned strings and lists live until cleanup; there is no incremental
  * GC. Do not free returned pointers. Init registers cleanup with atexit and
  * borrows argv until cleanup. Cleanup is idempotent and invalidates all owned
  * pointers. Panics abort, so they do not run atexit handlers. */
+int pp_runtime_abi_version(void);
 void pp_runtime_init(int argc, char **argv);
 void pp_runtime_cleanup(void);
 void *pp_object_alloc(int64_t size);
@@ -70,6 +74,19 @@ int64_t pp_task_await_i64(pp_task *task);
 double pp_task_await_f64(pp_task *task);
 void *pp_task_await_ptr(pp_task *task);
 void pp_task_await_void(pp_task *task);
+
+/* Structured task groups. Handles are opaque positive runtime IDs represented
+ * as i64 in the language ABI. Groups do not steal task ownership: the runtime
+ * still owns each task until cleanup, while a group owns only its membership
+ * list. Waiting is repeatable and cancellation is cooperative. */
+int64_t pp_task_group_new(void);
+void pp_task_group_add(int64_t group_handle, pp_task *task);
+void pp_task_group_cancel(int64_t group_handle);
+void pp_task_group_wait(int64_t group_handle);
+bool pp_task_group_wait_for(int64_t group_handle, int64_t timeout_ms);
+bool pp_task_group_is_done(int64_t group_handle);
+int64_t pp_task_group_pending(int64_t group_handle);
+void pp_task_group_close(int64_t group_handle);
 const char *pp_text_int(int64_t value);
 /* Parse an optional sign followed by ASCII decimal digits, without whitespace.
  * whole truncates toward zero after rejecting nonfinite/out-of-range values. */

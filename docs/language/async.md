@@ -1,6 +1,7 @@
-# Async tasks in PunPun 0.7 development
+# Async tasks and structured concurrency
 
-PunPun retains a native `async fn` / `await` foundation in the 0.6 development cycle. Async calls create native tasks and return immediately; `await` joins the task and yields its typed result.
+PunPun's `async fn` is native AOT concurrency. An async call starts a runtime
+task and returns a typed task handle; `await` joins it and produces its result.
 
 ```pp
 async fn delayed(value: i64, delay_ms: i64) -> i64 {
@@ -15,45 +16,45 @@ launch {
 }
 ```
 
-The two calls above may execute concurrently. This is AOT native code, not an interpreter and not source-to-source async lowering through another language.
+## Structured task groups
 
-## Where `await` is valid
-
-`await` is accepted inside an `async fn` and in the root `launch` block. Using it in an ordinary function is `E1503`.
-
-## Results
-
-Current task results support scalar values, strings/pointer-like values, and `void`. The portable C backend and direct Linux x86-64 backend use the same language semantics.
-
-## Cross-task safety in the beta
-
-PunPun deliberately rejects parameters that would cross a task boundary without a proven ownership model, including borrowed references, raw pointers, `nums` handles, and object identities. Such calls produce `E1502`. Copyable scalar/string parameters are supported.
-
-This restriction is conservative. It prevents a worker from retaining an unsafe reference to a caller stack frame while the ownership/`Send` analysis is still under development.
-
-## Runtime model
-
-On Linux, the current beta task runtime uses native pthread workers. On Windows
-the runtime source has a Win32 thread implementation. Argument contexts are
-copied before the worker starts and task handles are cleaned up by the runtime.
-
-Tasks expose cooperative cancellation and completion queries:
+Use `task_group()` when several tasks belong to one operation:
 
 ```pp
-let task = delayed(42, 100);
-cancel(task);
-say(task_done(task));
+let group = task_group();
+let a = delayed(20, 10);
+let b = delayed(22, 10);
+task_group_add(group, a);
+task_group_add(group, b);
+task_group_wait(group);
+task_group_close(group);
 ```
 
-`cancel` requests cancellation; it does not forcibly terminate native code.
-Running task code may query `cancelled()` at safe points and return promptly.
+Available operations are `task_group_add`, `task_group_cancel`,
+`task_group_wait`, `task_group_wait_for`, `task_group_done`,
+`task_group_pending`, and `task_group_close`.
 
-Programs that never call an async function do not create async tasks or initialize a task executor.
+Groups do not consume task results. A task can still be awaited normally after
+the group has waited for it.
 
-## Current boundary
+## Cancellation
 
-The current development build does **not** yet claim a production event-loop runtime. Forced
-preemption, nonblocking socket integration, structured concurrency, async file
-I/O, and compiler-generated coroutine/state-machine lowering remain ongoing
-work. The existing implementation is a real native concurrent task foundation
-and is covered by direct-x86, portable-C, and LSP tests.
+Cancellation is cooperative rather than forced thread termination. `cancelled()`
+returns whether the current worker has received a request. `sleep_ms` is a safe
+point and returns early when cancellation is requested. Long CPU loops should
+check `cancelled()` themselves.
+
+## Task-boundary ownership
+
+Async parameters must be independently owned/copyable values. Borrowed
+references, raw pointers, `nums` handles, and object identities are rejected at
+task boundaries until a future `Send`-style proof system exists. This keeps a
+worker from retaining aliases to a caller's mutable stack state.
+
+## I/O
+
+`std::async` exposes `read_text_async` and `write_text_async`. The first-party
+`requests` package exposes `requests_get_async`, `requests_post_async`, and the
+other HTTP verbs. These currently run blocking host APIs inside native PunPun
+workers. They are real concurrent tasks, but they are not advertised as an
+epoll/io_uring/IOCP coroutine engine.

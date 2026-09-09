@@ -1,4 +1,4 @@
-# PunPun 0.7 development language reference
+# PunPun 0.9 development language reference
 
 PunPun is a statically typed, ahead-of-time compiled language. The normal Linux
 x86-64 build uses the direct native backend; a portable C backend supports
@@ -165,7 +165,7 @@ The 0.6 language foundation executes inferred and explicit generic calls,
 deterministically monomorphizes generic types and methods, checks algebraic
 enum patterns for reachability/exhaustiveness, and supports `Option<T>`,
 `Result<T,E>`, postfix `?`, ownership/borrow checks and lexical destruction for
-supported owning values. PunPun 0.7 development now includes a verified Machine
+supported owning values. PunPun 0.9 development now includes a verified Machine
 IR foundation with explicit ABI and allocation metadata. Detailed direct-x86
 instruction selection is still being migrated from typed AST helpers into
 Machine IR during Step 7. Contract-typed dynamic dispatch and closures/first-
@@ -183,3 +183,8 @@ Identity objects are move-only. `move(value)` explicitly transfers a binding and
 ## Optional LLVM backend
 
 The default supported Linux x86-64 path is PunPun's direct backend. `--cc-backend` chooses portable C lowering. `--llvm-backend` chooses an optional Clang/LLVM path after the same parser, semantic analysis, ownership checks, typed HIR, verified MIR and Machine IR authority chain. `emit-llvm` writes inspectable LLVM IR. The LLVM compatibility path remains native-host only for the currently supported development host.
+
+
+## Structured task groups (0.8+)
+
+PunPun task groups provide an explicit lifetime/control surface around existing async tasks. Create a group with `task_group()`, add tasks with `task_group_add`, then wait, query, cancel or close the group. Cancellation remains cooperative: workers observe cancellation at safe points such as `sleep_ms` or explicit `cancelled()` checks. See [`docs/language/structured-async.md`](language/structured-async.md).

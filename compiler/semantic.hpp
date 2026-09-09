@@ -1413,6 +1413,15 @@ class SemanticAnalyzer {
                      type_name(task), {}, "E1505");
             return expression.value == "task_done" ? Type::Bool : Type::Void;
         }
+        if (expression.value == "task_group_add") {
+            if (expression.children.size() != 2)
+                fail(expression.token, "task_group_add expects a group handle and one Task value");
+            require(expression_type(*expression.children[0]), Type::Int, expression.children[0]->token, "task group handle");
+            const Type task = expression_type(*expression.children[1]);
+            if (!is_task_type(task))
+                fail(expression.children[1]->token, "task_group_add requires a Task value, got " + type_name(task), {}, "E1506");
+            return Type::Void;
+        }
         if (expression.value == "move" || expression.value == "drop") {
             if (expression.children.size() != 1)
                 fail(expression.token, expression.value + " expects exactly one owning binding");

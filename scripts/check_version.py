@@ -38,6 +38,13 @@ def main() -> None:
         stdout=subprocess.PIPE, stderr=subprocess.PIPE,
     ).stdout)
     require(info.get("compiler_version") == VERSION, "language-info version is out of sync")
+    if VERSION.startswith("1."):
+        require(info.get("language_version") == "1.0", "language-info stable language version is wrong")
+        require(info.get("language_stability") == "stable", "language-info must report stable for 1.x")
+        require(info.get("abi_version") == 1, "PunPun 1.x ABI version must remain 1")
+        require(info.get("runtime_abi_version") == 1, "PunPun 1.x runtime ABI version must remain 1")
+        require(info.get("lockfile_format") == 1, "PunPun 1.x lockfile format must remain 1")
+        require(info.get("package_format") == 1, "PunPun 1.x package format must remain 1")
 
     ppx = subprocess.run(
         [sys.executable, str(ROOT / "ppx/ppx.py"), "--version"], cwd=ROOT,

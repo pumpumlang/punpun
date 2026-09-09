@@ -5,6 +5,10 @@ from versioning import VERSION
 ROOT=Path(__file__).resolve().parents[1]
 EXT=ROOT/'editors'/'vscode'
 OUT=ROOT/'dist'/f'punpun-vscode-{VERSION}.vsix'
+FIXED_TIME=(2026,9,7,0,0,0)
+def write_bytes(z,name,data,mode=0o644):
+    info=zipfile.ZipInfo(name,FIXED_TIME); info.external_attr=(mode & 0xffff)<<16; info.compress_type=zipfile.ZIP_DEFLATED
+    z.writestr(info,data,compress_type=zipfile.ZIP_DEFLATED,compresslevel=9)
 # Keep the extension's bundled server synchronized with the real LSP implementation.
 (EXT/'server').mkdir(exist_ok=True)
 shutil.copy2(ROOT/'tooling'/'lsp'/'server.js', EXT/'server'/'server.js')
@@ -36,10 +40,10 @@ content_types='''<?xml version="1.0" encoding="utf-8"?>
 </Types>'''
 OUT.parent.mkdir(exist_ok=True)
 with zipfile.ZipFile(OUT,'w',zipfile.ZIP_DEFLATED) as z:
-    z.writestr('extension.vsixmanifest',manifest)
-    z.writestr('[Content_Types].xml',content_types)
+    write_bytes(z,'extension.vsixmanifest',manifest.encode())
+    write_bytes(z,'[Content_Types].xml',content_types.encode())
     for p in sorted(EXT.rglob('*')):
-        if p.is_file(): z.write(p,'extension/'+p.relative_to(EXT).as_posix())
+        if p.is_file(): write_bytes(z,'extension/'+p.relative_to(EXT).as_posix(),p.read_bytes(),0o755 if p.stat().st_mode & 0o100 else 0o644)
 # Validate critical files that were missing from an earlier beta VSIX.
 with zipfile.ZipFile(OUT) as z:
     names=set(z.namelist())

@@ -40,6 +40,9 @@ class CBackend {
 
     std::string generate() {
         out_ << "#include \"punpun.h\"\n"
+                "#if !defined(PUNPUN_RUNTIME_ABI_VERSION) || PUNPUN_RUNTIME_ABI_VERSION != 1\n"
+                "#error \"PunPun runtime ABI mismatch: compiler requires ABI 1\"\n"
+                "#endif\n"
                 "#include <stddef.h>\n"
                 "#include <stdint.h>\n"
                 "#include <string.h>\n\n";

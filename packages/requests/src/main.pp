@@ -179,3 +179,17 @@ fn requests_put(url: String, body: String) -> HttpResponse { return requests_req
 fn requests_patch(url: String, body: String) -> HttpResponse { return requests_request("PATCH", url, body, "", 30000, true); }
 fn requests_delete(url: String) -> HttpResponse { return requests_request("DELETE", url, "", "", 30000, true); }
 fn requests_head(url: String) -> HttpResponse { return requests_request("HEAD", url, "", "", 30000, true); }
+
+# Async networking helpers. They reuse the same requests implementation inside
+# native PunPun tasks, so callers can compose network work with task groups and
+# cancellation without introducing a second HTTP stack.
+async fn requests_request_async(method: String, url: String, body: String, headers: String, timeout_ms: i64, follow_redirects: bool) -> HttpResponse {
+    return requests_request(method, url, body, headers, timeout_ms, follow_redirects);
+}
+async fn requests_get_async(url: String) -> HttpResponse { return requests_get(url); }
+async fn requests_post_async(url: String, body: String) -> HttpResponse { return requests_post(url, body); }
+async fn requests_put_async(url: String, body: String) -> HttpResponse { return requests_put(url, body); }
+async fn requests_patch_async(url: String, body: String) -> HttpResponse { return requests_patch(url, body); }
+async fn requests_delete_async(url: String) -> HttpResponse { return requests_delete(url); }
+async fn requests_head_async(url: String) -> HttpResponse { return requests_head(url); }
+

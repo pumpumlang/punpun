@@ -14,73 +14,120 @@ PunPun is being developed toward Java-level reliability and C++-class native per
 | 5.5 | Optional Clang/LLVM compatibility backend and LLVM IR emission without replacing the native PunPun frontend | Complete in `0.6.0-beta` |
 | 6 | Standard-library/runtime integration, compatibility regression gate, self-host verification, release qualification and packaging | Complete on the Linux x86-64 beta release host |
 
-The normative 0.6 decisions live in [`spec/0.6/`](spec/0.6/). Platform-specific qualification remains explicit: the Linux host cannot honestly certify Windows installer execution or `pacman` install/upgrade/remove behavior.
-
-### 0.6 backend choices
-
-- **Direct PunPun x86-64:** default Linux x86-64 path and the project-owned native backend.
-- **Portable C:** `--cc-backend`, useful for portability/toolchain integration.
-- **Optional LLVM:** `--llvm-backend` uses Clang/LLVM after the same PunPun parser, semantic, ownership, HIR and MIR pipeline. In 0.6 this path is native-host only.
-
-LLVM is an alternative code-generation path, not a replacement parser/type checker and not the ordinary PunPun compilation pipeline.
-
-## 0.6.0-beta.1 release-hardening status
-
-`0.6.0-beta.1` repaired the PP brand pipeline, source/release hygiene, package metadata, continuous CI, governance files and build → qualify → promote publishing gate. Its source is the clean baseline for 0.7 development.
-
-The beta.1 promotion gate is intentionally separate from compiler development. The first Arch qualification attempt failed before package qualification completed, so beta.1 must not be described as fully platform-qualified. The release publisher correctly blocks promotion when any required platform job fails. Development may continue on `main` while that platform-specific release issue is repaired; release claims remain conservative.
+The normative 0.6 decisions live in [`spec/0.6/`](spec/0.6/).
 
 ## Step 7 / PunPun 0.7 — compiler scalability and backend maturity
 
-Step 7 is **implementation-complete in `0.7.0-dev.5` on the Linux x86-64 development host**. This is a development milestone, not a claim that the 0.7 release has passed Arch/Windows promotion gates.
+Step 7 is implementation-complete in `0.7.0-dev.5` on the Linux x86-64 development host.
 
 ### Phase 7.1 — Machine IR and explicit ABI — complete
+- Verified target-aware Machine IR below MIR.
+- Explicit PunPun argument-block and SysV AMD64 ABI locations, call barriers, liveness, physical locations, spills and frame verification.
+- `ppc emit-machine-ir` and `ppc emit-abi` expose compiler/ABI state.
 
-- Added verified target-aware Machine IR below MIR.
-- Made PunPun argument-block and SysV AMD64 ABI locations explicit, including hidden result pointers for by-value records.
-- Added call barriers, liveness, value classes, physical locations, callee-save requirements, spills and frame verification.
-- Added `ppc emit-machine-ir` and `ppc emit-abi` for inspectable compiler/ABI state.
-
-### Phase 7.2 — complete backend decoupling — complete
-
-- Canonical lexical binding IDs now prevent shadowed source names from aliasing backend storage.
-- HIR/MIR/Machine IR explicitly represent move-loads, drops, aggregate/enum construction, member/address/deref/index stores, lists, async/await and CFG-based short-circuit/match behavior.
-- The direct x86-64 backend emits **every non-extern PunPun function body from verified Machine IR**. The old typed-source body emitter has been removed.
-- Machine IR call metadata is the authority for internal argument blocks and native ABI placement.
+### Phase 7.2 — backend decoupling — complete
+- Canonical lexical binding IDs and explicit move/drop/aggregate/address/index/list/await IR operations.
+- Direct x86-64 PunPun function bodies are emitted exclusively from verified Machine IR.
 
 ### Phase 7.3 — granular incremental compilation — complete
-
-- Direct-native builds assemble/cache one object per PunPun function plus independent process-entry glue.
-- Function cache identity is split into interface, body/debug mapping and direct dependency ABI/layout hashes.
-- Unrelated function/interface changes no longer invalidate every native function object.
-- `--cache-info` reports function-level hits/misses and precise invalidation reasons; `--stats` reports function/module reused/rebuilt counts.
-- `scripts/benchmark_projects.py --gate` verifies a one-function edit rebuilds exactly that function in the generated large-project workload and is enforced in CI.
+- Independent native function objects and entry glue.
+- Interface/body/direct-dependency ABI fingerprints and exact cache hit/miss reasons.
+- CI scalability gate requires one edited function to rebuild exactly one function in the generated workload.
 
 ### Phase 7.4 — optimizer and allocation maturity — complete
-
-- Machine IR performs local load/copy propagation, redundant store/dead move cleanup, constant-branch simplification and unreachable-block pruning, with structural verification before and after optimization.
-- The direct backend consumes allocator-owned physical register homes and spill ranges rather than assigning every virtual value a redundant frame home.
-- Call-live values avoid volatile registers; required callee-saved registers are emitted/restored explicitly.
-- Straight-line spill ranges are reused when lifetimes do not overlap. CFG-crossing values are conservatively assigned dedicated stack ranges until a future interference-graph allocator can coalesce them safely.
-- Verification rejects overlapping register/stack allocations, invalid CFG targets, undefined values, call-clobber violations and out-of-frame spills.
+- Machine-IR propagation/cleanup, branch simplification and unreachable-block pruning.
+- Call-safe physical allocation, callee-save handling and safe spill-range reuse.
 
 ### Phase 7.5 — everyday compiler ergonomics — complete
+- Stable diagnostics/fix-its, module-private boundaries, FFI/ABI documentation, lint gates and deterministic PPX archives.
 
-- Diagnostics expose source spans, stable error codes, help text and machine-applicable fix-its where a concrete replacement is known.
-- Top-level `private fn` visibility is enforced across modules; object/field/method visibility continues to be checked by semantic analysis.
-- `ppc emit-abi` exposes the implemented PunPun internal ABI and supported SysV native ABI contract; `spec/0.7/ffi-abi.md` documents the stability boundary.
-- `pp lint` now gates formatting drift (`W2001`) and duplicate imports (`W2002`).
-- PPX publish archives are byte-reproducible across source mtime changes through canonical ordering, metadata and ZIP timestamps.
-- Incremental scalability, PPX reproducibility, backend semantics and compatibility behavior are covered by automated regression/CI gates.
+## Step 8 / PunPun 0.8 — structured async, networking and debugging
 
-### Step 7 completion boundary
+Step 8 is implementation-complete as part of `0.9.0-dev.5` on the Linux x86-64 development host. Step numbering describes engineering milestones; the combined development version records that Steps 8 and 9 were completed in one validated development pass.
 
-`0.7.0-dev.5` completes the planned Step 7 compiler architecture work. Promotion to a public 0.7 beta remains a separate release operation and still requires the real platform qualification jobs to pass. A failed Arch or Windows job is not converted into a success by finishing compiler development.
+### Phase 8.1 — structured task groups and cancellation — complete
+- Runtime task groups own an explicit set of child tasks and expose add, wait, timed wait, pending, done, cancel and close operations.
+- Group cancellation propagates a cooperative cancellation request to every member.
+- `sleep_ms` is a cancellation safe point and wakes promptly instead of forcing a cancelled task to sleep for its original full duration.
+- Group handles are runtime-owned, validated and cleaned deterministically without changing individual task lifetime ownership.
+- Direct and portable-C regression tests cover task groups and cancellation wake-up behavior.
 
-## Later releases
+### Phase 8.2 — async I/O and networking ergonomics — complete
+- `std::async` includes async text-file helpers and cancellable delay helpers.
+- The first-party `requests` package exposes async request/get/post/put/patch/delete/head wrappers that compose with PunPun tasks and task groups.
+- The implementation deliberately reuses one HTTP stack instead of introducing a second networking runtime.
+- Current networking calls still execute their synchronous libcurl operation inside a PunPun worker task; they are concurrent at the task level, not an event-loop/nonblocking-socket implementation. That boundary is documented rather than hidden.
 
-- **0.8:** ownership-aware structured async I/O, mature networking/stdlib, source debugging, safe cancellation/task groups, and broader platform validation.
-- **0.9:** ecosystem/security hardening, fuzzing, compatibility suites, generated API docs/doctests, long-running benchmarks, and carefully reviewed metaprogramming/performance features.
-- **1.0:** stable specification, compatibility guarantees, stable package/ABI policy, platform support tiers, and fully reproducible qualified releases.
+### Phase 8.3 — source debugging foundation — complete
+- `pp debug-map` generates deterministic JSON mappings from emitted assembler `.file`/`.loc` directives to PunPun functions and source locations.
+- `pp debug` builds a debug binary and launches GDB or LLDB when available.
+- Direct backend source-location directives are now exposed as a supported developer workflow rather than remaining invisible assembler detail.
 
-Hosted registry operations, ARM/macOS, complete GUI infrastructure, inheritance, SIMD/PGO and full-language self-hosting remain outside the current Step 7 phase unless separately promoted with tests and design review.
+### Phase 8.4 — platform qualification architecture — complete, qualification remains platform-specific
+- Fast CI continuously covers compiler, generated docs/doctests, compatibility, fuzzing, structured-async stress, incremental compilation and hygiene.
+- The Arch release job now executes package qualification inside a current Arch Linux Docker environment on the GitHub Ubuntu runner to avoid runner-tooling assumptions inside a minimal job container.
+- Linux release qualification runs Step 8/9 compatibility, fuzz and structured-concurrency gates before artifact assembly.
+- Windows and Arch are not called qualified until their real platform workflows pass. Workflow architecture is complete; platform success remains an observed result, not a roadmap checkbox.
+
+## Step 9 / PunPun 0.9 — ecosystem, security and production hardening
+
+Step 9 is implementation-complete in `0.9.0-dev.5` on the Linux x86-64 development host.
+
+### Phase 9.1 — PPX integrity and transport hardening — complete
+- New PPX archives contain deterministic `PPX-MANIFEST.json` metadata with per-file path, size and SHA-256 digests.
+- `ppx verify <archive>` validates the internal package manifest and rejects tampered package content.
+- Download/install paths verify the internal manifest when present while remaining compatible with legacy registry archives.
+- Registry configuration requires HTTPS for non-loopback endpoints unless the user deliberately enables the insecure-development override.
+- `ppx audit [--deny-injection]` audits materialized dependencies and can reject native `@inject->` use in dependency source.
+- This is an integrity/transport model, not public-key package signing. Cryptographic publisher identity remains a later security project.
+
+### Phase 9.2 — generated API documentation and doctests — complete
+- `pp doc` deterministically derives API documentation from the standard library and first-party package source.
+- `pp doc --check` fails when generated API docs drift from compiler/library source.
+- `pp test --doc` and `scripts/doctest.py` compile/run explicitly marked PunPun documentation examples.
+- Generated API Markdown/JSON and the documentation-site API reference are CI-gated.
+
+### Phase 9.3 — fuzzing, backend compatibility and stress gates — complete
+- Deterministic mutation fuzzing drives the real compiler frontend and records a reproduction on timeout, signal or internal compiler failure.
+- The compatibility matrix compares direct x86-64, portable C and optional LLVM behavior for common language fixtures.
+- The async/compiler stress harness repeatedly alternates direct and C task-group execution to catch state leaks and flaky concurrency.
+- CI uses bounded versions of these gates; longer local/release runs remain available through `pp fuzz`, `pp compat` and `pp stress`.
+
+### Phase 9.4 — measured performance tooling and PGO — complete for the portable-C backend
+- `pp pgo` builds an instrumented portable-C program, runs a training workload and rebuilds with compiler profile feedback.
+- The PGO helper uses stable generated C/object/profile paths so GCC/Clang profile data can be reused reliably.
+- Direct-x86 PGO is not claimed; the current feature is explicitly scoped to PunPun's portable-C backend.
+
+### Phase 9.5 — integrated quality gates and release truthfulness — complete
+- `Makefile` and CI expose generated-doc, doctest, fuzz, compatibility and structured-async stress gates.
+- Step 8/9 features have dedicated end-to-end regression coverage in `tests/test_step8_9.py`.
+- The source/release privacy, reproducibility and qualify-before-promote rules remain mandatory.
+
+## Step 10 / PunPun 1.0 — stable compatibility line
+
+Step 10 is implementation-complete in `1.0.0` on Linux x86-64.
+
+### Phase 10.1 — language/specification freeze — complete
+- Stable language epoch 1.0, SemVer/deprecation guarantees and `stable-api.json`.
+- `pp stable-check` rejects removal/signature drift of frozen builtins and standard-library APIs.
+
+### Phase 10.2 — ABI/package compatibility — complete
+- Language ABI 1, runtime ABI 1, package format 1 and lockfile format 1 are explicit metadata.
+- New manifests declare `language = "1.0"` and `abi = 1`; incompatible requirements are rejected.
+
+### Phase 10.3 — platform support tiers — complete
+- Tier 1 Linux x86-64; Tier 2 Arch/Windows x86-64; Tier 3 unsupported macOS/ARM64.
+- `pp platform-info` exposes the machine-readable policy.
+
+### Phase 10.4 — release integrity/signing — complete
+- Deterministic assembly, SHA-256, source SBOM and provenance.
+- Optional Ed25519 release signatures plus PPX detached signatures/trust roots.
+
+### Phase 10.5 — stable release gates — complete
+- ABI/stability/platform-policy/signing regression tests are integrated with test/CI/release gates.
+
+## Post-1.0 candidates requiring separate design review
+
+ public-key PPX signing/trust roots, native async event loop, direct-x86 PGO/autovectorization/SIMD, hygienic derive/macros, ARM64/macOS backends, complete GUI infrastructure and broader full-language self-hosting.
+
+A feature is promoted only when its complete parser/semantics/ownership/IR/backend/tooling/test/documentation path is implemented where applicable. Platform qualification is never inferred from another platform's successful run.

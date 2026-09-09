@@ -16,6 +16,7 @@ usage:
   pp remove <name>
   pp update | fetch | tree
   pp doctor | info | explain <CODE>
+  pp stable-check | platform-info | release-verify <release-dir>
   pp toolchain detect|list|info <name>
   pp toolchain probe [clang|gcc|zig|mingw ...]
   pp selfhost <input.pp> <output.c>
@@ -23,10 +24,17 @@ usage:
   pp build [file.pp] [--release] [--target native|linux-x86_64|windows-x86_64] [-o output]
   pp run   [file.pp] [--release] [-- args...]
   pp check [file.pp]
-  pp test
+  pp test [--doc]
+  pp doc [--check]
+  pp fuzz [--iterations N] [--seed N]
+  pp compat [--quick]
+  pp stress [--quick] [--iterations N]
+  pp pgo [file.pp] [-o output] [-- training args...]
   pp fmt   [file.pp] [--check]
   pp lint  [file.pp]
   pp clean
+  pp debug-map [file.pp] [-o map.json]
+  pp debug [file.pp] [-- args...]
   pp emit-tokens [file.pp] [-o output.txt]
   pp emit-ast    [file.pp] [-o output.txt]
   pp emit-machine-ir [file.pp] [-o output.txt]
@@ -122,6 +130,9 @@ write_project() {
 [package]
 name = "$name"
 version = "0.1.0"
+edition = "2026"
+language = "1.0"
+abi = 1
 entry = "src/main.pp"
 
 [dependencies]
@@ -319,9 +330,80 @@ case "$command_name" in
         exit 0
         ;;
     test)
-        [ $# -eq 0 ] || { echo "pp: test currently runs every tests/*.pp file and accepts no arguments" >&2; exit 2; }
-        run_tests
-        exit 0
+        if [ $# -eq 0 ]; then
+            run_tests
+            exit 0
+        fi
+        if [ $# -eq 1 ] && [ "$1" = "--doc" ]; then
+            run_tests
+            python3 "$SCRIPT_DIR/scripts/doctest.py" --ppc "$(compiler)"
+            exit $?
+        fi
+        echo "pp: usage: pp test [--doc]" >&2
+        exit 2
+        ;;
+    doc)
+        if [ $# -eq 0 ]; then
+            exec python3 "$SCRIPT_DIR/scripts/docgen.py"
+        fi
+        if [ $# -eq 1 ] && [ "$1" = "--check" ]; then
+            exec python3 "$SCRIPT_DIR/scripts/docgen.py" --check
+        fi
+        echo "pp: usage: pp doc [--check]" >&2
+        exit 2
+        ;;
+    fuzz)
+        exec python3 "$SCRIPT_DIR/scripts/fuzz_frontend.py" --ppc "$(compiler)" "$@"
+        ;;
+    compat)
+        exec python3 "$SCRIPT_DIR/scripts/compat_matrix.py" --ppc "$(compiler)" "$@"
+        ;;
+    stress)
+        exec python3 "$SCRIPT_DIR/scripts/stress.py" --ppc "$(compiler)" "$@"
+        ;;
+    stable-check)
+        [ $# -eq 0 ] || { echo "pp: stable-check accepts no arguments" >&2; exit 2; }
+        exec python3 "$SCRIPT_DIR/scripts/stability.py" check --ppc "$(compiler)"
+        ;;
+    platform-info)
+        [ $# -eq 0 ] || { echo "pp: platform-info accepts no arguments" >&2; exit 2; }
+        exec python3 "$SCRIPT_DIR/scripts/platform_policy.py"
+        ;;
+    release-verify)
+        [ $# -eq 1 ] || { echo "pp: usage: pp release-verify <release-dir>" >&2; exit 2; }
+        exec python3 "$SCRIPT_DIR/scripts/release_sign.py" verify-release "$1"
+        ;;
+    pgo)
+        case "${1:-}" in
+            *.pp) source_file=$1; shift ;;
+            *) source_file=$(default_source) ;;
+        esac
+        exec python3 "$SCRIPT_DIR/scripts/pgo.py" "$source_file" "$@"
+        ;;
+    debug-map)
+        output_args=""
+        case "${1:-}" in
+            *.pp) source_file=$1; shift ;;
+            *) source_file=$(default_source) ;;
+        esac
+        exec python3 "$SCRIPT_DIR/scripts/debug_map.py" "$source_file" --ppc "$(compiler)" "$@"
+        ;;
+    debug)
+        case "${1:-}" in
+            *.pp) source_file=$1; shift ;;
+            *) source_file=$(default_source) ;;
+        esac
+        PPC=$(compiler)
+        output="$PROJECT_DIR/.punpun/bin/debug-$(basename "$source_file" .pp)"
+        mkdir -p "$(dirname "$output")"
+        "$PPC" build "$source_file" -o "$output"
+        if command -v gdb >/dev/null 2>&1; then
+            exec gdb --args "$output" "$@"
+        elif command -v lldb >/dev/null 2>&1; then
+            exec lldb -- "$output" "$@"
+        fi
+        echo "pp: source debug info was emitted, but neither gdb nor lldb is installed" >&2
+        exit 1
         ;;
     editor)
         if [ "${1:-}" = "install-vscode" ] && [ $# -eq 1 ]; then

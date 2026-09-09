@@ -1,34 +1,12 @@
-PunPun 0.7.0-dev.5 — Step 7 implementation complete on the Linux x86-64 development host
+PunPun 1.0.0 — stable compatibility line implementation complete on Linux x86-64
 
-Completed 0.6 foundation:
-- deterministic generics/monomorphization and constraints
-- algebraic enums, Option/Result, exhaustive match and postfix ?
-- control-flow move-state analysis, borrow checking and checked Slice<int> views
-- mandatory verified typed HIR -> MIR pipeline with stable fingerprints
-- direct Linux x86-64 backend, portable C backend and optional Clang/LLVM path
-- compiler-backed LSP/editor, PPX, self-host bootstrap seed, docs and packaging
-- deterministic PP branding, source/release hygiene and qualify-before-promote publisher
+Stable contract:
+- language epoch 1.0 with semantic-versioning/deprecation guarantees
+- language ABI 1, runtime ABI 1, package format 1, Punpun.lock format 1
+- machine-enforced builtin/stdlib baseline (`pp stable-check`)
+- project metadata language=1.0 / abi=1 and incompatible-requirement rejection
+- Tier 1 Linux x86-64; Tier 2 Arch/Windows x86-64; Tier 3 macOS/ARM64 unsupported
+- deterministic release checksums, source SBOM/provenance and optional Ed25519 signing
+- PPX internal integrity plus detached Ed25519 publisher signatures/trust roots
 
-Step 7 / 0.7 compiler milestone completed:
-- verified target-aware Machine IR with explicit PunPun/SysV ABI metadata
-- canonical lexical binding IDs and explicit move/drop/aggregate/address/index/list/await IR semantics
-- direct x86-64 function bodies are Machine-IR-only; typed-source body fallback removed
-- call-aware physical allocation, callee-save emission, spill ranges, stack-slot reuse and CFG-safe conservative spills
-- Machine IR optimization + verification before/after optimization
-- independently cached native object per PunPun function and independent entry glue
-- per-function interface/body/direct-dependency ABI/layout fingerprints
-- precise function cache hit/miss reasons and reused/rebuilt module/function statistics
-- CI incremental scalability gate for exact one-function rebuild behavior
-- stable diagnostics with machine-applicable fix-its where replacements are known
-- cross-module top-level private-function enforcement and documented FFI/ABI boundary
-- lint gates for formatting and duplicate imports
-- deterministic byte-reproducible PPX publish archives
-
-Release qualification boundary:
-- 0.7.0-dev.5 is a development snapshot, not a promoted beta/release
-- Linux x86-64 is the development/validation host used for this Step 7 completion pass
-- the earlier beta.1 Arch Actions failure remains a platform/release issue, not a compiler-development blocker
-- no Arch/Windows 0.7 qualification is claimed until those real platform jobs pass
-
-Next milestone after Step 7:
-- PunPun 0.8: ownership-aware structured concurrency/networking, debugging/profiling foundations, cancellation/task groups and broader platform validation
+All Steps 1-9 compiler/runtime/tooling functionality remains part of 1.0.

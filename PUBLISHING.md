@@ -70,3 +70,7 @@ sha256sum -c SHA256SUMS
 ```
 
 Linux artifacts are executable-qualified on Linux. Arch installation/upgrade/removal and Windows MSI/file-association/upgrade/uninstall claims become release-qualified only when their real platform jobs pass. Do not manufacture native artifacts that were not built on a suitable host.
+
+## 1.0 stable-release gates
+
+Before promoting 1.x, run `make stability`, `python3 scripts/abi_check.py --ppc ./build/ppc`, and `python3 scripts/platform_policy.py --check`. Release assembly emits source SBOM/provenance and optionally signs when `PUNPUN_RELEASE_SIGNING_KEY` is configured.

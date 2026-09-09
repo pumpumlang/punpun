@@ -1,0 +1,37 @@
+{
+  "schema": 1,
+  "language": "PunPun",
+  "release_line": "1.x",
+  "tiers": [
+    {
+      "target": "linux-x86_64",
+      "tier": 1,
+      "status": "supported",
+      "promise": "release-blocking compiler/runtime/install smoke; regressions are release blockers"
+    },
+    {
+      "target": "arch-x86_64",
+      "tier": 2,
+      "status": "qualified-when-ci-green",
+      "promise": "official pacman package; supported when the release-tag Arch workflow passes"
+    },
+    {
+      "target": "windows-x86_64",
+      "tier": 2,
+      "status": "qualified-when-ci-green",
+      "promise": "official compiler/MSI target; supported when the release-tag Windows workflow passes"
+    },
+    {
+      "target": "macos",
+      "tier": 3,
+      "status": "unsupported",
+      "promise": "no 1.0 backend or release artifacts"
+    },
+    {
+      "target": "arm64",
+      "tier": 3,
+      "status": "unsupported",
+      "promise": "no 1.0 backend or release artifacts"
+    }
+  ]
+}

@@ -31,6 +31,16 @@ jobs:
         run: python3 scripts/probe_toolchains.py gcc clang --output toolchain-probes/linux.json
       - name: Large-project smoke benchmark
         run: python3 scripts/benchmark_projects.py --modules 10 100 --rounds 2 --gate --output benchmarks/linux.json
+      - name: Step 9 compatibility/fuzz/stress gates
+        run: |
+          python3 scripts/compat_matrix.py --quick --ppc ./build/ppc
+          python3 scripts/fuzz_frontend.py --iterations 100 --seed 2309 --ppc ./build/ppc
+          python3 scripts/stress.py --quick --ppc ./build/ppc
+      - name: Stable 1.0 release-contract gates
+        run: |
+          python3 scripts/stability.py check --ppc ./build/ppc
+          python3 scripts/abi_check.py --ppc ./build/ppc
+          python3 scripts/platform_policy.py --check
       - name: Assemble and validate Linux release
         run: python3 scripts/release.py
       - uses: actions/upload-artifact@v7
@@ -43,38 +53,37 @@ jobs:
 
   arch:
     runs-on: ubuntu-latest
-    container: archlinux:latest
     steps:
-      - name: Refresh keys and install build tools
-        run: |
-          pacman -Sy --noconfirm archlinux-keyring
-          pacman -Syu --noconfirm --needed base-devel gcc python python-pillow nodejs zstd curl git sudo
       - uses: actions/checkout@v7
       - name: Read release version
         run: echo "PUNPUN_VERSION=$(tr -d '\r\n' < VERSION)" >> "$GITHUB_ENV"
-      - name: Regenerate and verify canonical PP brand
+      - name: Build, install, upgrade, and remove inside Arch Linux
         run: |
-          python3 scripts/build_brand.py --repo-root .
-          git diff --exit-code -- assets editors/vscode/icon.png editors/vscode/assets editors/vscode/fileicons
-      - name: Build release inputs
-        run: python3 scripts/release.py --skip-tests
-      - name: Build canonical makepkg artifact
-        run: |
-          cp "dist/release-$PUNPUN_VERSION/PunPun-$PUNPUN_VERSION-linux-x86_64.tar.zst" packaging/arch/
-          useradd -m builder
-          chown -R builder:builder .
-          sudo -u builder bash -lc "cd '$GITHUB_WORKSPACE/packaging/arch' && makepkg --noconfirm --cleanbuild --force"
-      - name: Install, compile, upgrade, and uninstall
-        run: |
-          pacman -U --noconfirm packaging/arch/punpun-*.pkg.tar.zst
-          ppc --version
-          tmp=$(mktemp -d)
-          printf 'launch { say("arch-ok"); }\n' > "$tmp/main.pp"
-          (cd "$tmp" && pp build main.pp -o smoke && ./smoke | grep -Fx arch-ok)
-          pacman -U --noconfirm packaging/arch/punpun-*.pkg.tar.zst
-          pacman -R --noconfirm punpun
-          hash -r
-          ! command -v ppc
+          docker run --rm \
+            -e PUNPUN_VERSION="$PUNPUN_VERSION" \
+            -v "$GITHUB_WORKSPACE:/work" \
+            -w /work \
+            archlinux:latest bash -lc '
+              set -euxo pipefail
+              pacman -Syu --noconfirm --needed base-devel gcc python python-pillow nodejs zstd curl git sudo shared-mime-info hicolor-icon-theme
+              python3 scripts/build_brand.py --repo-root .
+              git diff --exit-code -- assets editors/vscode/icon.png editors/vscode/assets editors/vscode/fileicons
+              make -j2 test
+              python3 scripts/release.py --skip-tests
+              cp "dist/release-$PUNPUN_VERSION/PunPun-$PUNPUN_VERSION-linux-x86_64.tar.zst" packaging/arch/
+              useradd -m builder
+              chown -R builder:builder /work/packaging/arch
+              sudo -u builder bash -lc "cd /work/packaging/arch && makepkg --noconfirm --cleanbuild --force"
+              pacman -U --noconfirm packaging/arch/punpun-*.pkg.tar.zst
+              ppc --version
+              tmp=$(mktemp -d)
+              printf "launch { say(\"arch-ok\"); }\n" > "$tmp/main.pp"
+              (cd "$tmp" && pp build main.pp -o smoke && ./smoke | grep -Fx arch-ok)
+              pacman -U --noconfirm packaging/arch/punpun-*.pkg.tar.zst
+              pacman -R --noconfirm punpun
+              hash -r
+              ! command -v ppc
+            '
       - uses: actions/upload-artifact@v7
         with:
           name: punpun-arch-package
@@ -118,8 +127,8 @@ jobs:
       - name: Install WiX and build installers
         shell: pwsh
         run: |
-          dotnet tool install --global wix
-          wix extension add WixToolset.Bal.wixext
+          dotnet tool install --global wix --version "6.*"
+          wix extension add -g WixToolset.BootstrapperApplications.wixext/6.0.2
           ./installers/windows/build.ps1
       - name: MSI install, file association, upgrade, and uninstall
         shell: pwsh

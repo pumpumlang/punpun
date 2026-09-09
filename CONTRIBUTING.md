@@ -1,57 +1,65 @@
 # Contributing to PunPun
 
-PunPun is a compiler/toolchain project, so changes are judged by behavior, diagnostics, tests, and release reproducibility rather than file count. Small, reviewable changes are preferred over broad rewrites that silently alter language semantics.
+PunPun is a compiler/toolchain project, so changes are judged by observable behavior, diagnostics, tests and reproducibility rather than file count. Small reviewable changes are preferred over broad rewrites that silently alter language semantics.
 
 ## Build and test
 
-On a Linux development host with a C17 compiler, C++17 compiler, Python 3, Node.js, zstd, and the runtime development dependencies installed:
+On a Linux development host with C17/C++17 compilers, Python 3, Node.js and the runtime development dependencies installed:
 
 ```sh
 make -j2 test
 ```
 
-Useful focused gates are:
+Useful focused gates:
 
 ```sh
 python3 scripts/check_version.py
 python3 scripts/privacy_audit.py .
 python3 scripts/check_links.py README.md docs docs-site/content examples editors/vscode/README.md
 ./selfhost/bootstrap.sh
-python3 docs-site/build.py
-python3 ppx-site/build.py
-python3 scripts/package_vsix.py
-./build/ppc emit-machine-ir main.pp
-./build/ppc emit-abi main.pp
+python3 scripts/docgen.py --check
+python3 scripts/doctest.py --ppc ./build/ppc
+python3 scripts/compat_matrix.py --quick
+python3 scripts/fuzz_frontend.py --iterations 60 --seed 20560
+python3 scripts/stress.py --quick
 python3 scripts/benchmark_projects.py --modules 10 --rounds 1 --gate
 ```
 
-Release assembly additionally requires Pillow because `scripts/build_brand.py` regenerates all PP raster/ICO assets from the canonical geometry before packaging.
+For PPX integrity changes also exercise package verification/audit paths. For portable-C optimization changes, use `pp pgo` on a controlled training workload.
 
-## Language changes
+## Language/runtime changes
 
-A language feature is not complete at parsing. A normal vertical change should cover, where applicable:
+A language or runtime feature is not complete at parsing. A normal vertical change covers, where applicable:
 
 1. syntax/parser;
 2. semantic/type checking;
 3. ownership/borrow behavior;
-4. HIR, MIR, and Machine IR lowering/verification where the feature reaches target code;
-5. every supported backend affected by the feature, consuming Machine IR rather than rebuilding ABI facts independently;
-6. diagnostics and negative cases;
-7. runnable tests/examples;
-8. specification and learning documentation.
+4. HIR, MIR and Machine IR lowering/verification;
+5. every affected backend;
+6. runtime/ABI behavior;
+7. diagnostics and negative cases;
+8. runnable tests/examples;
+9. specification and learning documentation.
 
-Compatibility changes must be intentional and documented. Do not silently weaken the safe-language rules to make one example compile.
+Structured-concurrency changes must test cancellation and direct/portable-C behavior. Backend changes must preserve the Step 7 Machine-IR-only direct body path.
 
-## Generated branding
+## Generated content
 
-Do not hand-edit generated PunPun logos/icons. Edit `scripts/build_brand.py`, then run:
+Do not hand-edit generated API reference files. Change the library/package source and run:
 
 ```sh
-python3 scripts/build_brand.py --repo-root .
+pp doc
+pp doc --check
 ```
 
-A second run must produce identical bytes. Timestamped backups such as `*.bak-*` do not belong in the repository; Git is the history mechanism, because apparently one history mechanism was not enough for civilization.
+Do not hand-edit generated brand assets. Change `scripts/build_brand.py`, regenerate twice and require byte-identical output.
+
+Timestamped backups such as `*.bak-*` do not belong in the repository; Git already volunteered for that job.
 
 ## Pull requests
 
-Keep commits scoped, explain observable behavior, and include tests. CI on pushes and pull requests must remain green. Platform-specific installer/package claims require the corresponding real platform qualification job; a Linux host cannot certify Windows MSI execution or a real pacman transaction.
+Keep commits scoped and explain observable behavior. CI on pushes and pull requests must remain green. Platform-specific installer/package claims require the corresponding real platform qualification job; Linux cannot certify Windows MSI execution or a real Arch pacman transaction.
+
+## 1.x compatibility rule
+
+Run `make stability` before public language/runtime/stdlib API changes. Removing/changing frozen 1.0 symbols or ABI/package/lockfile epoch 1 is a major-version decision.

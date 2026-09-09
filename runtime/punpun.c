@@ -62,11 +62,24 @@ struct pp_task {
     struct pp_task *next;
 };
 
+struct pp_task_group_member {
+    pp_task *task;
+    struct pp_task_group_member *next;
+};
+
+struct pp_task_group {
+    int64_t id;
+    struct pp_task_group_member *members;
+    struct pp_task_group *next;
+};
+
 static pp_numbers *owned_numbers;
 static pp_i64_slice *owned_slices;
 static struct owned_text *owned_strings;
 static struct owned_object *owned_objects;
 static pp_task *owned_tasks;
+static pp_task_group *owned_task_groups;
+static atomic_int_fast64_t next_task_group_id = ATOMIC_VAR_INIT(1);
 static atomic_flag registry_lock = ATOMIC_FLAG_INIT;
 static bool cleanup_registered;
 static int runtime_argc;
@@ -128,6 +141,8 @@ static void pp_task_join(pp_task *task) {
     task->joined = true;
 }
 
+int pp_runtime_abi_version(void) { return PUNPUN_RUNTIME_ABI_VERSION; }
+
 void pp_runtime_init(int argc, char **argv) {
     if (argc < 0 || (argc > 0 && argv == NULL)) pp_panic("invalid runtime arguments");
     if (!cleanup_registered) {
@@ -139,6 +154,21 @@ void pp_runtime_init(int argc, char **argv) {
 }
 
 void pp_runtime_cleanup(void) {
+    for (;;) {
+        pp_lock_registry();
+        pp_task_group *group = owned_task_groups;
+        if (group != NULL) owned_task_groups = group->next;
+        pp_unlock_registry();
+        if (group == NULL) break;
+        struct pp_task_group_member *member = group->members;
+        while (member != NULL) {
+            struct pp_task_group_member *next = member->next;
+            pp_task_join(member->task);
+            free(member);
+            member = next;
+        }
+        free(group);
+    }
     for (;;) {
         pp_lock_registry();
         pp_task *task = owned_tasks;
@@ -604,19 +634,23 @@ const char *pp_read_line(void) {
 
 void pp_sleep_ms(int64_t duration) {
     if (duration < 0) pp_panic("sleep duration must be nonnegative");
-#ifdef _WIN32
+    /* Sleeping is a cooperative cancellation safe point. Small chunks keep
+     * cancellation latency bounded without introducing a mandatory event loop. */
     uint64_t remaining = (uint64_t)duration;
     while (remaining > 0) {
-        const DWORD chunk = remaining > UINT32_MAX ? UINT32_MAX : (DWORD)remaining;
-        Sleep(chunk);
-        remaining -= chunk;
-    }
+        if (pp_task_cancelled()) return;
+        const uint64_t chunk_ms = remaining > 10 ? 10 : remaining;
+#ifdef _WIN32
+        Sleep((DWORD)chunk_ms);
 #else
-    struct timespec request = {duration / 1000, (duration % 1000) * 1000000};
-    while (nanosleep(&request, &request) != 0) {
-        if (errno != EINTR) pp_panic("sleep failed");
-    }
+        struct timespec request = {(time_t)(chunk_ms / 1000), (long)((chunk_ms % 1000) * 1000000)};
+        while (nanosleep(&request, &request) != 0) {
+            if (errno != EINTR) pp_panic("sleep failed");
+            if (pp_task_cancelled()) return;
+        }
 #endif
+        remaining -= chunk_ms;
+    }
 }
 
 pp_task *pp_task_spawn(pp_task_entry entry, const void *context, int64_t context_size) {
@@ -683,6 +717,101 @@ double pp_task_await_f64(pp_task *task) {
 void *pp_task_await_ptr(pp_task *task) { return (void *)(uintptr_t)pp_task_await_bits(task); }
 
 void pp_task_await_void(pp_task *task) { (void)pp_task_await_bits(task); }
+
+static pp_task_group *pp_task_group_lookup(int64_t handle) {
+    if (handle <= 0) pp_panic("invalid task group handle");
+    pp_lock_registry();
+    pp_task_group *group = owned_task_groups;
+    while (group != NULL && group->id != handle) group = group->next;
+    pp_unlock_registry();
+    if (group == NULL) pp_panic("unknown or closed task group");
+    return group;
+}
+
+int64_t pp_task_group_new(void) {
+    pp_task_group *group = calloc(1, sizeof(*group));
+    if (group == NULL) pp_panic("out of memory");
+    const int64_t id = atomic_fetch_add_explicit(&next_task_group_id, 1, memory_order_relaxed);
+    if (id <= 0 || id == INT64_MAX) { free(group); pp_panic("task group id space exhausted"); }
+    group->id = id;
+    pp_lock_registry();
+    group->next = owned_task_groups;
+    owned_task_groups = group;
+    pp_unlock_registry();
+    return id;
+}
+
+void pp_task_group_add(int64_t handle, pp_task *task) {
+    if (task == NULL) pp_panic("cannot add null task to group");
+    pp_task_group *group = pp_task_group_lookup(handle);
+    for (struct pp_task_group_member *it = group->members; it != NULL; it = it->next)
+        if (it->task == task) return;
+    struct pp_task_group_member *member = malloc(sizeof(*member));
+    if (member == NULL) pp_panic("out of memory");
+    *member = (struct pp_task_group_member){.task = task, .next = group->members};
+    group->members = member;
+}
+
+void pp_task_group_cancel(int64_t handle) {
+    pp_task_group *group = pp_task_group_lookup(handle);
+    for (struct pp_task_group_member *it = group->members; it != NULL; it = it->next)
+        pp_task_cancel(it->task);
+}
+
+bool pp_task_group_is_done(int64_t handle) {
+    pp_task_group *group = pp_task_group_lookup(handle);
+    for (struct pp_task_group_member *it = group->members; it != NULL; it = it->next)
+        if (!pp_task_is_done(it->task)) return false;
+    return true;
+}
+
+int64_t pp_task_group_pending(int64_t handle) {
+    pp_task_group *group = pp_task_group_lookup(handle);
+    int64_t pending = 0;
+    for (struct pp_task_group_member *it = group->members; it != NULL; it = it->next) {
+        if (!pp_task_is_done(it->task)) {
+            if (pending == INT64_MAX) pp_panic("task group is too large");
+            ++pending;
+        }
+    }
+    return pending;
+}
+
+void pp_task_group_wait(int64_t handle) {
+    pp_task_group *group = pp_task_group_lookup(handle);
+    for (struct pp_task_group_member *it = group->members; it != NULL; it = it->next)
+        pp_task_join(it->task);
+}
+
+bool pp_task_group_wait_for(int64_t handle, int64_t timeout_ms) {
+    if (timeout_ms < 0) pp_panic("task group timeout must be nonnegative");
+    const int64_t start = pp_clock_ms();
+    for (;;) {
+        if (pp_task_group_is_done(handle)) { pp_task_group_wait(handle); return true; }
+        const int64_t now = pp_clock_ms();
+        if (now - start >= timeout_ms) return false;
+        pp_sleep_ms(1);
+    }
+}
+
+void pp_task_group_close(int64_t handle) {
+    if (handle <= 0) pp_panic("invalid task group handle");
+    pp_lock_registry();
+    pp_task_group **slot = &owned_task_groups;
+    while (*slot != NULL && (*slot)->id != handle) slot = &(*slot)->next;
+    if (*slot == NULL) { pp_unlock_registry(); pp_panic("unknown or closed task group"); }
+    pp_task_group *group = *slot;
+    *slot = group->next;
+    pp_unlock_registry();
+    struct pp_task_group_member *member = group->members;
+    while (member != NULL) {
+        struct pp_task_group_member *next = member->next;
+        pp_task_join(member->task);
+        free(member);
+        member = next;
+    }
+    free(group);
+}
 
 const char *pp_text_int(int64_t value) {
     char buffer[32];

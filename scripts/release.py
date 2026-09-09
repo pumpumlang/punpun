@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 from __future__ import annotations
-import argparse, hashlib, json, os, shutil, stat, subprocess, tarfile, tempfile, time, zipfile
+import argparse, gzip, hashlib, json, os, shutil, stat, subprocess, tarfile, tempfile, time, zipfile
 from pathlib import Path
 from versioning import PKGVER, VERSION
 
@@ -65,6 +65,11 @@ def make_sdk(stage:Path):
         copy_part(ROOT/f,sdk/f)
     for d in ('runtime','stdlib','packages','ppx','tooling','editors','docs','spec','assets','packaging','gui-maker','selfhost'):
         copy_part(ROOT/d,sdk/d)
+    # The release PKGBUILD embeds the SDK archive checksum. Keeping that generated
+    # file inside the SDK creates a checksum feedback loop across release runs.
+    # The SDK does not need the Arch build recipe at runtime; the exact, checksummed
+    # PKGBUILD remains a top-level release/source artifact instead.
+    (sdk/'packaging'/'arch'/'PKGBUILD').unlink(missing_ok=True)
     # Built docs are consumer-facing; source stays in source/full bundle.
     copy_part(ROOT/'docs-site'/'dist',sdk/'docs-site'/'dist')
     copy_part(ROOT/'ppx-site'/'dist',sdk/'ppx-site'/'dist')
@@ -89,7 +94,13 @@ def make_sdk(stage:Path):
 def make_self_extractor(sdk:Path,out:Path):
     with tempfile.NamedTemporaryFile(suffix='.tar.gz',delete=False) as t: payload=Path(t.name)
     try:
-        with tarfile.open(payload,'w:gz',compresslevel=9) as tf: tf.add(sdk,arcname=sdk.name)
+        with payload.open('wb') as raw:
+            with gzip.GzipFile(filename='', mode='wb', fileobj=raw, compresslevel=9, mtime=SOURCE_DATE_EPOCH) as gz:
+                with tarfile.open(fileobj=gz, mode='w') as tf:
+                    def stable(info):
+                        info.mtime=SOURCE_DATE_EPOCH; info.uid=0; info.gid=0; info.uname=''; info.gname=''
+                        return info
+                    tf.add(sdk,arcname=sdk.name,filter=stable)
         header=rf'''#!/usr/bin/env sh
 set -eu
 VERSION="{VERSION}"
@@ -197,7 +208,7 @@ def make_arch_package(sdk:Path,out:Path):
         size=sum(p.stat().st_size for p in root.rglob('*') if p.is_file())
         (root/'.PKGINFO').write_text(f'pkgname = punpun\npkgbase = punpun\npkgver = {PKGVER}-1\npkgdesc = PunPun native programming language SDK\nurl = {PROJECT_URL}\nbuilddate = {SOURCE_DATE_EPOCH}\npackager = PunPun Project\nsize = {size}\narch = x86_64\nlicense = MIT\ndepend = glibc\ndepend = gcc-libs\ndepend = python\ndepend = nodejs\ndepend = shared-mime-info\ndepend = hicolor-icon-theme\n')
         # GNU tar + zstd produces the package payload format; .MTREE is omitted on this host because libarchive/makepkg are unavailable.
-        subprocess.run(['tar','--zstd','-cf',str(out),'-C',str(root),'.'],check=True)
+        subprocess.run(['tar','--sort=name',f'--mtime=@{SOURCE_DATE_EPOCH}','--owner=0','--group=0','--numeric-owner','--zstd','-cf',str(out),'-C',str(root),'.'],check=True)
 
 def make_publisher_bundle():
     destination=RELEASE/f'PunPun-{VERSION}-publisher.zip'
@@ -222,10 +233,13 @@ def make_publisher_bundle():
             RELEASE/f'PunPun-{VERSION}-windows-installer-source.zip':groups['windows']/f'PunPun-{VERSION}-windows-installer-source.zip',
             RELEASE/'RELEASE_VALIDATION.md':groups['reports']/'RELEASE_VALIDATION.md',
             RELEASE/'release-manifest.json':groups['reports']/'release-manifest.json',
+            RELEASE/'SOURCE_SBOM.spdx.json':groups['reports']/'SOURCE_SBOM.spdx.json',
+            RELEASE/'RELEASE_PROVENANCE.json':groups['reports']/'RELEASE_PROVENANCE.json',
         }
         for source,target in copies.items():
             if not source.is_file(): raise RuntimeError(f'publisher input missing: {source}')
             shutil.copy2(source,target)
+        if (RELEASE/'RELEASE_SIGNATURES.json').is_file(): shutil.copy2(RELEASE/'RELEASE_SIGNATURES.json',groups['reports']/'RELEASE_SIGNATURES.json')
         (bundle/'PRIVACY_AUDIT.md').write_text(
             '# Release privacy audit\n\n'
             'The source audit passed before packaging. No account name, email address, '
@@ -258,7 +272,7 @@ def main():
         sdk=make_sdk(stage)
         sdk_zip=RELEASE/f'PunPun-{VERSION}-{TARGET}-SDK.zip'; zip_tree(sdk,sdk_zip,sdk.name)
         sdk_tarz=RELEASE/f'PunPun-{VERSION}-{TARGET}.tar.zst'
-        subprocess.run(['tar','--zstd','-cf',str(sdk_tarz),'-C',str(stage),sdk.name],check=True)
+        subprocess.run(['tar','--sort=name',f'--mtime=@{SOURCE_DATE_EPOCH}','--owner=0','--group=0','--numeric-owner','--zstd','-cf',str(sdk_tarz),'-C',str(stage),sdk.name],check=True)
         installer=RELEASE/f'PunPun-{VERSION}-Linux-x86_64-Installer.run'; make_self_extractor(sdk,installer)
         make_pkgbuild(RELEASE,sdk_tarz.name,sha(sdk_tarz))
         archpkg=RELEASE/f'punpun-{PKGVER}-1-x86_64.pkg.tar.zst'; make_arch_package(sdk,archpkg)
@@ -266,6 +280,9 @@ def main():
     with tempfile.TemporaryDirectory() as td:
         src=Path(td)/f'PunPun-{VERSION}-source'; copy_clean_source(src)
         source_zip=RELEASE/f'PunPun-{VERSION}-source.zip'; zip_tree(src,source_zip,src.name)
+        run(['python3','scripts/sbom.py','--root',str(src),'-o',str(RELEASE/'SOURCE_SBOM.spdx.json')])
+        provenance={'schema':1,'product':'PunPun','version':VERSION,'source_date_epoch':SOURCE_DATE_EPOCH,'source_archive':source_zip.name,'source_sha256':sha(source_zip),'language_version':'1.0','abi_version':1,'runtime_abi_version':1,'lockfile_format':1,'package_format':1,'builder':'scripts/release.py','project_url':PROJECT_URL}
+        (RELEASE/'RELEASE_PROVENANCE.json').write_text(json.dumps(provenance,indent=2,sort_keys=True)+'\n')
     # Deploy-ready static sites plus the Windows installer project. All other
     # source already lives in the single authoritative source archive.
     zip_tree(ROOT/'docs-site'/'dist',RELEASE/f'PunPun-{VERSION}-docs-site.zip','')
@@ -297,7 +314,7 @@ def main():
     for p in sorted(RELEASE.iterdir()):
         if p.is_file() and p.name not in {'SHA256SUMS','release-manifest.json','RELEASE_VALIDATION.md'}:
             statuses.append({'filename':p.name,'sha256':sha(p),'size':p.stat().st_size,'type':p.suffix.lstrip('.') or 'file'})
-    manifest={'product':'PunPun','version':VERSION,'host_target':'x86_64-unknown-linux-gnu','artifacts':statuses,
+    manifest={'product':'PunPun','version':VERSION,'language_version':'1.0','abi_version':1,'runtime_abi_version':1,'lockfile_format':1,'package_format':1,'host_target':'x86_64-unknown-linux-gnu','artifacts':statuses,
               'validation_report':'RELEASE_VALIDATION.md',
               'unbuilt':{'windows_msi':'WiX source complete; not built/tested on Linux host','windows_setup_exe':'WiX Burn source complete; not built/tested on Linux host','windows_portable_sdk':'Windows compiler payload unavailable on host'}}
     (RELEASE/'release-manifest.json').write_text(json.dumps(manifest,indent=2)+'\n')
@@ -305,6 +322,11 @@ def main():
     for p in sorted(RELEASE.iterdir()):
         if p.is_file() and p.name!='SHA256SUMS': checks.append(f'{sha(p)}  {p.name}')
     (RELEASE/'SHA256SUMS').write_text('\n'.join(checks)+'\n')
+    signing_key=os.environ.get('PUNPUN_RELEASE_SIGNING_KEY'); signing_public=os.environ.get('PUNPUN_RELEASE_SIGNING_PUBLIC_KEY')
+    if signing_key:
+        cmd=['python3','scripts/release_sign.py','sign-release',str(RELEASE),'--private-key',signing_key]
+        if signing_public: cmd.extend(['--public-key',signing_public])
+        run(cmd)
     publisher=make_publisher_bundle()
     print('publisher bundle:',publisher)
     print('release assembled:',RELEASE)

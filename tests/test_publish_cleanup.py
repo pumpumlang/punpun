@@ -29,6 +29,6 @@ class PublishCleanupTests(unittest.TestCase):
         self.assertIn('ensure_candidate_tag',script)
         self.assertIn('wait_for_platform_qualification',script)
         self.assertIn('gh run watch',script)
-        self.assertLess(script.index('wait_for_platform_qualification "$SOURCE_SHA"'), script.index('step "Promoting release downloads"'))
+        self.assertLess(script.index('wait_for_platform_qualification "$SOURCE_SHA"'), script.index('step "Promoting stable release downloads"'))
 
 if __name__=='__main__': unittest.main()

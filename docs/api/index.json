@@ -1,0 +1,862 @@
+{
+  "entries": [
+    {
+      "documentation": "PunPun structured async helpers. `async fn` / `await` are compiler features. This module provides reusable task helpers while the runtime keeps task creation lazy for ordinary programs.",
+      "kind": "fn",
+      "line": 6,
+      "module": "stdlib/std/async.pp",
+      "name": "delay_ms",
+      "signature": "async fn delay_ms(delay: i64)"
+    },
+    {
+      "documentation": "",
+      "kind": "fn",
+      "line": 10,
+      "module": "stdlib/std/async.pp",
+      "name": "delayed_i64",
+      "signature": "async fn delayed_i64(value: i64, delay: i64) -> i64"
+    },
+    {
+      "documentation": "",
+      "kind": "fn",
+      "line": 15,
+      "module": "stdlib/std/async.pp",
+      "name": "delayed_text",
+      "signature": "async fn delayed_text(value: String, delay: i64) -> String"
+    },
+    {
+      "documentation": "",
+      "kind": "fn",
+      "line": 20,
+      "module": "stdlib/std/async.pp",
+      "name": "read_text_async",
+      "signature": "async fn read_text_async(path: String) -> String"
+    },
+    {
+      "documentation": "",
+      "kind": "fn",
+      "line": 24,
+      "module": "stdlib/std/async.pp",
+      "name": "write_text_async",
+      "signature": "async fn write_text_async(path: String, value: String)"
+    },
+    {
+      "documentation": "Cooperative workers should check cancelled() at natural loop boundaries. sleep_ms() is itself a cancellation safe point and returns early when the current task receives a cancellation request.",
+      "kind": "fn",
+      "line": 31,
+      "module": "stdlib/std/async.pp",
+      "name": "cancellable_delay_ms",
+      "signature": "async fn cancellable_delay_ms(delay: i64) -> bool"
+    },
+    {
+      "documentation": "",
+      "kind": "fn",
+      "line": 3,
+      "module": "stdlib/std/fs.pp",
+      "name": "fs_exists",
+      "signature": "fn fs_exists(path: String) -> bool"
+    },
+    {
+      "documentation": "",
+      "kind": "fn",
+      "line": 7,
+      "module": "stdlib/std/fs.pp",
+      "name": "fs_read",
+      "signature": "fn fs_read(path: String) -> String"
+    },
+    {
+      "documentation": "",
+      "kind": "fn",
+      "line": 11,
+      "module": "stdlib/std/fs.pp",
+      "name": "fs_write",
+      "signature": "fn fs_write(path: String, contents: String) -> void"
+    },
+    {
+      "documentation": "",
+      "kind": "fn",
+      "line": 15,
+      "module": "stdlib/std/fs.pp",
+      "name": "fs_make_dir",
+      "signature": "fn fs_make_dir(path: String) -> bool"
+    },
+    {
+      "documentation": "",
+      "kind": "fn",
+      "line": 16,
+      "module": "stdlib/std/fs.pp",
+      "name": "fs_remove",
+      "signature": "fn fs_remove(path: String) -> bool"
+    },
+    {
+      "documentation": "",
+      "kind": "fn",
+      "line": 17,
+      "module": "stdlib/std/fs.pp",
+      "name": "fs_rename",
+      "signature": "fn fs_rename(source: String, destination: String) -> bool"
+    },
+    {
+      "documentation": "",
+      "kind": "fn",
+      "line": 18,
+      "module": "stdlib/std/fs.pp",
+      "name": "fs_join",
+      "signature": "fn fs_join(left: String, right: String) -> String"
+    },
+    {
+      "documentation": "",
+      "kind": "fn",
+      "line": 3,
+      "module": "stdlib/std/io.pp",
+      "name": "io_read_line",
+      "signature": "fn io_read_line() -> String"
+    },
+    {
+      "documentation": "",
+      "kind": "fn",
+      "line": 1,
+      "module": "stdlib/std/math.pp",
+      "name": "minimum",
+      "signature": "fn minimum(left: i64, right: i64) -> i64"
+    },
+    {
+      "documentation": "",
+      "kind": "fn",
+      "line": 9,
+      "module": "stdlib/std/math.pp",
+      "name": "maximum",
+      "signature": "fn maximum(left: i64, right: i64) -> i64"
+    },
+    {
+      "documentation": "",
+      "kind": "fn",
+      "line": 17,
+      "module": "stdlib/std/math.pp",
+      "name": "clamp",
+      "signature": "fn clamp(value: i64, lower: i64, upper: i64) -> i64"
+    },
+    {
+      "documentation": "",
+      "kind": "fn",
+      "line": 22,
+      "module": "stdlib/std/math.pp",
+      "name": "gcd",
+      "signature": "fn gcd(left: i64, right: i64) -> i64"
+    },
+    {
+      "documentation": "",
+      "kind": "fn",
+      "line": 44,
+      "module": "stdlib/std/math.pp",
+      "name": "factorial",
+      "signature": "fn factorial(n: i64) -> i64"
+    },
+    {
+      "documentation": "",
+      "kind": "fn",
+      "line": 53,
+      "module": "stdlib/std/math.pp",
+      "name": "integer_power",
+      "signature": "fn integer_power(base: i64, exponent: i64) -> i64"
+    },
+    {
+      "documentation": "",
+      "kind": "fn",
+      "line": 3,
+      "module": "stdlib/std/nums.pp",
+      "name": "nums_copy",
+      "signature": "fn nums_copy(values: nums) -> nums"
+    },
+    {
+      "documentation": "",
+      "kind": "fn",
+      "line": 11,
+      "module": "stdlib/std/nums.pp",
+      "name": "nums_contains",
+      "signature": "fn nums_contains(values: nums, needle: i64) -> bool"
+    },
+    {
+      "documentation": "",
+      "kind": "fn",
+      "line": 20,
+      "module": "stdlib/std/nums.pp",
+      "name": "nums_index_of",
+      "signature": "fn nums_index_of(values: nums, needle: i64) -> i64"
+    },
+    {
+      "documentation": "",
+      "kind": "fn",
+      "line": 29,
+      "module": "stdlib/std/nums.pp",
+      "name": "nums_count",
+      "signature": "fn nums_count(values: nums, needle: i64) -> i64"
+    },
+    {
+      "documentation": "",
+      "kind": "fn",
+      "line": 39,
+      "module": "stdlib/std/nums.pp",
+      "name": "nums_reverse",
+      "signature": "fn nums_reverse(values: nums) -> nums"
+    },
+    {
+      "documentation": "",
+      "kind": "fn",
+      "line": 49,
+      "module": "stdlib/std/nums.pp",
+      "name": "nums_equal",
+      "signature": "fn nums_equal(left: nums, right: nums) -> bool"
+    },
+    {
+      "documentation": "Generic Option helpers. Option<T> itself is a prelude algebraic enum.",
+      "kind": "fn",
+      "line": 3,
+      "module": "stdlib/std/option.pp",
+      "name": "option_is_some",
+      "signature": "fn option_is_some<T>(value: Option<T>) -> bool"
+    },
+    {
+      "documentation": "",
+      "kind": "fn",
+      "line": 10,
+      "module": "stdlib/std/option.pp",
+      "name": "option_is_none",
+      "signature": "fn option_is_none<T>(value: Option<T>) -> bool"
+    },
+    {
+      "documentation": "",
+      "kind": "fn",
+      "line": 14,
+      "module": "stdlib/std/option.pp",
+      "name": "option_unwrap_or",
+      "signature": "fn option_unwrap_or<T: Copy>(value: Option<T>, fallback: T) -> T"
+    },
+    {
+      "documentation": "Generic Result helpers. Result<T,E> itself is a prelude algebraic enum.",
+      "kind": "fn",
+      "line": 3,
+      "module": "stdlib/std/result.pp",
+      "name": "result_is_ok",
+      "signature": "fn result_is_ok<T, E>(value: Result<T, E>) -> bool"
+    },
+    {
+      "documentation": "",
+      "kind": "fn",
+      "line": 10,
+      "module": "stdlib/std/result.pp",
+      "name": "result_is_error",
+      "signature": "fn result_is_error<T, E>(value: Result<T, E>) -> bool"
+    },
+    {
+      "documentation": "",
+      "kind": "fn",
+      "line": 14,
+      "module": "stdlib/std/result.pp",
+      "name": "result_unwrap_or",
+      "signature": "fn result_unwrap_or<T: Copy, E>(value: Result<T, E>, fallback: T) -> T"
+    },
+    {
+      "documentation": "",
+      "kind": "fn",
+      "line": 1,
+      "module": "stdlib/std/stats.pp",
+      "name": "stats_sum",
+      "signature": "fn stats_sum(values: nums) -> i64"
+    },
+    {
+      "documentation": "",
+      "kind": "fn",
+      "line": 9,
+      "module": "stdlib/std/stats.pp",
+      "name": "stats_mean",
+      "signature": "fn stats_mean(values: nums) -> f64"
+    },
+    {
+      "documentation": "",
+      "kind": "fn",
+      "line": 14,
+      "module": "stdlib/std/stats.pp",
+      "name": "stats_min",
+      "signature": "fn stats_min(values: nums) -> i64"
+    },
+    {
+      "documentation": "",
+      "kind": "fn",
+      "line": 25,
+      "module": "stdlib/std/stats.pp",
+      "name": "stats_max",
+      "signature": "fn stats_max(values: nums) -> i64"
+    },
+    {
+      "documentation": "",
+      "kind": "fn",
+      "line": 36,
+      "module": "stdlib/std/stats.pp",
+      "name": "stats_sorted",
+      "signature": "fn stats_sorted(values: nums) -> nums"
+    },
+    {
+      "documentation": "",
+      "kind": "fn",
+      "line": 3,
+      "module": "stdlib/std/system.pp",
+      "name": "system_platform",
+      "signature": "fn system_platform() -> String"
+    },
+    {
+      "documentation": "",
+      "kind": "fn",
+      "line": 7,
+      "module": "stdlib/std/system.pp",
+      "name": "system_current_dir",
+      "signature": "fn system_current_dir() -> String"
+    },
+    {
+      "documentation": "",
+      "kind": "fn",
+      "line": 11,
+      "module": "stdlib/std/system.pp",
+      "name": "system_env_has",
+      "signature": "fn system_env_has(name: String) -> bool"
+    },
+    {
+      "documentation": "",
+      "kind": "fn",
+      "line": 15,
+      "module": "stdlib/std/system.pp",
+      "name": "system_env_or",
+      "signature": "fn system_env_or(name: String, fallback: String) -> String"
+    },
+    {
+      "documentation": "",
+      "kind": "fn",
+      "line": 3,
+      "module": "stdlib/std/testing.pp",
+      "name": "expect_int",
+      "signature": "fn expect_int(actual: i64, expected: i64) -> void"
+    },
+    {
+      "documentation": "",
+      "kind": "fn",
+      "line": 7,
+      "module": "stdlib/std/testing.pp",
+      "name": "expect_bool",
+      "signature": "fn expect_bool(actual: bool, expected: bool) -> void"
+    },
+    {
+      "documentation": "",
+      "kind": "fn",
+      "line": 11,
+      "module": "stdlib/std/testing.pp",
+      "name": "expect_str",
+      "signature": "fn expect_str(actual: String, expected: String) -> void"
+    },
+    {
+      "documentation": "",
+      "kind": "fn",
+      "line": 1,
+      "module": "stdlib/std/text.pp",
+      "name": "text_starts_with",
+      "signature": "fn text_starts_with(value: String, prefix: String) -> bool"
+    },
+    {
+      "documentation": "",
+      "kind": "fn",
+      "line": 5,
+      "module": "stdlib/std/text.pp",
+      "name": "text_ends_with",
+      "signature": "fn text_ends_with(value: String, suffix: String) -> bool"
+    },
+    {
+      "documentation": "",
+      "kind": "fn",
+      "line": 9,
+      "module": "stdlib/std/text.pp",
+      "name": "text_trim",
+      "signature": "fn text_trim(value: String) -> String"
+    },
+    {
+      "documentation": "",
+      "kind": "fn",
+      "line": 21,
+      "module": "stdlib/std/text.pp",
+      "name": "text_repeat",
+      "signature": "fn text_repeat(value: String, count: i64) -> String"
+    },
+    {
+      "documentation": "",
+      "kind": "fn",
+      "line": 30,
+      "module": "stdlib/std/text.pp",
+      "name": "text_is_utf8",
+      "signature": "fn text_is_utf8(value: String) -> bool"
+    },
+    {
+      "documentation": "",
+      "kind": "fn",
+      "line": 31,
+      "module": "stdlib/std/text.pp",
+      "name": "text_codepoints",
+      "signature": "fn text_codepoints(value: String) -> i64"
+    },
+    {
+      "documentation": "",
+      "kind": "fn",
+      "line": 3,
+      "module": "stdlib/std/time.pp",
+      "name": "elapsed_ms",
+      "signature": "fn elapsed_ms(start: i64) -> i64"
+    },
+    {
+      "documentation": "",
+      "kind": "fn",
+      "line": 7,
+      "module": "stdlib/std/time.pp",
+      "name": "deadline_reached",
+      "signature": "fn deadline_reached(deadline: i64) -> bool"
+    },
+    {
+      "documentation": "",
+      "kind": "fn",
+      "line": 11,
+      "module": "stdlib/std/time.pp",
+      "name": "deadline_after_ms",
+      "signature": "fn deadline_after_ms(duration: i64) -> i64"
+    },
+    {
+      "documentation": "",
+      "kind": "fn",
+      "line": 16,
+      "module": "stdlib/std/time.pp",
+      "name": "delay_ms",
+      "signature": "fn delay_ms(duration: i64) -> void"
+    },
+    {
+      "documentation": "",
+      "kind": "fn",
+      "line": 1,
+      "module": "packages/cli/src/main.pp",
+      "name": "cli_count",
+      "signature": "fn cli_count() -> i64"
+    },
+    {
+      "documentation": "",
+      "kind": "fn",
+      "line": 2,
+      "module": "packages/cli/src/main.pp",
+      "name": "cli_arg",
+      "signature": "fn cli_arg(index: i64) -> String"
+    },
+    {
+      "documentation": "",
+      "kind": "fn",
+      "line": 3,
+      "module": "packages/cli/src/main.pp",
+      "name": "cli_has_args",
+      "signature": "fn cli_has_args() -> bool"
+    },
+    {
+      "documentation": "",
+      "kind": "fn",
+      "line": 1,
+      "module": "packages/filesystem/src/main.pp",
+      "name": "file_read",
+      "signature": "fn file_read(path: String) -> String"
+    },
+    {
+      "documentation": "",
+      "kind": "fn",
+      "line": 2,
+      "module": "packages/filesystem/src/main.pp",
+      "name": "file_write",
+      "signature": "fn file_write(path: String, contents: String)"
+    },
+    {
+      "documentation": "",
+      "kind": "fn",
+      "line": 3,
+      "module": "packages/filesystem/src/main.pp",
+      "name": "file_present",
+      "signature": "fn file_present(path: String) -> bool"
+    },
+    {
+      "documentation": "",
+      "kind": "fn",
+      "line": 4,
+      "module": "packages/filesystem/src/main.pp",
+      "name": "working_directory",
+      "signature": "fn working_directory() -> String"
+    },
+    {
+      "documentation": "",
+      "kind": "fn",
+      "line": 26,
+      "module": "packages/gui/src/main.pp",
+      "name": "pp_gui_available",
+      "signature": "extern native fn pp_gui_available() -> i64;"
+    },
+    {
+      "documentation": "",
+      "kind": "fn",
+      "line": 27,
+      "module": "packages/gui/src/main.pp",
+      "name": "pp_gui_message",
+      "signature": "extern native fn pp_gui_message(title: String, message: String) -> i64;"
+    },
+    {
+      "documentation": "",
+      "kind": "fn",
+      "line": 29,
+      "module": "packages/gui/src/main.pp",
+      "name": "gui_available",
+      "signature": "fn gui_available() -> bool"
+    },
+    {
+      "documentation": "",
+      "kind": "fn",
+      "line": 30,
+      "module": "packages/gui/src/main.pp",
+      "name": "gui_message",
+      "signature": "fn gui_message(title: String, message: String) -> bool"
+    },
+    {
+      "documentation": "",
+      "kind": "fn",
+      "line": 21,
+      "module": "packages/json/src/main.pp",
+      "name": "pp_json_valid",
+      "signature": "extern native fn pp_json_valid(text: String) -> i64;"
+    },
+    {
+      "documentation": "",
+      "kind": "fn",
+      "line": 22,
+      "module": "packages/json/src/main.pp",
+      "name": "pp_json_get_string",
+      "signature": "extern native fn pp_json_get_string(text: String, key: String, fallback: String) -> String;"
+    },
+    {
+      "documentation": "",
+      "kind": "fn",
+      "line": 23,
+      "module": "packages/json/src/main.pp",
+      "name": "pp_json_get_i64",
+      "signature": "extern native fn pp_json_get_i64(text: String, key: String, fallback: i64) -> i64;"
+    },
+    {
+      "documentation": "",
+      "kind": "fn",
+      "line": 24,
+      "module": "packages/json/src/main.pp",
+      "name": "pp_json_quote",
+      "signature": "extern native fn pp_json_quote(text: String) -> String;"
+    },
+    {
+      "documentation": "",
+      "kind": "fn",
+      "line": 26,
+      "module": "packages/json/src/main.pp",
+      "name": "json_valid",
+      "signature": "fn json_valid(text: String) -> bool"
+    },
+    {
+      "documentation": "",
+      "kind": "fn",
+      "line": 27,
+      "module": "packages/json/src/main.pp",
+      "name": "json_get_string",
+      "signature": "fn json_get_string(text: String, key: String, fallback: String) -> String"
+    },
+    {
+      "documentation": "",
+      "kind": "fn",
+      "line": 28,
+      "module": "packages/json/src/main.pp",
+      "name": "json_get_i64",
+      "signature": "fn json_get_i64(text: String, key: String, fallback: i64) -> i64"
+    },
+    {
+      "documentation": "",
+      "kind": "fn",
+      "line": 29,
+      "module": "packages/json/src/main.pp",
+      "name": "json_quote",
+      "signature": "fn json_quote(text: String) -> String"
+    },
+    {
+      "documentation": "",
+      "kind": "fn",
+      "line": 1,
+      "module": "packages/logging/src/main.pp",
+      "name": "log_trace",
+      "signature": "fn log_trace(message: String)"
+    },
+    {
+      "documentation": "",
+      "kind": "fn",
+      "line": 2,
+      "module": "packages/logging/src/main.pp",
+      "name": "log_debug",
+      "signature": "fn log_debug(message: String)"
+    },
+    {
+      "documentation": "",
+      "kind": "fn",
+      "line": 3,
+      "module": "packages/logging/src/main.pp",
+      "name": "log_info",
+      "signature": "fn log_info(message: String)"
+    },
+    {
+      "documentation": "",
+      "kind": "fn",
+      "line": 4,
+      "module": "packages/logging/src/main.pp",
+      "name": "log_warn",
+      "signature": "fn log_warn(message: String)"
+    },
+    {
+      "documentation": "",
+      "kind": "fn",
+      "line": 5,
+      "module": "packages/logging/src/main.pp",
+      "name": "log_error",
+      "signature": "fn log_error(message: String)"
+    },
+    {
+      "documentation": "",
+      "kind": "struct",
+      "line": 20,
+      "module": "packages/requests/src/main.pp",
+      "name": "curl_slist",
+      "signature": "struct curl_slist;"
+    },
+    {
+      "documentation": "",
+      "kind": "struct",
+      "line": 96,
+      "module": "packages/requests/src/main.pp",
+      "name": "curl_slist",
+      "signature": "struct curl_slist *list=NULL;"
+    },
+    {
+      "documentation": "",
+      "kind": "struct",
+      "line": 103,
+      "module": "packages/requests/src/main.pp",
+      "name": "curl_slist",
+      "signature": "struct curl_slist *next=p_slist_append(list,line);"
+    },
+    {
+      "documentation": "",
+      "kind": "struct",
+      "line": 122,
+      "module": "packages/requests/src/main.pp",
+      "name": "curl_slist",
+      "signature": "struct curl_slist *header_list=pp_req_headers(headers);"
+    },
+    {
+      "documentation": "",
+      "kind": "fn",
+      "line": 145,
+      "module": "packages/requests/src/main.pp",
+      "name": "pp_requests_request",
+      "signature": "extern native fn pp_requests_request(method: String, url: String, body: String, headers: String, timeout_ms: i64, follow: i64) -> String;"
+    },
+    {
+      "documentation": "",
+      "kind": "fn",
+      "line": 146,
+      "module": "packages/requests/src/main.pp",
+      "name": "pp_requests_status",
+      "signature": "extern native fn pp_requests_status() -> i64;"
+    },
+    {
+      "documentation": "",
+      "kind": "fn",
+      "line": 147,
+      "module": "packages/requests/src/main.pp",
+      "name": "pp_requests_error",
+      "signature": "extern native fn pp_requests_error() -> String;"
+    },
+    {
+      "documentation": "",
+      "kind": "fn",
+      "line": 148,
+      "module": "packages/requests/src/main.pp",
+      "name": "pp_requests_available",
+      "signature": "extern native fn pp_requests_available() -> i64;"
+    },
+    {
+      "documentation": "",
+      "kind": "object",
+      "line": 150,
+      "module": "packages/requests/src/main.pp",
+      "name": "HttpResponse",
+      "signature": "object HttpResponse"
+    },
+    {
+      "documentation": "",
+      "kind": "fn",
+      "line": 161,
+      "module": "packages/requests/src/main.pp",
+      "name": "ok",
+      "signature": "public fn ok() -> bool"
+    },
+    {
+      "documentation": "",
+      "kind": "fn",
+      "line": 162,
+      "module": "packages/requests/src/main.pp",
+      "name": "text",
+      "signature": "public fn text() -> String"
+    },
+    {
+      "documentation": "",
+      "kind": "fn",
+      "line": 165,
+      "module": "packages/requests/src/main.pp",
+      "name": "requests_available",
+      "signature": "fn requests_available() -> bool"
+    },
+    {
+      "documentation": "",
+      "kind": "fn",
+      "line": 166,
+      "module": "packages/requests/src/main.pp",
+      "name": "requests_request",
+      "signature": "fn requests_request(method: String, url: String, body: String, headers: String, timeout_ms: i64, follow_redirects: bool) -> HttpResponse"
+    },
+    {
+      "documentation": "",
+      "kind": "fn",
+      "line": 172,
+      "module": "packages/requests/src/main.pp",
+      "name": "requests_get",
+      "signature": "fn requests_get(url: String) -> HttpResponse"
+    },
+    {
+      "documentation": "",
+      "kind": "fn",
+      "line": 175,
+      "module": "packages/requests/src/main.pp",
+      "name": "requests_post",
+      "signature": "fn requests_post(url: String, body: String) -> HttpResponse"
+    },
+    {
+      "documentation": "",
+      "kind": "fn",
+      "line": 178,
+      "module": "packages/requests/src/main.pp",
+      "name": "requests_put",
+      "signature": "fn requests_put(url: String, body: String) -> HttpResponse"
+    },
+    {
+      "documentation": "",
+      "kind": "fn",
+      "line": 179,
+      "module": "packages/requests/src/main.pp",
+      "name": "requests_patch",
+      "signature": "fn requests_patch(url: String, body: String) -> HttpResponse"
+    },
+    {
+      "documentation": "",
+      "kind": "fn",
+      "line": 180,
+      "module": "packages/requests/src/main.pp",
+      "name": "requests_delete",
+      "signature": "fn requests_delete(url: String) -> HttpResponse"
+    },
+    {
+      "documentation": "",
+      "kind": "fn",
+      "line": 181,
+      "module": "packages/requests/src/main.pp",
+      "name": "requests_head",
+      "signature": "fn requests_head(url: String) -> HttpResponse"
+    },
+    {
+      "documentation": "Async networking helpers. They reuse the same requests implementation inside native PunPun tasks, so callers can compose network work with task groups and cancellation without introducing a second HTTP stack.",
+      "kind": "fn",
+      "line": 186,
+      "module": "packages/requests/src/main.pp",
+      "name": "requests_request_async",
+      "signature": "async fn requests_request_async(method: String, url: String, body: String, headers: String, timeout_ms: i64, follow_redirects: bool) -> HttpResponse"
+    },
+    {
+      "documentation": "",
+      "kind": "fn",
+      "line": 189,
+      "module": "packages/requests/src/main.pp",
+      "name": "requests_get_async",
+      "signature": "async fn requests_get_async(url: String) -> HttpResponse"
+    },
+    {
+      "documentation": "",
+      "kind": "fn",
+      "line": 190,
+      "module": "packages/requests/src/main.pp",
+      "name": "requests_post_async",
+      "signature": "async fn requests_post_async(url: String, body: String) -> HttpResponse"
+    },
+    {
+      "documentation": "",
+      "kind": "fn",
+      "line": 191,
+      "module": "packages/requests/src/main.pp",
+      "name": "requests_put_async",
+      "signature": "async fn requests_put_async(url: String, body: String) -> HttpResponse"
+    },
+    {
+      "documentation": "",
+      "kind": "fn",
+      "line": 192,
+      "module": "packages/requests/src/main.pp",
+      "name": "requests_patch_async",
+      "signature": "async fn requests_patch_async(url: String, body: String) -> HttpResponse"
+    },
+    {
+      "documentation": "",
+      "kind": "fn",
+      "line": 193,
+      "module": "packages/requests/src/main.pp",
+      "name": "requests_delete_async",
+      "signature": "async fn requests_delete_async(url: String) -> HttpResponse"
+    },
+    {
+      "documentation": "",
+      "kind": "fn",
+      "line": 194,
+      "module": "packages/requests/src/main.pp",
+      "name": "requests_head_async",
+      "signature": "async fn requests_head_async(url: String) -> HttpResponse"
+    },
+    {
+      "documentation": "",
+      "kind": "fn",
+      "line": 1,
+      "module": "packages/testing/src/main.pp",
+      "name": "expect",
+      "signature": "fn expect(condition: bool, message: String)"
+    },
+    {
+      "documentation": "",
+      "kind": "fn",
+      "line": 2,
+      "module": "packages/testing/src/main.pp",
+      "name": "expect_equal_i64",
+      "signature": "fn expect_equal_i64(left: i64, right: i64, message: String)"
+    },
+    {
+      "documentation": "",
+      "kind": "fn",
+      "line": 3,
+      "module": "packages/testing/src/main.pp",
+      "name": "expect_equal_string",
+      "signature": "fn expect_equal_string(left: String, right: String, message: String)"
+    }
+  ],
+  "format": 1,
+  "version": "1.0.0"
+}

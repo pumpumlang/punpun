@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""PunPunXPac (PPX) beta package client.
+"""PunPunXPac (PPX) package client.
 
 PPX deliberately uses the same Punpun.toml/Punpun.lock model as `pp`. Local and
 registry packages are materialized as ordinary path dependencies before the
@@ -26,7 +26,8 @@ import urllib.parse
 import urllib.request
 import zipfile
 
-VERSION = (Path(__file__).resolve().parents[1] / "VERSION").read_text(encoding="utf-8").strip()
+ROOT = Path(__file__).resolve().parents[1]
+VERSION = (ROOT / "VERSION").read_text(encoding="utf-8").strip()
 DEFAULT_REGISTRY = "http://127.0.0.1:8765"
 NAME_RE = re.compile(r"^[A-Za-z][A-Za-z0-9_-]{0,63}$")
 SEMVER_RE = re.compile(r"^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-([0-9A-Za-z.-]+))?$")
@@ -54,7 +55,18 @@ def bundled_packages() -> Path:
 
 
 def registry_url() -> str:
-    return os.environ.get("PPX_REGISTRY", DEFAULT_REGISTRY).rstrip("/")
+    value = os.environ.get("PPX_REGISTRY", DEFAULT_REGISTRY).rstrip("/")
+    parsed = urllib.parse.urlparse(value)
+    if parsed.scheme not in {"http", "https"} or not parsed.netloc:
+        raise SystemExit(f"ppx: invalid registry URL: {value}")
+    host = (parsed.hostname or "").lower()
+    loopback = host in {"127.0.0.1", "localhost", "::1"}
+    if parsed.scheme != "https" and not loopback and os.environ.get("PPX_ALLOW_INSECURE_REGISTRY") != "1":
+        raise SystemExit(
+            "ppx: refusing insecure non-loopback registry; use https or set "
+            "PPX_ALLOW_INSECURE_REGISTRY=1 for an explicitly trusted development registry"
+        )
+    return value
 
 
 def pp_command() -> str:
@@ -286,25 +298,92 @@ def manifest_name_version(root: Path) -> tuple[str, str, str]:
     metadata = manifest_publish_metadata(root)
     return metadata["name"], metadata["version"], metadata.get("description", "")
 
+def package_source_files(root: Path) -> list[Path]:
+    files: list[Path] = []
+    for path in sorted(root.rglob("*")):
+        if not path.is_file():
+            continue
+        rel = path.relative_to(root)
+        if any(part in {".git", ".punpun", "node_modules", "__pycache__", ".pytest_cache", ".mypy_cache", ".ruff_cache", "build", "dist"} for part in rel.parts):
+            continue
+        if rel.name in {".DS_Store", "Thumbs.db", "desktop.ini", "PPX-MANIFEST.json"} or rel.suffix in {".pyc", ".tmp"}:
+            continue
+        if path.stat().st_size > 16 * 1024 * 1024:
+            raise SystemExit(f"ppx: refusing unusually large package file: {rel}")
+        files.append(path)
+    return files
+
+
+def package_integrity_manifest(root: Path, files: list[Path]) -> bytes:
+    payload = {
+        "format": 1,
+        "files": [
+            {
+                "path": path.relative_to(root).as_posix(),
+                "sha256": hashlib.sha256(path.read_bytes()).hexdigest(),
+                "size": path.stat().st_size,
+            }
+            for path in files
+        ],
+    }
+    return (json.dumps(payload, sort_keys=True, separators=(",", ":")) + "\n").encode("utf-8")
+
+
+def verify_package_tree(root: Path, *, require_manifest: bool = True) -> dict:
+    manifest_path = root / "PPX-MANIFEST.json"
+    if not manifest_path.is_file():
+        if require_manifest:
+            raise SystemExit("ppx: package archive has no PPX-MANIFEST.json integrity manifest")
+        return {"format": 0, "files": []}
+    try:
+        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as exc:
+        raise SystemExit(f"ppx: invalid package integrity manifest: {exc}")
+    if manifest.get("format") != 1 or not isinstance(manifest.get("files"), list):
+        raise SystemExit("ppx: unsupported package integrity manifest")
+    declared: set[str] = set()
+    for item in manifest["files"]:
+        if not isinstance(item, dict):
+            raise SystemExit("ppx: malformed package integrity entry")
+        name = str(item.get("path", ""))
+        rel = Path(name)
+        if not name or rel.is_absolute() or ".." in rel.parts or name == "PPX-MANIFEST.json":
+            raise SystemExit(f"ppx: unsafe integrity-manifest path: {name!r}")
+        target = root / rel
+        if not target.is_file():
+            raise SystemExit(f"ppx: package integrity file is missing: {name}")
+        content = target.read_bytes()
+        actual = hashlib.sha256(content).hexdigest()
+        if actual != item.get("sha256") or len(content) != item.get("size"):
+            raise SystemExit(f"ppx: package integrity mismatch: {name}")
+        declared.add(rel.as_posix())
+    actual_files = {
+        p.relative_to(root).as_posix()
+        for p in root.rglob("*")
+        if p.is_file() and p.name != "PPX-MANIFEST.json"
+    }
+    undeclared = sorted(actual_files - declared)
+    if undeclared:
+        raise SystemExit("ppx: package contains undeclared file(s): " + ", ".join(undeclared[:8]))
+    return manifest
+
+
 def create_package_archive(root: Path) -> tuple[bytes, str]:
+    files = package_source_files(root)
+    manifest_bytes = package_integrity_manifest(root, files)
     with tempfile.NamedTemporaryFile(suffix=".zip", delete=False) as temp:
         temp_path = Path(temp.name)
     try:
         with zipfile.ZipFile(temp_path, "w", compression=zipfile.ZIP_DEFLATED, compresslevel=9) as zf:
-            for path in sorted(root.rglob("*")):
-                if not path.is_file(): continue
-                rel = path.relative_to(root)
-                if any(part in {".git", ".punpun", "node_modules", "__pycache__", ".pytest_cache", ".mypy_cache", ".ruff_cache", "build", "dist"} for part in rel.parts): continue
-                if rel.name in {".DS_Store", "Thumbs.db", "desktop.ini"} or rel.suffix in {".pyc", ".tmp"}: continue
-                if path.stat().st_size > 16 * 1024 * 1024:
-                    raise SystemExit(f"ppx: refusing unusually large package file: {rel}")
-                # Registry package bytes are part of the dependency identity.
-                # Never leak filesystem mtimes/UIDs into that identity.
-                info = zipfile.ZipInfo(rel.as_posix(), date_time=(1980, 1, 1, 0, 0, 0))
+            def write_entry(name: str, content: bytes) -> None:
+                info = zipfile.ZipInfo(name, date_time=(1980, 1, 1, 0, 0, 0))
                 info.compress_type = zipfile.ZIP_DEFLATED
                 info.external_attr = (0o100644 & 0xFFFF) << 16
                 info.create_system = 3
-                zf.writestr(info, path.read_bytes(), compress_type=zipfile.ZIP_DEFLATED, compresslevel=9)
+                zf.writestr(info, content, compress_type=zipfile.ZIP_DEFLATED, compresslevel=9)
+            for path in files:
+                write_entry(path.relative_to(root).as_posix(), path.read_bytes())
+            write_entry("PPX-MANIFEST.json", manifest_bytes)
         content = temp_path.read_bytes()
         if len(content) > 32 * 1024 * 1024:
             raise SystemExit("ppx: package archive exceeds 32 MiB beta registry limit")
@@ -356,6 +435,7 @@ def resolve_remote(name: str, requirement: str | None, resolving=None) -> Path:
     safe_extract_zip(archive, staging / "src")
     archive.unlink()
     source_root = staging / "src"
+    verify_package_tree(source_root, require_manifest=False)
     manifest = source_root / "Punpun.toml"
     if not manifest.is_file():
         raise SystemExit(f"ppx: {name} {version} archive has no Punpun.toml")
@@ -497,6 +577,12 @@ def cmd_download(args):
     checksum = hashlib.sha256(content).hexdigest()
     if checksum != selected["checksum"]:
         raise SystemExit(f"ppx: checksum mismatch for {args.name} {version}")
+    with tempfile.TemporaryDirectory(prefix="ppx-download-verify-") as td:
+        archive = Path(td) / "package.zip"
+        archive.write_bytes(content)
+        extracted = Path(td) / "src"
+        safe_extract_zip(archive, extracted)
+        verify_package_tree(extracted, require_manifest=False)
     output = Path(args.output) if args.output else Path(f"{args.name}-{version}.zip")
     output.parent.mkdir(parents=True, exist_ok=True)
     output.write_bytes(content)
@@ -522,6 +608,102 @@ def cmd_yank(args):
              method="POST", payload={}, token=load_token(True))
     print(f"yanked {args.name} {args.version}")
 
+
+def cmd_verify(args):
+    archive = Path(args.archive).resolve()
+    if not archive.is_file(): raise SystemExit(f"ppx: archive not found: {archive}")
+    with tempfile.TemporaryDirectory() as td:
+        root = Path(td) / "package"; safe_extract_zip(archive, root); manifest = verify_package_tree(root)
+    signature=Path(args.signature).resolve() if getattr(args,"signature",None) else None
+    if getattr(args,"trusted",False):
+        signature=signature or Path(str(archive)+".sig")
+        if not signature.is_file(): raise SystemExit("ppx: --trusted requires a detached .sig file")
+        keys=sorted(trust_root().glob("*.pem"))
+        if not keys: raise SystemExit("ppx: no trusted PPX signing keys; use `ppx trust add <public.pem>`")
+        key=verify_detached_signature(archive,signature,keys); print(f"signature: trusted via {key.name}")
+    elif signature:
+        if not getattr(args,"public_key",None): raise SystemExit("ppx: --signature requires --public-key (or use --trusted)")
+        key=verify_detached_signature(archive,signature,[Path(args.public_key).resolve()]); print(f"signature: valid via {key}")
+    print(f"verified {archive.name}: {len(manifest['files'])} file(s), sha256={hashlib.sha256(archive.read_bytes()).hexdigest()}")
+
+def _injection_files(root: Path) -> list[str]:
+    result = []
+    for path in sorted(root.rglob("*.pp")):
+        try:
+            text = path.read_text(encoding="utf-8")
+        except OSError:
+            continue
+        if "@inject->" in text:
+            result.append(path.relative_to(root).as_posix())
+    return result
+
+
+def cmd_audit(args):
+    root = Path.cwd()
+    manifest = root / "Punpun.toml"
+    if not manifest.is_file():
+        raise SystemExit("ppx: audit requires a Punpun.toml project")
+    document = tomllib.loads(manifest.read_text(encoding="utf-8"))
+    dependencies = document.get("dependencies") or {}
+    findings: list[str] = []
+    checked = 0
+    for name, spec in sorted(dependencies.items()):
+        path_value = None
+        if isinstance(spec, dict):
+            path_value = spec.get("path")
+        elif isinstance(spec, str) and (spec.startswith(".") or "/" in spec or "\\" in spec):
+            path_value = spec
+        if not path_value:
+            findings.append(f"{name}: registry dependency is not materialized as a local audited path")
+            continue
+        dep_root = (root / str(path_value)).resolve()
+        if not dep_root.is_dir():
+            findings.append(f"{name}: dependency path is missing: {dep_root}")
+            continue
+        checked += 1
+        injections = _injection_files(dep_root)
+        for item in injections:
+            findings.append(f"{name}: native injection in {item}")
+    print(f"PPX audit: {checked} local dependency path(s) checked")
+    if findings:
+        for item in findings:
+            print("warning: " + item)
+        if args.deny_injection and any("native injection" in item for item in findings):
+            raise SystemExit("ppx: audit failed because --deny-injection was requested")
+    else:
+        print("PPX audit: no dependency findings")
+
+
+
+def trust_root() -> Path:
+    root = state_root() / "trust"
+    root.mkdir(parents=True, exist_ok=True)
+    return root
+
+def cmd_sign(args):
+    sys.path.insert(0, str(ROOT / "scripts")); import release_sign
+    archive=Path(args.archive).resolve()
+    if not archive.is_file(): raise SystemExit(f"ppx: archive not found: {archive}")
+    output=Path(args.output or (str(archive)+".sig")); output.write_bytes(release_sign.sign_bytes(Path(args.private_key),archive.read_bytes())); print(f"signed {archive.name} -> {output}")
+
+def cmd_trust(args):
+    if args.action=="list":
+        keys=sorted(trust_root().glob("*.pem")); print("\n".join(k.name for k in keys) if keys else "no trusted PPX signing keys"); return
+    if not args.key: raise SystemExit("ppx: trust add/remove requires a key argument")
+    if args.action=="add":
+        source=Path(args.key).resolve()
+        if not source.is_file(): raise SystemExit("ppx: trusted key file not found")
+        digest=hashlib.sha256(source.read_bytes()).hexdigest()[:16]; target=trust_root()/f"{digest}.pem"; shutil.copy2(source,target); print(f"trusted {target.name}"); return
+    target=trust_root()/args.key
+    if not target.is_file(): raise SystemExit(f"ppx: trusted key not found: {args.key}")
+    target.unlink(); print(f"removed trust root {args.key}")
+
+def verify_detached_signature(archive: Path, signature: Path, public_keys: list[Path]) -> Path:
+    sys.path.insert(0, str(ROOT / "scripts")); import release_sign
+    data=archive.read_bytes(); sig=signature.read_bytes()
+    for key in public_keys:
+        if release_sign.verify_bytes(key,data,sig): return key
+    raise SystemExit("ppx: detached Ed25519 signature did not match any trusted key")
 
 def cmd_doctor(_args):
     print(f"PPX {VERSION}")
@@ -559,6 +741,14 @@ def parser() -> argparse.ArgumentParser:
     login = sub.add_parser("login"); login.add_argument("username"); login.add_argument("--password", help=argparse.SUPPRESS); login.set_defaults(func=cmd_login)
     sub.add_parser("logout").set_defaults(func=cmd_logout)
     cache = sub.add_parser("cache"); cache.add_argument("action", choices=["path", "clean"], nargs="?", default="path"); cache.set_defaults(func=lambda a: (shutil.rmtree(cache_root(), ignore_errors=True), print("PPX cache cleared")) if a.action == "clean" else print(cache_root()))
+    verify = sub.add_parser("verify", help="verify package integrity and optional Ed25519 publisher signature")
+    verify.add_argument("archive"); verify.add_argument("--signature"); verify.add_argument("--public-key"); verify.add_argument("--trusted", action="store_true"); verify.set_defaults(func=cmd_verify)
+    sign = sub.add_parser("sign", help="create a detached Ed25519 package signature")
+    sign.add_argument("archive"); sign.add_argument("--private-key", required=True); sign.add_argument("-o", "--output"); sign.set_defaults(func=cmd_sign)
+    trust = sub.add_parser("trust", help="manage trusted PPX public signing keys")
+    trust.add_argument("action", choices=["add","remove","list"]); trust.add_argument("key", nargs="?"); trust.set_defaults(func=cmd_trust)
+    audit = sub.add_parser("audit", help="audit local dependency sources and native injection exposure")
+    audit.add_argument("--deny-injection", action="store_true"); audit.set_defaults(func=cmd_audit)
     sub.add_parser("doctor").set_defaults(func=cmd_doctor)
     return p
 
