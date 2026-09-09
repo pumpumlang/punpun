@@ -9,7 +9,7 @@
 
 <p align="center">
   <img alt="PunPun 0.7.0-dev.5" src="https://img.shields.io/badge/version-0.7.0--dev.5-b9ff4a?style=for-the-badge&labelColor=11151e">
-  <img alt="Linux x86-64 qualified" src="https://img.shields.io/badge/qualified-Linux%20x86--64-66e3ff?style=for-the-badge&labelColor=11151e">
+  <img alt="Linux x86-64 validated" src="https://img.shields.io/badge/validated-Linux%20x86--64-66e3ff?style=for-the-badge&labelColor=11151e">
   <img alt="MIT license" src="https://img.shields.io/badge/license-MIT-f6f7fa?style=for-the-badge&labelColor=11151e">
 </p>
 
@@ -77,14 +77,14 @@ The 0.6 language-foundation features remain available:
 
 ## Install
 
-The commands below refer to the latest published 0.6 beta release artifacts. A source checkout of `main` is the newer `0.7.0-dev.5` Step 7-complete development line.
+The commands below refer to the `0.7.0-dev.5` Step 7-complete development release. It is published as a prerelease because Arch and Windows promotion gates are still separate from the Linux-host compiler milestone.
 
 ### Linux x86-64 installer
 
 Use the self-extracting release installer:
 
 ```sh
-bash PunPun-0.6.0-beta-Linux-x86_64-Installer.run
+bash PunPun-0.7.0-dev.5-Linux-x86_64-Installer.run
 ```
 
 It installs the SDK under `~/.local/share/punpun`, command wrappers under `~/.local/bin`, VS Code support when an editor CLI is available, and the `.pp` Linux MIME/file icon association.
@@ -101,14 +101,14 @@ pp doctor
 Install the generated package with pacman:
 
 ```sh
-sudo pacman -U punpun-0.6.0_beta-1-x86_64.pkg.tar.zst
+sudo pacman -U punpun-0.7.0_dev.5-1-x86_64.pkg.tar.zst
 ```
 
 The package includes the PunPun MIME definition and hicolor file icons for `.pp` source files.
 
 ### Portable SDK
 
-Extract `PunPun-0.6.0-beta-linux-x86_64-SDK.zip` or the `.tar.zst` release and invoke the commands from its `bin/` directory.
+Extract `PunPun-0.7.0-dev.5-linux-x86_64-SDK.zip` or `PunPun-0.7.0-dev.5-linux-x86_64.tar.zst` and invoke the commands from its `bin/` directory.
 
 ### Windows
 
