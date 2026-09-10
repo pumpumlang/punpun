@@ -2,7 +2,7 @@ from __future__ import annotations
 import re
 from pathlib import Path
 from PySide6.QtCore import Qt, QRect, QSize, Signal
-from PySide6.QtGui import QColor, QFont, QPainter, QSyntaxHighlighter, QTextCharFormat
+from PySide6.QtGui import QColor, QFont, QPainter, QSyntaxHighlighter, QTextCharFormat, QTextFormat
 from PySide6.QtWidgets import QPlainTextEdit, QWidget
 from .filetypes import kind_for
 from .theme import MOCHA
@@ -53,4 +53,4 @@ class CodeEditor(QPlainTextEdit):
             if block.isVisible() and bottom>=event.rect().top(): p.setPen(QColor(MOCHA['surface2'])); p.drawText(0,top,self.line_area.width()-7,self.fontMetrics().height(),Qt.AlignmentFlag.AlignRight,str(num+1))
             block=block.next(); top=bottom; bottom=top+round(self.blockBoundingRect(block).height()); num+=1
     def highlight_line(self):
-        s=QPlainTextEdit.ExtraSelection(); s.format.setBackground(QColor(MOCHA['surface0'])); s.format.setProperty(QTextCharFormat.Property.FullWidthSelection,True); s.cursor=self.textCursor(); s.cursor.clearSelection(); self.setExtraSelections([s])
+        s=QPlainTextEdit.ExtraSelection(); s.format.setBackground(QColor(MOCHA['surface0'])); s.format.setProperty(QTextFormat.Property.FullWidthSelection,True); s.cursor=self.textCursor(); s.cursor.clearSelection(); self.setExtraSelections([s])
