@@ -111,6 +111,9 @@ jobs:
       - name: Build Windows compiler and runtime
         shell: msys2 {0}
         run: |
+          # Hosted runners keep TEMP on D: and LOCALAPPDATA on C:. Keep PPC's
+          # staging and cache on one volume so the cache's atomic rename stays valid.
+          export PPC_CACHE="$(cygpath -w "$RUNNER_TEMP")/ppc-cache"
           make -B compiler CXX=g++ CC=gcc
           ./build/ppc.exe --version
           printf 'launch { say("windows-ok"); }\n' > windows-smoke.pp
