@@ -53,7 +53,7 @@ class Toolchain:
         return None
 
     def punpun_check(self, source: Path) -> CommandPlan:
-        exe=self.ppc() or self.pp()
+        exe=self.pp() or self.ppc()
         if not exe: raise FileNotFoundError("PunPun 1.3 toolchain is not installed")
         if Path(exe).name.lower().startswith("ppc"):
             argv=[exe,"check","--json",str(source)]
@@ -65,7 +65,7 @@ class Toolchain:
         from .filetypes import kind_for
         kind=kind_for(source)
         if kind.id == "punpun":
-            exe=self.ppc() or self.pp()
+            exe=self.pp() or self.ppc()
             if not exe: raise FileNotFoundError("PunPun 1.3 toolchain is not installed")
             return CommandPlan([exe,"run",str(source)], source.parent, "Run PunPun")
         build_dir=source.parent/".punpun-ide"/"build"; build_dir.mkdir(parents=True, exist_ok=True)
@@ -99,6 +99,7 @@ class Toolchain:
         dbg=self.find("gdb","lldb")
         return CommandPlan([compiler,str(source),"-g","-O0","-o",str(out)],source.parent,f"Build {kind.label} debug executable"), ([dbg,str(out)] if dbg else None)
 
+
 def fetch_latest_release(timeout: int=10) -> dict:
     req=urllib.request.Request(RELEASE_API,headers={"User-Agent":"PunPun-IDE/0.1"})
     with urllib.request.urlopen(req,timeout=timeout) as r:
@@ -126,8 +127,10 @@ def safe_extract(archive: Path, destination: Path) -> None:
             z.extractall(destination)
     elif archive.name.endswith((".tar.gz",".tgz")):
         with tarfile.open(archive,"r:gz") as t:
-            for m in t.getmembers(): ok(m.name)
-            t.extractall(destination, filter="data")
+            for m in t.getmembers():
+                ok(m.name)
+                if m.issym() or m.islnk(): raise ValueError("Archive links are not allowed")
+            t.extractall(destination)
     else: raise ValueError("Unsupported toolchain archive")
 
 def install_release_asset(asset: ReleaseAsset, app_dir: Path, progress=None) -> Path:
