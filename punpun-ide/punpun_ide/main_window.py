@@ -1,15 +1,15 @@
 from __future__ import annotations
 from pathlib import Path
-import os, subprocess, threading
+import os
 from PySide6.QtCore import Qt, QDir, QProcess, QTimer, Signal, QObject
 from PySide6.QtGui import QAction, QIcon, QTextCursor, QKeySequence, QShortcut
-from PySide6.QtWidgets import (QMainWindow,QFileSystemModel,QTreeView,QTabWidget,QDockWidget,QPlainTextEdit,QListWidget,QListWidgetItem,QToolBar,QFileDialog,QMessageBox,QSplitter,QTextBrowser,QLineEdit,QWidget,QVBoxLayout,QLabel,QCompleter,QMenu,QToolTip)
+from PySide6.QtWidgets import (QMainWindow,QFileSystemModel,QTreeView,QTabWidget,QDockWidget,QPlainTextEdit,QListWidget,QListWidgetItem,QToolBar,QFileDialog,QMessageBox,QSplitter,QTextBrowser,QLineEdit,QWidget,QVBoxLayout,QMenu,QToolTip)
 from .editor import CodeEditor
 from .filetypes import kind_for
 from .toolchain import Toolchain
 from .smart import fallback_problems, outline, help_for_word
 from .downloader import ToolchainDialog
-from .lsp import PunPunLspClient, LspError
+from .lsp import PunPunLspClient
 
 class Bridge(QObject):
     diagnostics=Signal(str,object)
@@ -122,7 +122,7 @@ class MainWindow(QMainWindow):
     def show_fallback(self,e):
         ps=fallback_problems(e.toPlainText()); self._problems[str(e.path)]=ps; self.render_problems()
     def on_lsp_diagnostics(self,uri,diags):
-        from urllib.parse import urlparse,unquote; path=unquote(urlparse(uri).path); rows=[]
+        from urllib.parse import urlparse,unquote; path=unquote(urlparse(uri).path); path=path[1:] if os.name=="nt" and len(path)>2 and path[0]=="/" and path[2]==":" else path; rows=[]
         from .smart import Problem
         for d in diags:
             s=d.get("range",{}).get("start",{}); sev={1:"error",2:"warning",3:"info",4:"hint"}.get(d.get("severity"),"info"); rows.append(Problem(sev,int(s.get("line",0))+1,int(s.get("character",0))+1,str(d.get("message","")),str(d.get("code", ""))))
@@ -149,7 +149,7 @@ class MainWindow(QMainWindow):
         active=getattr(self,"_interactive_process",None)
         if active is not None and active.state()!=QProcess.ProcessState.NotRunning:
             active.write((cmd+"\n").encode()); return
-        self.termout.appendPlainText(f"$ {cmd}"); shell=os.environ.get("COMSPEC","cmd.exe") if os.name=="nt" else os.environ.get("SHELL","/bin/sh"); args=["/c",cmd] if os.name=="nt" else ["-lc",cmd]; p=QProcess(self); p.setWorkingDirectory(str(self.root)); p.readyReadStandardOutput.connect(lambda:self.termout.appendPlainText(bytes(p.readAllStandardOutput()).decode(errors="replace").rstrip())); p.readyReadStandardError.connect(lambda:self.termout.appendPlainText(bytes(p.readAllStandardError()).decode(errors="replace").rstrip())); p.start(shell,args); self._terminal_process=p
+        self.termout.appendPlainText(f"$ {cmd}"); shell=os.environ.get("COMSPEC","cmd.exe") if os.name=="nt" else os.environ.get("SHELL","/bin/sh"); args=["/c",cmd] if os.name=="nt" else ["-lc",cmd]; p=QProcess(self); p.setWorkingDirectory(str(self.root)); from PySide6.QtCore import QProcessEnvironment; pe=QProcessEnvironment.systemEnvironment(); [pe.insert(k,v) for k,v in self.tc.env().items()]; p.setProcessEnvironment(pe); p.readyReadStandardOutput.connect(lambda:self.termout.appendPlainText(bytes(p.readAllStandardOutput()).decode(errors="replace").rstrip())); p.readyReadStandardError.connect(lambda:self.termout.appendPlainText(bytes(p.readAllStandardError()).decode(errors="replace").rstrip())); p.start(shell,args); self._terminal_process=p
     def update_context_help(self,e):
         if kind_for(e.path).id != "punpun": return
         cur=e.textCursor(); cur.select(QTextCursor.SelectionType.WordUnderCursor); word=cur.selectedText(); tip=help_for_word(word)
