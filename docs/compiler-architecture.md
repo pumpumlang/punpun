@@ -1,94 +1,77 @@
-# Compiler architecture (0.9 development)
+# PunPun 1.3 compiler architecture
 
-PunPun keeps one direction of semantic authority. Backends do not re-parse or re-typecheck the language.
-
-```text
-frontend.hpp       lexer/parser/AST + source spans
-semantic.hpp       names, types, generics, contracts, enum/match typing
-ownership.hpp      move-state and safe-borrow analysis
-hir.hpp            typed control-flow/value IR
-hir_opt.hpp        target-independent HIR optimization
-mir.hpp            verified target-independent SSA-like MIR
-machine_ir.hpp     target ABI + call-aware liveness + physical allocation
-pipeline.hpp       mandatory HIR/MIR/Machine-IR construction + fingerprints
-backend_x86_64.hpp direct Linux x86-64 emission
-backend_c.hpp      portable C17 lowering (also feeds optional LLVM)
-main.cpp           CLI, cache, toolchain selection, build orchestration
-```
-
-## Authority chain
-
-Every successful `check`, build, or backend emission runs:
+PPC is the canonical PunPun compiler. It is a C++20 program with a C11 runtime
+and one shared frontend for every backend and editor query.
 
 ```text
-source
-  -> parser
-  -> semantic/type analysis
-  -> ownership/borrow analysis
-  -> typed HIR
-  -> verified MIR
-  -> verified Machine IR
-  -> selected backend
+source -> SourceManager -> lexer -> parser/AST -> checker/HIR -> MIR builder
+                                                               |
+                                                          optimizer
+                                                               |
+                                     +-------------------------+----------------+
+                                     |                         |                |
+                                  C backend              x86-64 backend    bytecode/VM
 ```
 
-HIR and MIR preserve language meaning without target calling-convention decisions. Machine IR is the first target-aware layer. It records the ABI and allocation facts that native code generation must obey.
+## Frontend
 
-## Machine IR in 0.7.0-dev.5
+`compiler/src/syntax` accepts the modern stable grammar and the retained
+migration dialect. `compiler/src/sema` performs declaration collection, type
+resolution, generic specialization, exhaustiveness, ownership, and borrow
+checks. It emits typed, resolved HIR so backends do not repeat name lookup or
+language semantics.
 
-`compiler/machine_ir.hpp` is the target-aware contract between verified MIR and native code generation. It contains:
+## MIR and optimization
 
-- explicit PunPun internal argument-block ABI layouts;
-- modeled SysV AMD64 native-call register/stack placements;
-- hidden result pointers for by-value record returns;
-- call-barrier-aware liveness and GPR/FPR/aggregate classes;
-- allocator-owned register homes and spill ranges;
-- explicit callee-saved requirements;
-- CFG-aware conservative spill handling for values crossing block boundaries;
-- 16-byte-aligned frame requirements and allocation/control-flow verification;
-- local propagation/cleanup, constant branch simplification and unreachable block pruning.
+`compiler/src/mir` lowers HIR into an explicit control-flow graph. `-O1` runs a
+cheap cleanup sweep; `-O2` iterates constant folding, propagation, branch
+simplification, dead-code removal, and block cleanup to a fixed point. Checked
+arithmetic is preserved: operations that would trap are not folded into wrapped
+values.
 
-Inspect target allocation and ABI state directly:
+## Backends
 
-```sh
-ppc emit-machine-ir main.pp
-ppc emit-abi main.pp
-```
+- `c` emits a C11 translation unit and invokes the host C compiler. It is the default and has full language coverage.
+- `native` emits System V x86-64 assembly directly. It diagnoses unsupported async and stack-passed argument cases instead of silently changing behavior.
+- `bytecode` emits register bytecode for the bundled VM. It runs in-process and uses the same runtime services as native executables.
 
-The textual dump is a compiler/debugging format, not yet a stable serialization API.
+All three consume the same MIR. The compiler regression runner compares their
+observable output and uses explicit skip metadata for documented backend gaps.
 
-## Backend authority after Step 7
+## Runtime
 
-Every non-extern PunPun function in the direct x86-64 backend is emitted by walking verified Machine IR blocks/instructions. The earlier typed-source function-body emitter has been removed. Machine IR explicitly carries the operations needed for lexical moves/drops, aggregates/enums, member/address/deref/index mutation, lists, short-circuit CFG and async/await behavior.
+`runtime/ppcrt.c` and the platform files implement ABI epoch 1. HTTPS is in
+`runtime/ppc_https.c`; GUI support is in `runtime/ppc_gui.c`. They are linked by
+the C/native backends and directly called by the VM, so there is one behavior
+and error model.
 
-The direct backend also consumes Machine IR parameter offsets, internal argument-block sizes, hidden record-result pointers, native argument locations, physical register assignments, spill ranges and callee-save requirements. It does not rebuild those facts from source-level syntax.
+Runtime object caching is content-addressed by compiler version, ABI/cache
+epoch, target, compiler identity, headers, flags, and source contents. Objects
+are staged and atomically renamed so concurrent builds never consume a partial
+file. `--no-cache` rebuilds runtime objects in private temporary files.
 
-The portable C backend remains a portability lowering scheduled from the same authoritative compiled function set. The optional LLVM path continues to use portable C/Clang after the shared frontend/analysis/IR authority chain; it is not an alternate parser/type checker.
+## Language service
 
-## Granular incremental compilation
+`compiler/src/service` wraps the compiler's source, syntax, and semantic data.
+`ppc serve --stdio` provides diagnostics, full-text synchronization, completion,
+hover, partial definitions, and nested document symbols. The VS Code extension
+is a protocol client only; it does not contain a second PunPun parser.
 
-For direct-native builds, the driver emits one independently assemblable object per PunPun function plus independently cached process-entry glue. Each function cache key includes target/toolchain/optimization configuration and three compiler fingerprints:
+## Layout
 
-1. **interface** — callable type/interface identity;
-2. **dependency** — direct called-function interface hashes plus reachable shape/enum layout identity;
-3. **body** — Machine-IR body, debug mapping and allocation identity.
+| Path | Responsibility |
+|---|---|
+| `compiler/include/ppc` | Compiler interfaces |
+| `compiler/src/support` | Source management, host abstraction, diagnostics |
+| `compiler/src/syntax` | Lexer and parser |
+| `compiler/src/sema` | Types, builtins, ownership, HIR |
+| `compiler/src/mir` | CFG IR and optimizer |
+| `compiler/src/codegen` | C, x86-64, bytecode, and VM |
+| `compiler/src/service` | Language service and LSP |
+| `compiler/src/driver` | CLI, imports, cache, and host toolchain |
+| `runtime` | ABI 1 runtime and native libraries |
+| `stdlib` | PunPun source modules |
+| `compiler/tests` | Cross-backend and LSP regressions |
 
-This allows unrelated functions to remain cache hits when another function changes. `--cache-info` reports function-level reasons and `--stats` reports reused/rebuilt function and module counts. `scripts/benchmark_projects.py --gate` is the CI scalability contract for the generated project workload.
-
-## Machine IR optimizer/allocation boundary
-
-The current allocator deliberately prefers correctness over unsafe cross-CFG coalescing. Straight-line scalar temporaries can live in physical registers and non-overlapping spills can reuse stack slots. Call-live values use preserved registers or spills. Values whose SSA lifetime crosses basic-block boundaries use dedicated spill ranges until a future interference-graph allocator can prove safe coalescing across joins/loops.
-
-That conservative rule is intentional: block storage order is not dominance order, so ordinary linear interval overlap is insufficient at match/branch joins. The verifier continues to reject overlapping final register/stack locations and call-clobber violations.
-
-## LLVM
-
-The optional LLVM path still reuses `backend_c.hpp` as a portable lowering and asks Clang to produce LLVM/native code. It goes through the same parser, semantic, ownership, HIR, MIR and Machine IR authority chain before backend emission.
-
-
-## Step 8/9 runtime and quality surfaces
-
-Step 8 does not insert a second compiler IR layer. Structured task groups are runtime operations surfaced as typed built-ins; `async fn`/`await` continue through the normal frontend/HIR/MIR/Machine-IR pipeline. Cancellation is cooperative, with runtime safe points such as `sleep_ms`.
-
-Source debugging reuses direct-backend assembler `.file`/`.loc` directives. `scripts/debug_map.py` converts those mappings into deterministic JSON, while `pp debug` delegates interactive debugging to GDB/LLDB.
-
-Step 9 production gates sit around the compiler rather than changing language semantics: generated API docs/doctests, deterministic frontend mutation fuzzing, backend compatibility execution, structured-async stress and portable-C PGO. PPX package manifests add archive-content integrity without changing the compiler's trust model or claiming publisher-signature authentication.
+See [the compiler implementation notes](../compiler/docs/architecture.md) and
+[known limitations](../compiler/docs/known-limitations.md) for deeper detail.

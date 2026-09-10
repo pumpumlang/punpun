@@ -1,17 +1,16 @@
 # requests
 
-First-party PunPun HTTP package backed by the system libcurl runtime when
-available. Install from a source checkout/SDK with:
+Compatibility package for the PunPun 1.0 requests API, now backed by the
+verified PunPun 1.3 HTTPS runtime.
 
 ```sh
 ppx add requests
 ```
 
-Synchronous helpers include `requests_get`, `requests_post`, `requests_put`,
-`requests_patch`, `requests_delete`, `requests_head`, and the configurable
-`requests_request`.
+`requests_get`, `requests_post`, `requests_put`, `requests_patch`,
+`requests_delete`, `requests_head`, and `requests_request` return
+`HttpResponse` with `status`, `body`, `error`, `ok()`, and `text()`.
+Task-returning async variants preserve the same response type.
 
-PunPun 0.8+ also exposes task-returning async wrappers such as
-`requests_get_async` and `requests_request_async`. They run through the native
-PunPun task runtime and compose with `task_group_*` structured-concurrency
-builtins.
+Only `https://` URLs are accepted. TLS peer/hostname verification is mandatory,
+redirects remain HTTPS-only, and response bodies are capped at 64 MiB.

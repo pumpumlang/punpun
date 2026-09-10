@@ -27,12 +27,16 @@ These rules apply to every compiler, runtime, package, documentation and release
 
 - Preserve valid 0.6+ source unless a documented migration and diagnostic are provided.
 - ABI/ownership/overload changes must be specified before implementation.
-- Direct x86 PunPun function bodies remain Machine-IR-only.
-- Direct-native incremental correctness must preserve per-function dependency invalidation and the exact-one-function rebuild gate.
+- C, native x86-64, and bytecode behavior must remain derived from the shared
+  typed HIR/MIR pipeline; a backend must not reimplement source semantics.
+- Runtime-object cache identity must include compiler/cache epoch, target,
+  toolchain identity, runtime headers, flags, and source contents. Concurrent
+  writers must publish objects atomically.
 
 ## Step 8 concurrency/debugging gates
 
-- Structured task groups must have direct/C regression coverage and deterministic cleanup.
+- Structured task groups must have C/bytecode regression coverage and
+  deterministic cleanup while native x86-64 reports its documented async gap.
 - Cancellation is cooperative; blocking/safe-point behavior must be documented rather than presented as preemptive cancellation.
 - Async networking documentation must distinguish worker-task concurrency from true nonblocking socket/event-loop I/O.
 - Source debugging must preserve deterministic source mapping and cannot depend on machine-specific absolute paths in committed output.

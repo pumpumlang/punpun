@@ -1,0 +1,7 @@
+[package]
+name = "https"
+version = "1.3.0"
+description = "Verified HTTPS requests for PunPun"
+entry = "src/main.pp"
+
+[dependencies]

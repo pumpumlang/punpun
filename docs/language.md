@@ -1,9 +1,9 @@
-# PunPun 0.9 development language reference
+# PunPun 1.3 language reference
 
-PunPun is a statically typed, ahead-of-time compiled language. The normal Linux
-x86-64 build uses the direct native backend; a portable C backend supports
-additional toolchains. This page describes the supported 0.5 syntax. The older
-`launch: ... done` dialect is accepted only by the migration tool.
+PunPun is a statically typed compiled language. PPC's default backend emits
+portable C; direct x86-64 and register-bytecode backends use the same semantic
+frontend. This page describes the stable 1.0 language as implemented by PunPun
+1.3. The older `launch: ... done` dialect remains accepted for migration.
 
 ## Program structure
 
@@ -165,11 +165,9 @@ The 0.6 language foundation executes inferred and explicit generic calls,
 deterministically monomorphizes generic types and methods, checks algebraic
 enum patterns for reachability/exhaustiveness, and supports `Option<T>`,
 `Result<T,E>`, postfix `?`, ownership/borrow checks and lexical destruction for
-supported owning values. PunPun 0.9 development now includes a verified Machine
-IR foundation with explicit ABI and allocation metadata. Detailed direct-x86
-instruction selection is still being migrated from typed AST helpers into
-Machine IR during Step 7. Contract-typed dynamic dispatch and closures/first-
-class functions remain later work. The authoritative implementation matrix is
+supported owning values. PunPun 1.3 lowers all three backends from PPC's typed
+HIR and verified MIR. Contract-typed dynamic dispatch and closures/first-class
+functions remain later work. The authoritative implementation summary is
 in [`COMPLETION_REPORT.md`](../COMPLETION_REPORT.md).
 
 Normative 0.6 rules and implementation status are in [`spec/0.6/`](../spec/0.6/).
@@ -180,9 +178,13 @@ Identity objects are move-only. `move(value)` explicitly transfers a binding and
 
 `nums` intentionally retains its 0.5 shared-handle behavior in 0.6. Use `view(values, start, end)` to create a checked `Slice<int>`; `slice_len(view)` and `slice_get(view, index)` access it. The compiler prevents checked mutation/move of the source while a named slice borrow is live.
 
-## Optional LLVM backend
+## Compiler backends
 
-The default supported Linux x86-64 path is PunPun's direct backend. `--cc-backend` chooses portable C lowering. `--llvm-backend` chooses an optional Clang/LLVM path after the same parser, semantic analysis, ownership checks, typed HIR, verified MIR and Machine IR authority chain. `emit-llvm` writes inspectable LLVM IR. The LLVM compatibility path remains native-host only for the currently supported development host.
+`--backend=c` is the default and covers the full language.
+`--backend=native` emits x86-64 System V assembly directly.
+`--backend=bytecode` runs register bytecode in the bundled VM without an
+external toolchain. Unsupported backend features produce a diagnostic rather
+than silently changing program behavior.
 
 
 ## Structured task groups (0.8+)

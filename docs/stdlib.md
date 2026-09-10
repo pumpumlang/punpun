@@ -1,5 +1,18 @@
 # Standard Library
 
+PunPun 1.3 ships 47 source modules across collections, data encoding/parsing,
+math, text, system, filesystem, async, HTTPS, GUI, testing, time, options, and
+results. The generated API reference is the exhaustive signature list.
+
+## Native library foundations
+
+- `std.net.https` wraps verified HTTPS runtime builtins with GET, POST, PUT, DELETE, HEAD, status/error, and task-returning convenience functions.
+- `std.gui` provides GUI availability, a native message window, and a default-title alert helper.
+
+HTTPS uses the system libcurl with certificate/hostname verification and
+HTTPS-only redirects. GUI uses Win32 or dynamically loaded X11/XWayland and
+reports false on unsupported/headless sessions.
+
 ## Generic sum types
 
 `Option<T>` and `Result<T,E>` are available from the prelude. Import
@@ -18,10 +31,10 @@ bring std.nums
 bring std.time
 
 launch:
-    pin readings <- [9, 2, 7]
-    say clamp(stats_sum(readings), 0, 100)
-    say text_trim("  ready\n")
-done
+    let readings = [9, 2, 7];
+    say(clamp(stats_sum(readings), 0, 100));
+    say(text_trim("  ready\n"));
+}
 ```
 
 All modules share the program's global function/shape namespace. Functions are

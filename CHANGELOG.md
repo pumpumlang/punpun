@@ -174,3 +174,11 @@ This beta is a substantial compiler/toolchain rework rather than a cosmetic vers
 - The self-hosted compiler currently covers its documented bootstrap subset;
   the full production language continues to use the C++ compiler.
 - ABI stability is not promised during the 0.x series.
+## 1.3.0 — 2026-09-10
+
+- Replaced the legacy compiler with the supplied PPC C++20 compiler, preserving language/runtime ABI epoch 1.
+- Integrated portable C, direct x86-64, and bytecode backends plus the compiler-native LSP.
+- Added verified HTTPS builtins, `std.net.https`, a first-party `https` package, and a compatibility-preserving `requests` implementation.
+- Added native GUI availability/message APIs backed by Win32 or dynamically loaded X11/XWayland.
+- Expanded the standard library and generated API reference.
+- Updated the launcher, VS Code extension, self-host bootstrap, CI/release tooling, and platform documentation for the canonical compiler.

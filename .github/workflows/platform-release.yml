@@ -113,7 +113,7 @@ jobs:
           make -B compiler CXX=g++ CC=gcc
           ./build/ppc.exe --version
           printf 'launch { say("windows-ok"); }\n' > windows-smoke.pp
-          ./build/ppc.exe build windows-smoke.pp -o windows-smoke.exe --cc-backend
+          ./build/ppc.exe build windows-smoke.pp -o windows-smoke.exe --backend=c
           ./windows-smoke.exe | grep -Fx windows-ok
       - name: Stage Windows SDK payload
         shell: pwsh

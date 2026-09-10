@@ -1,7 +1,7 @@
 # Async, task groups, and cancellation
 
-PunPun 0.9 keeps the native `async fn` / `await` model and adds structured task
-groups. Calling an async function returns a typed native task immediately.
+PunPun 1.3 keeps the `async fn` / `await` model and structured task groups.
+Calling an async function returns a typed task immediately.
 
 ```pp
 async fn fetch_later(value: i64) -> i64 {

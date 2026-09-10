@@ -1,20 +1,29 @@
-# PunPun 1.0.0 release notes
+# PunPun 1.3.0 release notes
 
-PunPun 1.0 establishes the first stable compatibility line.
+PunPun 1.3 replaces the legacy compiler with the supplied PPC compiler while
+keeping the stable PunPun 1.0 language, runtime ABI, package, and lockfile epochs.
 
-## Stability
-- Stable language epoch **1.0** with SemVer/deprecation guarantees.
-- `pp stable-check` enforces the frozen builtin/stdlib surface.
-- Explicit ABI 1, runtime ABI 1, package format 1 and lockfile format 1.
-- New projects record `language = "1.0"` and `abi = 1`.
+## Compiler
 
-## Release/security
-- `pp platform-info` exposes support tiers.
-- Source SBOM and release provenance generation.
-- Optional Ed25519 release signatures and PPX detached signatures/trust roots.
-- Release qualification now pins WiX 6 with the correct BootstrapperApplications extension and installs the Arch MIME/icon runtime dependencies before package lifecycle testing.
+- One C++20 frontend feeds portable C, direct x86-64, and register-bytecode backends.
+- The compiler now exposes its own LSP server through `ppc serve --stdio`.
+- Stable 1.0 keywords, builtins, and standard-library signatures remain machine checked.
+- Common 1.0 CLI spellings remain accepted where they have a direct PPC equivalent.
+- Compiler and runtime caches include the 1.3 compiler/cache identity.
 
-## Existing foundations
-1.0 includes ownership/algebraic types, verified HIR/MIR/Machine IR, native/C/LLVM backends, incremental compilation, structured async/cancellation, source debugging, PPX, docs/doctests, fuzz/compat/stress gates and portable-C PGO.
+## Libraries
 
-Linux x86-64 is Tier 1. Arch and Windows x86-64 are Tier 2 and are called qualified per-release only when their real workflows pass.
+- Added HTTPS primitives plus `std.net.https` and a first-party `https` package.
+- TLS certificate and hostname verification are mandatory; redirects remain HTTPS-only.
+- Added `std.gui` and runtime-native message windows using Win32 or dynamically loaded X11/XWayland.
+- Expanded collections, data, math, system, and text modules.
+- The existing `requests` package keeps its `HttpResponse` API but now shares the HTTPS runtime.
+
+## Tooling and release
+
+- VS Code talks directly to PPC and advertises only implemented LSP capabilities.
+- Generated API documentation now includes nested standard-library modules.
+- Cross-backend compiler regressions, LSP tests, ABI checks, privacy checks, and release validation use the new compiler/runtime layout.
+
+Linux x86-64 is the locally validated host. Windows and Arch are not called
+qualified until their actual GitHub workflows pass for the release candidate.

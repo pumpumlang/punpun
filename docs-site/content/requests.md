@@ -1,39 +1,30 @@
-# HTTP requests
+# Verified HTTPS
 
-The first-party `requests` package loads the system libcurl runtime dynamically,
-so programs that never use HTTP pay no HTTP startup/link cost.
+PunPun 1.3 provides HTTPS in the runtime and through `std.net.https`. Programs
+that do not call it pay no HTTP startup or link-time dependency cost because
+libcurl is loaded dynamically.
 
 ```punpun
-bring requests;
+import std.net.https
 
 launch {
-    let response = requests_get("https://example.com");
-    say(response.status);
-    say(response.text());
+    let body = https_get("https://example.com");
+    if https_ok() {
+        say(body);
+    } else {
+        say(https_error());
+    }
 }
 ```
 
-GET, POST, PUT, PATCH, DELETE and HEAD support headers, timeouts, redirect
-controls, status/body/error reporting, and structured error paths.
+The primitive `https_request(method, url, body, headers, timeout_ms, follow)`
+supports custom headers and request methods. The most recent response status and
+error are available through `https_status()` and `https_error()`.
 
-## Async wrappers
+Only HTTPS URLs are accepted. Peer and hostname verification are mandatory,
+redirects remain HTTPS-only, timeouts are bounded, and bodies are capped at
+64 MiB.
 
-Every major request helper also has a task-returning async form:
-
-```punpun
-bring requests;
-
-launch {
-    let group = task_group();
-    let request = requests_get_async("https://example.com");
-    task_group_add(group, request);
-    task_group_wait(group);
-    let response = await request;
-    say(response.status);
-    task_group_close(group);
-}
-```
-
-The async wrappers execute libcurl work on PunPun native workers. This composes
-with cancellation/task groups without claiming that libcurl easy-mode calls are
-a kernel-native event loop.
+The `requests` package preserves the older `HttpResponse` API. Async helpers
+run blocking libcurl work inside PunPun worker tasks; this is task concurrency,
+not a nonblocking socket reactor.

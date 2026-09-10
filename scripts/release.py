@@ -84,7 +84,7 @@ def make_sdk(stage:Path):
         'pp':'ROOT=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)\nexport PATH="$ROOT/bin:$PATH"\nexec "$ROOT/punpun" "$@"',
         'punpun':'ROOT=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)\nexport PATH="$ROOT/bin:$PATH"\nexec "$ROOT/punpun" "$@"',
         'ppx':'ROOT=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)\nexec "$ROOT/ppx/ppx" "$@"',
-        'punpun-lsp':'ROOT=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)\nexport PUNPUN_PPC="$ROOT/bin/ppc"\nexec node "$ROOT/tooling/lsp/server.js" "$@"',
+        'punpun-lsp':'ROOT=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)\nexec "$ROOT/bin/ppc" serve --stdio "$@"',
     }
     for name,body in wrappers.items():
         p=sdk/'bin'/name; p.write_text('#!/usr/bin/env sh\nset -eu\n'+body+'\n'); executable(p)
@@ -169,7 +169,7 @@ pkgdesc="PunPun native programming language SDK"
 arch=('x86_64')
 url="{PROJECT_URL}"
 license=('MIT')
-depends=('glibc' 'gcc-libs' 'python' 'nodejs' 'shared-mime-info' 'hicolor-icon-theme')
+depends=('glibc' 'gcc-libs' 'python' 'shared-mime-info' 'hicolor-icon-theme')
 optdepends=('base-devel: rebuild compiler and use C injection' 'libcurl: requests package' 'libx11: PunUI Linux backend')
 source=('{sdk_tar_name}')
 sha256sums=('{sdk_sha}')
@@ -206,7 +206,7 @@ def make_arch_package(sdk:Path,out:Path):
             icon_dir=root/f'usr/share/icons/hicolor/{icon_size}x{icon_size}/mimetypes'; icon_dir.mkdir(parents=True)
             shutil.copy2(sdk/f'assets/punpun-icon-{icon_size}.png',icon_dir/'application-x-punpun.png')
         size=sum(p.stat().st_size for p in root.rglob('*') if p.is_file())
-        (root/'.PKGINFO').write_text(f'pkgname = punpun\npkgbase = punpun\npkgver = {PKGVER}-1\npkgdesc = PunPun native programming language SDK\nurl = {PROJECT_URL}\nbuilddate = {SOURCE_DATE_EPOCH}\npackager = PunPun Project\nsize = {size}\narch = x86_64\nlicense = MIT\ndepend = glibc\ndepend = gcc-libs\ndepend = python\ndepend = nodejs\ndepend = shared-mime-info\ndepend = hicolor-icon-theme\n')
+        (root/'.PKGINFO').write_text(f'pkgname = punpun\npkgbase = punpun\npkgver = {PKGVER}-1\npkgdesc = PunPun native programming language SDK\nurl = {PROJECT_URL}\nbuilddate = {SOURCE_DATE_EPOCH}\npackager = PunPun Project\nsize = {size}\narch = x86_64\nlicense = MIT\ndepend = glibc\ndepend = gcc-libs\ndepend = python\ndepend = shared-mime-info\ndepend = hicolor-icon-theme\n')
         # GNU tar + zstd produces the package payload format; .MTREE is omitted on this host because libarchive/makepkg are unavailable.
         subprocess.run(['tar','--sort=name',f'--mtime=@{SOURCE_DATE_EPOCH}','--owner=0','--group=0','--numeric-owner','--zstd','-cf',str(out),'-C',str(root),'.'],check=True)
 

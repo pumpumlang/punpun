@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 from pathlib import Path
-import json, shutil, zipfile
+import json, zipfile
 from versioning import VERSION
 ROOT=Path(__file__).resolve().parents[1]
 EXT=ROOT/'editors'/'vscode'
@@ -9,9 +9,6 @@ FIXED_TIME=(2026,9,7,0,0,0)
 def write_bytes(z,name,data,mode=0o644):
     info=zipfile.ZipInfo(name,FIXED_TIME); info.external_attr=(mode & 0xffff)<<16; info.compress_type=zipfile.ZIP_DEFLATED
     z.writestr(info,data,compress_type=zipfile.ZIP_DEFLATED,compresslevel=9)
-# Keep the extension's bundled server synchronized with the real LSP implementation.
-(EXT/'server').mkdir(exist_ok=True)
-shutil.copy2(ROOT/'tooling'/'lsp'/'server.js', EXT/'server'/'server.js')
 pkg=json.loads((EXT/'package.json').read_text())
 version=pkg['version']
 if version != VERSION:
@@ -47,7 +44,7 @@ with zipfile.ZipFile(OUT,'w',zipfile.ZIP_DEFLATED) as z:
 # Validate critical files that were missing from an earlier beta VSIX.
 with zipfile.ZipFile(OUT) as z:
     names=set(z.namelist())
-    required={'extension/package.json','extension/extension.js','extension/server/server.js','extension/assets/punpun-icon-128.png','extension/assets/punpun-file-light.png','extension/assets/punpun-file-dark.png','extension/syntaxes/punpun.tmLanguage.json'}
+    required={'extension/package.json','extension/extension.js','extension/assets/punpun-icon-128.png','extension/assets/punpun-file-light.png','extension/assets/punpun-file-dark.png','extension/syntaxes/punpun.tmLanguage.json'}
     missing=required-names
     if missing: raise SystemExit('VSIX missing: '+', '.join(sorted(missing)))
 print(OUT)

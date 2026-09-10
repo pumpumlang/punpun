@@ -1,8 +1,8 @@
-# PunPun 0.9 development grammar overview
+# PunPun 1.3 grammar overview
 
-PunPun 0.5 uses structured brace blocks and semicolon-terminated ordinary
-statements. During the beta the compiler can still parse the 0.4 migration
-dialect so existing projects can be converted with `pp migrate`.
+The stable grammar uses structured brace blocks and semicolon-terminated
+ordinary statements. PPC also accepts the 0.4 migration dialect so existing
+projects can be converted incrementally.
 
 ## Modules and entry point
 

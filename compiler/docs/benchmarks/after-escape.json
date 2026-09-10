@@ -1,0 +1,1129 @@
+{
+  "schema": 1,
+  "host": {
+    "cpus": 1,
+    "platform": "linux"
+  },
+  "repetitions": 5,
+  "workloads": [
+    {
+      "name": "empty",
+      "compile": {
+        "check": {
+          "median_ms": 2.8221180000400636,
+          "min_ms": 2.6327719999699184,
+          "max_ms": 2.977545000021564
+        },
+        "c-O0": {
+          "median_ms": 32.59778900019228,
+          "min_ms": 32.02764399998159,
+          "max_ms": 32.95595800000228
+        },
+        "c-O1": {
+          "median_ms": 35.293473000137965,
+          "min_ms": 33.8305649997892,
+          "max_ms": 36.36655700006486
+        },
+        "c-O2": {
+          "median_ms": 35.13676600005056,
+          "min_ms": 32.24555499991766,
+          "max_ms": 35.9775179999815
+        },
+        "native-O0": {
+          "median_ms": 21.97482399992623,
+          "min_ms": 21.34642500004702,
+          "max_ms": 23.489681000000928
+        },
+        "native-O1": {
+          "median_ms": 22.970671000166476,
+          "min_ms": 22.43853400000262,
+          "max_ms": 23.545393999938824
+        },
+        "native-O2": {
+          "median_ms": 22.87902199987002,
+          "min_ms": 22.330812000063816,
+          "max_ms": 24.020545000212223
+        },
+        "bytecode-O0": {
+          "median_ms": 1.8614059999890742,
+          "min_ms": 1.8025570000190783,
+          "max_ms": 1.9065659998886986
+        },
+        "bytecode-O1": {
+          "median_ms": 1.8033359999662935,
+          "min_ms": 1.745760999938284,
+          "max_ms": 1.8632809999417077
+        },
+        "bytecode-O2": {
+          "median_ms": 1.7700159999094467,
+          "min_ms": 1.7619879999983823,
+          "max_ms": 2.0587209999121114
+        }
+      },
+      "run": {
+        "c-O0": {
+          "median_ms": 1.9065919998411118,
+          "min_ms": 1.8833310000445636,
+          "max_ms": 1.9863309998982004,
+          "runtime_dominated": false
+        },
+        "c-O1": {
+          "median_ms": 1.038200000039069,
+          "min_ms": 0.9494219998487097,
+          "max_ms": 2.054721999911635,
+          "runtime_dominated": false
+        },
+        "c-O2": {
+          "median_ms": 2.0163090000551165,
+          "min_ms": 0.8865610000157176,
+          "max_ms": 2.107016000081785,
+          "runtime_dominated": false
+        },
+        "native-O0": {
+          "median_ms": 2.003005000005942,
+          "min_ms": 0.9481839999807562,
+          "max_ms": 2.078139999866835,
+          "runtime_dominated": false
+        },
+        "native-O1": {
+          "median_ms": 1.9736929998543928,
+          "min_ms": 0.9030979999806732,
+          "max_ms": 1.9996169999103586,
+          "runtime_dominated": false
+        },
+        "native-O2": {
+          "median_ms": 2.0042920000378217,
+          "min_ms": 1.9752250000237837,
+          "max_ms": 2.0969730001070275,
+          "runtime_dominated": false
+        },
+        "bytecode-O0": {
+          "median_ms": 2.8608430000076623,
+          "min_ms": 1.7543059998388344,
+          "max_ms": 2.950691000023653,
+          "runtime_dominated": false
+        },
+        "bytecode-O1": {
+          "median_ms": 2.899233000107415,
+          "min_ms": 2.788929000189455,
+          "max_ms": 2.95344500000283,
+          "runtime_dominated": false
+        },
+        "bytecode-O2": {
+          "median_ms": 2.8497710000010557,
+          "min_ms": 1.7016010001498216,
+          "max_ms": 2.8965659998902993,
+          "runtime_dominated": false
+        }
+      },
+      "size": {
+        "c-O0": 38536,
+        "c-O1": 38504,
+        "c-O2": 38504,
+        "native-O0": 38448,
+        "native-O1": 38448,
+        "native-O2": 38448,
+        "bytecode-O0": 306,
+        "bytecode-O1": 306,
+        "bytecode-O2": 306
+      }
+    },
+    {
+      "name": "fib_recursive",
+      "compile": {
+        "check": {
+          "median_ms": 2.7567780000481434,
+          "min_ms": 2.6229220000004716,
+          "max_ms": 2.8282789999138913
+        },
+        "c-O0": {
+          "median_ms": 33.30065399995874,
+          "min_ms": 32.5685440000143,
+          "max_ms": 34.66139500005738
+        },
+        "c-O1": {
+          "median_ms": 37.37875100000565,
+          "min_ms": 35.3219609999087,
+          "max_ms": 39.467868999963684
+        },
+        "c-O2": {
+          "median_ms": 36.15689000002931,
+          "min_ms": 35.60135299994727,
+          "max_ms": 36.60705799984498
+        },
+        "native-O0": {
+          "median_ms": 21.575700000084908,
+          "min_ms": 20.891577000156758,
+          "max_ms": 22.82144400010111
+        },
+        "native-O1": {
+          "median_ms": 20.70027900003879,
+          "min_ms": 20.179445000167107,
+          "max_ms": 22.115242999916518
+        },
+        "native-O2": {
+          "median_ms": 20.65148999986377,
+          "min_ms": 20.110562000127175,
+          "max_ms": 21.665950000169687
+        },
+        "bytecode-O0": {
+          "median_ms": 1.6439450000689249,
+          "min_ms": 1.5909510000255978,
+          "max_ms": 2.771383999970567
+        },
+        "bytecode-O1": {
+          "median_ms": 1.800931999923705,
+          "min_ms": 1.771008000105212,
+          "max_ms": 1.8546539999988454
+        },
+        "bytecode-O2": {
+          "median_ms": 1.7623220001041773,
+          "min_ms": 1.610442000128387,
+          "max_ms": 1.8242450000798272
+        }
+      },
+      "run": {
+        "c-O0": {
+          "median_ms": 4.004779000069902,
+          "min_ms": 3.932282000050691,
+          "max_ms": 4.463839999971242,
+          "runtime_dominated": true
+        },
+        "c-O1": {
+          "median_ms": 3.5979179999685584,
+          "min_ms": 3.4984569999778614,
+          "max_ms": 3.8204259999474743,
+          "runtime_dominated": true
+        },
+        "c-O2": {
+          "median_ms": 3.5415130000728823,
+          "min_ms": 2.488717000005636,
+          "max_ms": 3.6633280001296953,
+          "runtime_dominated": true
+        },
+        "native-O0": {
+          "median_ms": 8.90648500012503,
+          "min_ms": 8.687592000114819,
+          "max_ms": 9.189831999947273,
+          "runtime_dominated": true
+        },
+        "native-O1": {
+          "median_ms": 8.946286999844233,
+          "min_ms": 8.631163000018205,
+          "max_ms": 9.144351000031747,
+          "runtime_dominated": true
+        },
+        "native-O2": {
+          "median_ms": 8.898748999854433,
+          "min_ms": 8.789950000164026,
+          "max_ms": 9.497294999846417,
+          "runtime_dominated": true
+        },
+        "bytecode-O0": {
+          "median_ms": 28.70211500021469,
+          "min_ms": 26.03679200001352,
+          "max_ms": 29.903087000093365,
+          "runtime_dominated": true
+        },
+        "bytecode-O1": {
+          "median_ms": 28.364130999989356,
+          "min_ms": 27.41694099995584,
+          "max_ms": 37.081568000076004,
+          "runtime_dominated": true
+        },
+        "bytecode-O2": {
+          "median_ms": 28.555305999816483,
+          "min_ms": 28.077445000008083,
+          "max_ms": 30.01085599998987,
+          "runtime_dominated": true
+        }
+      },
+      "size": {
+        "c-O0": 38568,
+        "c-O1": 38536,
+        "c-O2": 38536,
+        "native-O0": 38480,
+        "native-O1": 38480,
+        "native-O2": 38480,
+        "bytecode-O0": 1214,
+        "bytecode-O1": 1214,
+        "bytecode-O2": 1214
+      }
+    },
+    {
+      "name": "sieve",
+      "compile": {
+        "check": {
+          "median_ms": 2.8294599999298953,
+          "min_ms": 1.7367620000641182,
+          "max_ms": 2.8977029999168735
+        },
+        "c-O0": {
+          "median_ms": 35.807952000141086,
+          "min_ms": 34.9242489999142,
+          "max_ms": 36.690081000188
+        },
+        "c-O1": {
+          "median_ms": 40.634432999922865,
+          "min_ms": 38.29039400011425,
+          "max_ms": 43.68406799994773
+        },
+        "c-O2": {
+          "median_ms": 43.34129399990161,
+          "min_ms": 40.665063999995255,
+          "max_ms": 46.85747200005608
+        },
+        "native-O0": {
+          "median_ms": 23.059898000155954,
+          "min_ms": 21.790089999967677,
+          "max_ms": 24.062051000100837
+        },
+        "native-O1": {
+          "median_ms": 25.605862000020352,
+          "min_ms": 24.43254599984357,
+          "max_ms": 26.71859699989909
+        },
+        "native-O2": {
+          "median_ms": 26.467742999784605,
+          "min_ms": 25.65668299985191,
+          "max_ms": 27.9622200000631
+        },
+        "bytecode-O0": {
+          "median_ms": 1.98957300017355,
+          "min_ms": 1.9084850000581355,
+          "max_ms": 2.077244000020073
+        },
+        "bytecode-O1": {
+          "median_ms": 2.2421629998916615,
+          "min_ms": 2.211794999993799,
+          "max_ms": 3.3325030001378764
+        },
+        "bytecode-O2": {
+          "median_ms": 2.1223819999249827,
+          "min_ms": 1.943515999982992,
+          "max_ms": 3.2620270001189056
+        }
+      },
+      "run": {
+        "c-O0": {
+          "median_ms": 11.71066899996731,
+          "min_ms": 11.368353000079878,
+          "max_ms": 13.027187999796297,
+          "runtime_dominated": true
+        },
+        "c-O1": {
+          "median_ms": 8.264098999916314,
+          "min_ms": 7.701958999859926,
+          "max_ms": 9.672632000047088,
+          "runtime_dominated": true
+        },
+        "c-O2": {
+          "median_ms": 7.1610549998695205,
+          "min_ms": 7.027390000075684,
+          "max_ms": 8.50075299990749,
+          "runtime_dominated": true
+        },
+        "native-O0": {
+          "median_ms": 10.487994999948569,
+          "min_ms": 10.104837999961092,
+          "max_ms": 11.08608300000924,
+          "runtime_dominated": true
+        },
+        "native-O1": {
+          "median_ms": 11.450722999825302,
+          "min_ms": 10.883812999963993,
+          "max_ms": 11.893952999798785,
+          "runtime_dominated": true
+        },
+        "native-O2": {
+          "median_ms": 11.031964000039807,
+          "min_ms": 10.959726999999475,
+          "max_ms": 11.398610000014742,
+          "runtime_dominated": true
+        },
+        "bytecode-O0": {
+          "median_ms": 76.36776100002862,
+          "min_ms": 75.83745299984912,
+          "max_ms": 76.8697770001836,
+          "runtime_dominated": true
+        },
+        "bytecode-O1": {
+          "median_ms": 76.3539550000587,
+          "min_ms": 74.26872899986847,
+          "max_ms": 77.59242199995242,
+          "runtime_dominated": true
+        },
+        "bytecode-O2": {
+          "median_ms": 77.16752300007101,
+          "min_ms": 75.56377499986411,
+          "max_ms": 77.92396800005008,
+          "runtime_dominated": true
+        }
+      },
+      "size": {
+        "c-O0": 42632,
+        "c-O1": 38504,
+        "c-O2": 38504,
+        "native-O0": 38448,
+        "native-O1": 38448,
+        "native-O2": 38448,
+        "bytecode-O0": 3431,
+        "bytecode-O1": 3431,
+        "bytecode-O2": 3386
+      }
+    },
+    {
+      "name": "string_build",
+      "compile": {
+        "check": {
+          "median_ms": 3.1802260000404203,
+          "min_ms": 3.0062439998346235,
+          "max_ms": 3.2288190000144823
+        },
+        "c-O0": {
+          "median_ms": 37.564648999932615,
+          "min_ms": 36.14225599994825,
+          "max_ms": 39.24001500013219
+        },
+        "c-O1": {
+          "median_ms": 37.93004099998143,
+          "min_ms": 35.70489100002305,
+          "max_ms": 40.61595699999998
+        },
+        "c-O2": {
+          "median_ms": 37.21651299997575,
+          "min_ms": 35.3400670001065,
+          "max_ms": 37.438578999854144
+        },
+        "native-O0": {
+          "median_ms": 23.54513999989649,
+          "min_ms": 22.70406999991792,
+          "max_ms": 24.046188000056645
+        },
+        "native-O1": {
+          "median_ms": 22.872991999975056,
+          "min_ms": 20.824424000011277,
+          "max_ms": 23.57708699992145
+        },
+        "native-O2": {
+          "median_ms": 21.90794900002402,
+          "min_ms": 20.83727700005511,
+          "max_ms": 22.295968999969773
+        },
+        "bytecode-O0": {
+          "median_ms": 1.7041079997852648,
+          "min_ms": 1.6241619998709211,
+          "max_ms": 1.8058250000194676
+        },
+        "bytecode-O1": {
+          "median_ms": 1.7154100000880135,
+          "min_ms": 1.6544499999326945,
+          "max_ms": 1.7924010001024726
+        },
+        "bytecode-O2": {
+          "median_ms": 1.9308460000502237,
+          "min_ms": 1.8553220002104354,
+          "max_ms": 1.987178000035783
+        }
+      },
+      "run": {
+        "c-O0": {
+          "median_ms": 3.552900000158843,
+          "min_ms": 2.4295460000303137,
+          "max_ms": 3.686237000010806,
+          "runtime_dominated": true
+        },
+        "c-O1": {
+          "median_ms": 3.3569520001037745,
+          "min_ms": 2.1835189998000715,
+          "max_ms": 3.5128329998315166,
+          "runtime_dominated": true
+        },
+        "c-O2": {
+          "median_ms": 3.422156000169707,
+          "min_ms": 2.3500780000631494,
+          "max_ms": 3.539493000062066,
+          "runtime_dominated": true
+        },
+        "native-O0": {
+          "median_ms": 3.628015999993295,
+          "min_ms": 3.471515000001091,
+          "max_ms": 3.698080000049231,
+          "runtime_dominated": true
+        },
+        "native-O1": {
+          "median_ms": 3.1803049998870847,
+          "min_ms": 2.3315609998917353,
+          "max_ms": 3.532618999997794,
+          "runtime_dominated": true
+        },
+        "native-O2": {
+          "median_ms": 3.212401999917347,
+          "min_ms": 3.1809449999400385,
+          "max_ms": 3.4575029999359685,
+          "runtime_dominated": true
+        },
+        "bytecode-O0": {
+          "median_ms": 4.664604999788935,
+          "min_ms": 4.618621999952666,
+          "max_ms": 4.825131999950827,
+          "runtime_dominated": true
+        },
+        "bytecode-O1": {
+          "median_ms": 4.6587050001107855,
+          "min_ms": 3.822100999968825,
+          "max_ms": 5.195006999883844,
+          "runtime_dominated": true
+        },
+        "bytecode-O2": {
+          "median_ms": 5.185728000014933,
+          "min_ms": 5.1006349999624945,
+          "max_ms": 5.273753999972541,
+          "runtime_dominated": true
+        }
+      },
+      "size": {
+        "c-O0": 42632,
+        "c-O1": 38504,
+        "c-O2": 38504,
+        "native-O0": 38448,
+        "native-O1": 38448,
+        "native-O2": 38448,
+        "bytecode-O0": 1909,
+        "bytecode-O1": 1819,
+        "bytecode-O2": 1774
+      }
+    },
+    {
+      "name": "aggregates",
+      "compile": {
+        "check": {
+          "median_ms": 2.8131229998962226,
+          "min_ms": 1.6950819999692612,
+          "max_ms": 2.8939389999322884
+        },
+        "c-O0": {
+          "median_ms": 39.39884000010352,
+          "min_ms": 38.67714500006514,
+          "max_ms": 39.87028699998518
+        },
+        "c-O1": {
+          "median_ms": 37.74619499995424,
+          "min_ms": 35.552822999989075,
+          "max_ms": 39.25477799998589
+        },
+        "c-O2": {
+          "median_ms": 40.11402000014641,
+          "min_ms": 39.43428799993853,
+          "max_ms": 40.29923999996754
+        },
+        "native-O0": {
+          "median_ms": 23.249363000104495,
+          "min_ms": 22.777515999905518,
+          "max_ms": 24.034842999981265
+        },
+        "native-O1": {
+          "median_ms": 25.161488000094323,
+          "min_ms": 24.245155000016894,
+          "max_ms": 25.723411000171836
+        },
+        "native-O2": {
+          "median_ms": 23.40112400020189,
+          "min_ms": 22.93394699995588,
+          "max_ms": 24.123649000102887
+        },
+        "bytecode-O0": {
+          "median_ms": 1.889939999955459,
+          "min_ms": 1.8285769999693002,
+          "max_ms": 1.9305900000290421
+        },
+        "bytecode-O1": {
+          "median_ms": 1.8608800000947667,
+          "min_ms": 1.7065790000287961,
+          "max_ms": 1.9939720000365924
+        },
+        "bytecode-O2": {
+          "median_ms": 1.884061000055226,
+          "min_ms": 1.8486029998712183,
+          "max_ms": 2.9773429998840584
+        }
+      },
+      "run": {
+        "c-O0": {
+          "median_ms": 3.6061890000382846,
+          "min_ms": 2.5365029998738464,
+          "max_ms": 3.6575260000972776,
+          "runtime_dominated": true
+        },
+        "c-O1": {
+          "median_ms": 2.4133160000019416,
+          "min_ms": 1.3641350001307728,
+          "max_ms": 2.4852799999735,
+          "runtime_dominated": true
+        },
+        "c-O2": {
+          "median_ms": 1.5270109997800319,
+          "min_ms": 1.3201239999034442,
+          "max_ms": 2.4598449999757577,
+          "runtime_dominated": true
+        },
+        "native-O0": {
+          "median_ms": 53.930713999989166,
+          "min_ms": 52.46738800019557,
+          "max_ms": 55.020980000108466,
+          "runtime_dominated": true
+        },
+        "native-O1": {
+          "median_ms": 43.698158000097465,
+          "min_ms": 42.20630099985101,
+          "max_ms": 44.644129000062094,
+          "runtime_dominated": true
+        },
+        "native-O2": {
+          "median_ms": 43.240504999857876,
+          "min_ms": 41.7669629998727,
+          "max_ms": 47.0659650000016,
+          "runtime_dominated": true
+        },
+        "bytecode-O0": {
+          "median_ms": 98.38715499995487,
+          "min_ms": 94.4861390000824,
+          "max_ms": 104.72870900002818,
+          "runtime_dominated": true
+        },
+        "bytecode-O1": {
+          "median_ms": 84.64713800003665,
+          "min_ms": 83.21698200006722,
+          "max_ms": 88.58932300017841,
+          "runtime_dominated": true
+        },
+        "bytecode-O2": {
+          "median_ms": 83.39976699994622,
+          "min_ms": 79.22011100004056,
+          "max_ms": 91.27009400003772,
+          "runtime_dominated": true
+        }
+      },
+      "size": {
+        "c-O0": 42696,
+        "c-O1": 38504,
+        "c-O2": 38504,
+        "native-O0": 42680,
+        "native-O1": 42680,
+        "native-O2": 42680,
+        "bytecode-O0": 4177,
+        "bytecode-O1": 3997,
+        "bytecode-O2": 3952
+      }
+    },
+    {
+      "name": "matrix",
+      "compile": {
+        "check": {
+          "median_ms": 2.799674000016239,
+          "min_ms": 1.7664849999619037,
+          "max_ms": 2.896818999943207
+        },
+        "c-O0": {
+          "median_ms": 35.239937999904214,
+          "min_ms": 34.733511000013095,
+          "max_ms": 35.76918499993553
+        },
+        "c-O1": {
+          "median_ms": 39.057060999994064,
+          "min_ms": 35.940957000093476,
+          "max_ms": 41.444571999818436
+        },
+        "c-O2": {
+          "median_ms": 41.339458000038576,
+          "min_ms": 39.93323000008786,
+          "max_ms": 42.11502099997233
+        },
+        "native-O0": {
+          "median_ms": 23.540174000117986,
+          "min_ms": 22.883640999907584,
+          "max_ms": 24.709903000029954
+        },
+        "native-O1": {
+          "median_ms": 22.937536999961594,
+          "min_ms": 22.515030000022307,
+          "max_ms": 23.836694999999963
+        },
+        "native-O2": {
+          "median_ms": 21.822465000013835,
+          "min_ms": 20.929067999986728,
+          "max_ms": 22.901944000068397
+        },
+        "bytecode-O0": {
+          "median_ms": 2.024658999971507,
+          "min_ms": 1.9688580000547518,
+          "max_ms": 2.0785619999514893
+        },
+        "bytecode-O1": {
+          "median_ms": 1.9452499998351414,
+          "min_ms": 1.8964970001889014,
+          "max_ms": 1.985415000035573
+        },
+        "bytecode-O2": {
+          "median_ms": 1.973730000145224,
+          "min_ms": 1.9577390000904416,
+          "max_ms": 2.021568000145635
+        }
+      },
+      "run": {
+        "c-O0": {
+          "median_ms": 4.532712999889554,
+          "min_ms": 4.100253999922643,
+          "max_ms": 5.440799999860246,
+          "runtime_dominated": true
+        },
+        "c-O1": {
+          "median_ms": 4.425800000035451,
+          "min_ms": 4.22762099992724,
+          "max_ms": 5.588470000020607,
+          "runtime_dominated": true
+        },
+        "c-O2": {
+          "median_ms": 4.4020939999427355,
+          "min_ms": 4.3003620000945375,
+          "max_ms": 5.401190999918981,
+          "runtime_dominated": true
+        },
+        "native-O0": {
+          "median_ms": 2.872333000141225,
+          "min_ms": 2.744579999898633,
+          "max_ms": 3.979960999913601,
+          "runtime_dominated": true
+        },
+        "native-O1": {
+          "median_ms": 3.012510999951701,
+          "min_ms": 2.573394999899392,
+          "max_ms": 3.911840000000666,
+          "runtime_dominated": true
+        },
+        "native-O2": {
+          "median_ms": 3.6338830000204325,
+          "min_ms": 2.8614749999178457,
+          "max_ms": 4.341615999919668,
+          "runtime_dominated": true
+        },
+        "bytecode-O0": {
+          "median_ms": 16.25843400006488,
+          "min_ms": 15.85563399999046,
+          "max_ms": 17.905501000086588,
+          "runtime_dominated": true
+        },
+        "bytecode-O1": {
+          "median_ms": 17.717889000095965,
+          "min_ms": 16.102167999861194,
+          "max_ms": 18.118398000069647,
+          "runtime_dominated": true
+        },
+        "bytecode-O2": {
+          "median_ms": 16.541751999966436,
+          "min_ms": 16.075901999784037,
+          "max_ms": 17.808945000069798,
+          "runtime_dominated": true
+        }
+      },
+      "size": {
+        "c-O0": 42632,
+        "c-O1": 38504,
+        "c-O2": 38504,
+        "native-O0": 42544,
+        "native-O1": 42544,
+        "native-O2": 42544,
+        "bytecode-O0": 5183,
+        "bytecode-O1": 5183,
+        "bytecode-O2": 5003
+      }
+    },
+    {
+      "name": "enum_dispatch",
+      "compile": {
+        "check": {
+          "median_ms": 2.8589089999968564,
+          "min_ms": 1.8662019999737822,
+          "max_ms": 2.9317800001535943
+        },
+        "c-O0": {
+          "median_ms": 35.97447199990711,
+          "min_ms": 35.78864299993256,
+          "max_ms": 39.34931599997071
+        },
+        "c-O1": {
+          "median_ms": 40.5118709998078,
+          "min_ms": 40.20145699996647,
+          "max_ms": 43.791691000024
+        },
+        "c-O2": {
+          "median_ms": 43.28171099996325,
+          "min_ms": 42.11447699981363,
+          "max_ms": 45.35567900006754
+        },
+        "native-O0": {
+          "median_ms": 23.384437000004255,
+          "min_ms": 21.858101999896462,
+          "max_ms": 23.772611999902438
+        },
+        "native-O1": {
+          "median_ms": 23.229698999784887,
+          "min_ms": 22.615563000044858,
+          "max_ms": 23.864165000077264
+        },
+        "native-O2": {
+          "median_ms": 24.702301000161242,
+          "min_ms": 24.13046500009841,
+          "max_ms": 25.222949999943012
+        },
+        "bytecode-O0": {
+          "median_ms": 1.9574179998471664,
+          "min_ms": 1.8999279998297425,
+          "max_ms": 2.114068000082625
+        },
+        "bytecode-O1": {
+          "median_ms": 2.0368929999676766,
+          "min_ms": 1.928700000007666,
+          "max_ms": 3.2390819999363885
+        },
+        "bytecode-O2": {
+          "median_ms": 2.014799999869865,
+          "min_ms": 1.9587140000112413,
+          "max_ms": 2.042339999889009
+        }
+      },
+      "run": {
+        "c-O0": {
+          "median_ms": 6.0851600001115,
+          "min_ms": 5.613473000039448,
+          "max_ms": 6.861071000002994,
+          "runtime_dominated": true
+        },
+        "c-O1": {
+          "median_ms": 3.772112999968158,
+          "min_ms": 3.609437000022808,
+          "max_ms": 4.026884000040809,
+          "runtime_dominated": true
+        },
+        "c-O2": {
+          "median_ms": 2.7321319998918625,
+          "min_ms": 2.5714339999467484,
+          "max_ms": 3.8769440000123723,
+          "runtime_dominated": true
+        },
+        "native-O0": {
+          "median_ms": 19.33240400012437,
+          "min_ms": 17.67264300019633,
+          "max_ms": 21.045825000101104,
+          "runtime_dominated": true
+        },
+        "native-O1": {
+          "median_ms": 18.5471409999991,
+          "min_ms": 17.576388999941628,
+          "max_ms": 21.376671000098213,
+          "runtime_dominated": true
+        },
+        "native-O2": {
+          "median_ms": 21.17247500018493,
+          "min_ms": 20.48043099989627,
+          "max_ms": 21.798598000032143,
+          "runtime_dominated": true
+        },
+        "bytecode-O0": {
+          "median_ms": 43.35446999994019,
+          "min_ms": 41.56809699998121,
+          "max_ms": 44.29329100003088,
+          "runtime_dominated": true
+        },
+        "bytecode-O1": {
+          "median_ms": 45.686715999863736,
+          "min_ms": 43.92550499983372,
+          "max_ms": 47.393502999966586,
+          "runtime_dominated": true
+        },
+        "bytecode-O2": {
+          "median_ms": 45.14913200000592,
+          "min_ms": 44.49356100008117,
+          "max_ms": 45.91016399990622,
+          "runtime_dominated": true
+        }
+      },
+      "size": {
+        "c-O0": 42664,
+        "c-O1": 38544,
+        "c-O2": 38544,
+        "native-O0": 42584,
+        "native-O1": 42584,
+        "native-O2": 42584,
+        "bytecode-O0": 5881,
+        "bytecode-O1": 5791,
+        "bytecode-O2": 5386
+      }
+    },
+    {
+      "name": "generic_heavy",
+      "compile": {
+        "check": {
+          "median_ms": 2.9596490001040365,
+          "min_ms": 1.8559119998826645,
+          "max_ms": 3.1024300001263327
+        },
+        "c-O0": {
+          "median_ms": 39.03387899981681,
+          "min_ms": 36.22551500006921,
+          "max_ms": 40.10066499995446
+        },
+        "c-O1": {
+          "median_ms": 38.858227999980954,
+          "min_ms": 38.10426299992287,
+          "max_ms": 39.89289900005133
+        },
+        "c-O2": {
+          "median_ms": 38.88459400013744,
+          "min_ms": 37.647216000095796,
+          "max_ms": 39.49181200005114
+        },
+        "native-O0": {
+          "median_ms": 24.416551000058462,
+          "min_ms": 23.63684000010835,
+          "max_ms": 25.211598000169033
+        },
+        "native-O1": {
+          "median_ms": 26.423809000107212,
+          "min_ms": 25.182312999959322,
+          "max_ms": 26.928296000050977
+        },
+        "native-O2": {
+          "median_ms": 24.71033000006173,
+          "min_ms": 23.84620999987419,
+          "max_ms": 28.096001999983855
+        },
+        "bytecode-O0": {
+          "median_ms": 1.9804549999662413,
+          "min_ms": 1.9346460001088417,
+          "max_ms": 3.2181530000343628
+        },
+        "bytecode-O1": {
+          "median_ms": 2.179935999947702,
+          "min_ms": 2.0737749998716026,
+          "max_ms": 3.2391439999628346
+        },
+        "bytecode-O2": {
+          "median_ms": 2.021279000018694,
+          "min_ms": 2.00610299998516,
+          "max_ms": 2.0838839998305048
+        }
+      },
+      "run": {
+        "c-O0": {
+          "median_ms": 2.7664589999858435,
+          "min_ms": 1.7222020001099736,
+          "max_ms": 2.803751000101329,
+          "runtime_dominated": true
+        },
+        "c-O1": {
+          "median_ms": 2.2603459999572806,
+          "min_ms": 1.1557989998891571,
+          "max_ms": 2.3195179999220272,
+          "runtime_dominated": true
+        },
+        "c-O2": {
+          "median_ms": 2.2696259998156165,
+          "min_ms": 1.243676000058258,
+          "max_ms": 2.2890959999131155,
+          "runtime_dominated": true
+        },
+        "native-O0": {
+          "median_ms": 7.466283999974621,
+          "min_ms": 6.482452000000194,
+          "max_ms": 7.497765999914918,
+          "runtime_dominated": true
+        },
+        "native-O1": {
+          "median_ms": 2.733503000172277,
+          "min_ms": 2.712409999958254,
+          "max_ms": 3.752572999928816,
+          "runtime_dominated": true
+        },
+        "native-O2": {
+          "median_ms": 2.7628859998003463,
+          "min_ms": 2.6690669999425154,
+          "max_ms": 3.751369999918097,
+          "runtime_dominated": true
+        },
+        "bytecode-O0": {
+          "median_ms": 24.285142000053384,
+          "min_ms": 23.989896000102817,
+          "max_ms": 25.341349000200353,
+          "runtime_dominated": true
+        },
+        "bytecode-O1": {
+          "median_ms": 20.20214300000589,
+          "min_ms": 19.392105999941123,
+          "max_ms": 20.49964999991971,
+          "runtime_dominated": true
+        },
+        "bytecode-O2": {
+          "median_ms": 19.46387699990737,
+          "min_ms": 18.91958499982138,
+          "max_ms": 20.70838399981767,
+          "runtime_dominated": true
+        }
+      },
+      "size": {
+        "c-O0": 42816,
+        "c-O1": 38504,
+        "c-O2": 38504,
+        "native-O0": 38664,
+        "native-O1": 38632,
+        "native-O2": 38632,
+        "bytecode-O0": 4102,
+        "bytecode-O1": 3967,
+        "bytecode-O2": 3922
+      }
+    },
+    {
+      "name": "large_source",
+      "compile": {
+        "check": {
+          "median_ms": 8.444349999990663,
+          "min_ms": 8.263962999990326,
+          "max_ms": 8.53720599980079
+        },
+        "c-O0": {
+          "median_ms": 557.4467980000009,
+          "min_ms": 503.28667400003724,
+          "max_ms": 582.6116099999581
+        },
+        "c-O1": {
+          "median_ms": 648.3939100000953,
+          "min_ms": 625.172295000084,
+          "max_ms": 654.3645589999869
+        },
+        "c-O2": {
+          "median_ms": 642.4935210000058,
+          "min_ms": 619.983904000037,
+          "max_ms": 699.363084999959
+        },
+        "native-O0": {
+          "median_ms": 69.57884000007653,
+          "min_ms": 67.8187880000678,
+          "max_ms": 73.0325530000755
+        },
+        "native-O1": {
+          "median_ms": 72.06786699998702,
+          "min_ms": 70.29567899985523,
+          "max_ms": 79.76437999991504
+        },
+        "native-O2": {
+          "median_ms": 72.2247790001802,
+          "min_ms": 67.57922500014502,
+          "max_ms": 75.3073299999869
+        },
+        "bytecode-O0": {
+          "median_ms": 9.26323500016224,
+          "min_ms": 9.231739999904676,
+          "max_ms": 9.340152000049784
+        },
+        "bytecode-O1": {
+          "median_ms": 9.691802999896026,
+          "min_ms": 9.614695999971445,
+          "max_ms": 9.797063999940292
+        },
+        "bytecode-O2": {
+          "median_ms": 9.797319999961474,
+          "min_ms": 9.210925000161296,
+          "max_ms": 10.879861000148594
+        }
+      },
+      "run": {
+        "c-O0": {
+          "median_ms": 1.9404750000830973,
+          "min_ms": 1.0218659999736701,
+          "max_ms": 2.1028230000865733,
+          "runtime_dominated": false
+        },
+        "c-O1": {
+          "median_ms": 2.0851519998359436,
+          "min_ms": 0.9947170001396444,
+          "max_ms": 2.089458000000377,
+          "runtime_dominated": false
+        },
+        "c-O2": {
+          "median_ms": 2.028492000135884,
+          "min_ms": 1.0689889998047875,
+          "max_ms": 2.242430999785938,
+          "runtime_dominated": false
+        },
+        "native-O0": {
+          "median_ms": 0.9173359999294917,
+          "min_ms": 0.8136489998378238,
+          "max_ms": 1.9410109998716507,
+          "runtime_dominated": false
+        },
+        "native-O1": {
+          "median_ms": 2.0465830000375718,
+          "min_ms": 2.0197879998704593,
+          "max_ms": 2.107282999986637,
+          "runtime_dominated": false
+        },
+        "native-O2": {
+          "median_ms": 1.065331000063452,
+          "min_ms": 0.960992000045735,
+          "max_ms": 2.121106000004147,
+          "runtime_dominated": false
+        },
+        "bytecode-O0": {
+          "median_ms": 9.735557000112749,
+          "min_ms": 8.676292999780344,
+          "max_ms": 9.825172000091698,
+          "runtime_dominated": false
+        },
+        "bytecode-O1": {
+          "median_ms": 10.52478700012216,
+          "min_ms": 10.019367000040802,
+          "max_ms": 10.874163999915254,
+          "runtime_dominated": false
+        },
+        "bytecode-O2": {
+          "median_ms": 11.269612999967649,
+          "min_ms": 10.950997999998435,
+          "max_ms": 11.83689399999821,
+          "runtime_dominated": false
+        }
+      },
+      "size": {
+        "c-O0": 292288,
+        "c-O1": 88448,
+        "c-O2": 88448,
+        "native-O0": 247144,
+        "native-O1": 234856,
+        "native-O2": 234856,
+        "bytecode-O0": 491086,
+        "bytecode-O1": 436996,
+        "bytecode-O2": 436996
+      }
+    }
+  ],
+  "compiler": {
+    "compiler": "ppc",
+    "compiler_version": "1.0.1",
+    "language": "1.0",
+    "implementation_status": "stable-1.0-surface",
+    "language_abi": 1,
+    "runtime_abi": 1,
+    "package_format": 1,
+    "lockfile_format": 1,
+    "cache_epoch": 2,
+    "dialects": [
+      "modern",
+      "migration"
+    ],
+    "backends": [
+      "c",
+      "native",
+      "bytecode"
+    ],
+    "checked_arithmetic": true
+  }
+}

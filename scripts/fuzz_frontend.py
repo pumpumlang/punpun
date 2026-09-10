@@ -50,7 +50,13 @@ def main() -> int:
                 result = subprocess.run([args.ppc, "check", str(path), "--no-cache"], text=True,
                                         capture_output=True, timeout=4)
             except subprocess.TimeoutExpired:
-                raise SystemExit(f"fuzz case {index} timed out (seed={args.seed})")
+                reproduction = ROOT / ".punpun" / "fuzz-repro.pp"
+                reproduction.parent.mkdir(parents=True, exist_ok=True)
+                reproduction.write_text(source, encoding="utf-8")
+                raise SystemExit(
+                    f"fuzz case {index} timed out (seed={args.seed}); "
+                    f"repro -> {reproduction}"
+                )
             combined = result.stdout + result.stderr
             if result.returncode < 0:
                 raise SystemExit(f"fuzz case {index} crashed by signal {-result.returncode} (seed={args.seed})")

@@ -1,12 +1,17 @@
-PunPun 1.0.0 — stable compatibility line implementation complete on Linux x86-64
+PunPun 1.3.0 — canonical PPC compiler integrated
 
 Stable contract:
-- language epoch 1.0 with semantic-versioning/deprecation guarantees
-- language ABI 1, runtime ABI 1, package format 1, Punpun.lock format 1
-- machine-enforced builtin/stdlib baseline (`pp stable-check`)
-- project metadata language=1.0 / abi=1 and incompatible-requirement rejection
-- Tier 1 Linux x86-64; Tier 2 Arch/Windows x86-64; Tier 3 macOS/ARM64 unsupported
-- deterministic release checksums, source SBOM/provenance and optional Ed25519 signing
-- PPX internal integrity plus detached Ed25519 publisher signatures/trust roots
+- language epoch 1.0
+- language ABI 1 and runtime ABI 1
+- package format 1 and Punpun.lock format 1
+- frozen 1.0 builtin and standard-library compatibility gates
 
-All Steps 1-9 compiler/runtime/tooling functionality remains part of 1.0.
+Implemented in 1.3:
+- portable C, direct x86-64, and bytecode backends behind one frontend
+- compiler-native LSP and VS Code client
+- verified HTTPS runtime, stdlib module, and package
+- Win32/X11 native GUI foundation and stdlib module
+- expanded standard library and generated API documentation
+
+Validated locally: Linux x86-64.
+Release qualification for Windows and Arch remains workflow-specific.

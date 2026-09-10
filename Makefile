@@ -1,16 +1,55 @@
 CXX ?= c++
 CC ?= cc
-CXXFLAGS ?= -std=c++17 -O2 -Wall -Wextra -Wpedantic -Werror
-CFLAGS ?= -std=c17 -O2 -Wall -Wextra -Wpedantic -Werror
 BUILD := build
 VERSION := $(strip $(shell tr -d '\r\n' < VERSION))
 
-.PHONY: all compiler selfhost clean test docs doctest fuzz compat stress stability release-policy version-sync version-check install install-vscode
+CXXFLAGS ?= -std=c++20 -O2 -Wall -Wextra -Wpedantic -Wno-unused-parameter
+CFLAGS ?= -std=c11 -O2 -Wall -Wextra -Wpedantic
+CPPFLAGS += -Icompiler/include -Iruntime
+LDLIBS += -lpthread -lm
+ifeq ($(shell uname -s 2>/dev/null),Linux)
+LDLIBS += -ldl
+endif
+ifeq ($(OS),Windows_NT)
+LDLIBS += -luser32
+endif
 
-# The core compiler is intentionally bootstrap-able with only C/C++ + make.
+PPC_SOURCES := $(wildcard compiler/src/*.cpp) \
+               $(wildcard compiler/src/support/*.cpp) \
+               $(wildcard compiler/src/syntax/*.cpp) \
+               $(wildcard compiler/src/sema/*.cpp) \
+               $(wildcard compiler/src/hir/*.cpp) \
+               $(wildcard compiler/src/mir/*.cpp) \
+               $(wildcard compiler/src/codegen/*.cpp) \
+               $(wildcard compiler/src/driver/*.cpp) \
+               $(wildcard compiler/src/service/*.cpp)
+RUNTIME_SOURCES := runtime/ppcrt.c runtime/ppc_https.c runtime/ppc_gui.c \
+                   runtime/ppc_platform_posix.c runtime/ppc_platform_windows.c
+PPC_OBJECTS := $(patsubst %.cpp,$(BUILD)/%.o,$(PPC_SOURCES))
+RUNTIME_OBJECTS := $(patsubst %.c,$(BUILD)/%.o,$(RUNTIME_SOURCES))
+DEPS := $(PPC_OBJECTS:.o=.d) $(RUNTIME_OBJECTS:.o=.d)
+
+.PHONY: all compiler clean test compiler-test package-test docs doctest fuzz compat stress stability release-policy version-sync version-check install install-vscode
+
 all: compiler
 
-compiler: $(BUILD)/ppc
+compiler: version-sync $(BUILD)/ppc
+
+$(BUILD)/ppc: $(PPC_OBJECTS) $(RUNTIME_OBJECTS)
+	@echo "  link    $@"
+	@$(CXX) $^ -o $@ $(LDLIBS)
+
+$(BUILD)/%.o: %.cpp
+	@mkdir -p $(dir $@)
+	@echo "  c++     $<"
+	@$(CXX) $(CPPFLAGS) $(CXXFLAGS) -MMD -MP -c $< -o $@
+
+$(BUILD)/%.o: %.c
+	@mkdir -p $(dir $@)
+	@echo "  cc      $<"
+	@$(CC) $(CPPFLAGS) $(CFLAGS) -fPIC -MMD -MP -c $< -o $@
+
+-include $(DEPS)
 
 version-sync:
 	python3 scripts/sync_version.py
@@ -18,26 +57,19 @@ version-sync:
 version-check: compiler
 	python3 scripts/check_version.py
 
-selfhost: compiler runtime/libpunpun.a
-	./selfhost/bootstrap.sh
+compiler-test: compiler
+	python3 compiler/tests/run_tests.py --ppc ./build/ppc --backend c --backend bytecode --backend native
+	PPC=./build/ppc python3 compiler/tests/lsp/test_lsp.py
 
-$(BUILD):
-	mkdir -p $(BUILD)
+package-test: compiler
+	@for backend in c native bytecode; do \
+		./build/ppc run --module-path packages/https --backend=$$backend packages/https/tests/smoke.pp | grep -Fx https-ok; \
+		./build/ppc run --module-path packages/gui --backend=$$backend packages/gui/tests/smoke.pp | grep -Fx gui-ok; \
+		./build/ppc run --module-path packages/requests --backend=$$backend packages/requests/tests/smoke.pp | grep -Fx requests-ok; \
+	done
 
-runtime/punpun.o: runtime/punpun.c runtime/punpun.h
-	$(CC) $(CFLAGS) -c $< -o $@
-
-runtime/libpunpun.a: runtime/punpun.o
-	ar rcs $@ $^
-
-PPC_SOURCES := compiler/main.cpp compiler/frontend.hpp compiler/diagnostics.hpp compiler/debug_dump.hpp compiler/semantic.hpp compiler/formatter.hpp compiler/process.hpp compiler/hir.hpp compiler/hir_opt.hpp compiler/mir.hpp compiler/machine_ir.hpp compiler/ownership.hpp compiler/pipeline.hpp compiler/builtins.hpp compiler/stability.hpp compiler/backend_c.hpp compiler/backend_x86_64.hpp
-
-$(BUILD)/ppc: $(PPC_SOURCES) VERSION runtime/libpunpun.a | $(BUILD)
-	$(CXX) $(CXXFLAGS) -DPP_RUNTIME_DIR='"runtime"' -DPP_VERSION='"$(VERSION)"' compiler/main.cpp -o $@
-
-test: version-sync compiler
+test: version-sync compiler compiler-test package-test
 	python3 scripts/check_version.py
-	./tests/run.sh
 	./build/ppc check main.pp
 	python3 scripts/docgen.py --check
 	python3 scripts/doctest.py --ppc ./build/ppc
@@ -75,8 +107,8 @@ install: compiler
 	install -Dm755 $(BUILD)/ppc $(DESTDIR)/usr/local/bin/ppc
 	install -Dm755 punpun $(DESTDIR)/usr/local/bin/punpun
 	install -Dm755 pp $(DESTDIR)/usr/local/bin/pp
-	mkdir -p $(DESTDIR)/usr/local/lib/punpun
-	cp runtime/punpun.h runtime/libpunpun.a runtime/punpun.c $(DESTDIR)/usr/local/lib/punpun/
+	mkdir -p $(DESTDIR)/usr/local/lib/punpun/runtime
+	cp runtime/ppcrt.h runtime/ppcrt.c runtime/ppc_https.c runtime/ppc_gui.c runtime/ppc_platform.h runtime/ppc_platform_posix.c runtime/ppc_platform_windows.c $(DESTDIR)/usr/local/lib/punpun/runtime/
 	mkdir -p $(DESTDIR)/usr/local/lib/punpun/stdlib
 	cp -R stdlib/. $(DESTDIR)/usr/local/lib/punpun/stdlib/
 
@@ -84,4 +116,4 @@ install-vscode:
 	./punpun editor install-vscode
 
 clean:
-	rm -rf $(BUILD) runtime/*.o runtime/*.a tests/tmp .punpun
+	rm -rf $(BUILD) compiler/build compiler/build-debug compiler/ppc compiler/ppc-debug tests/tmp .punpun

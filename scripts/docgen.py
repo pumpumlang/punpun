@@ -17,7 +17,7 @@ DECL_RE = re.compile(
 
 
 def source_files() -> list[Path]:
-    files = sorted((ROOT / "stdlib" / "std").glob("*.pp"))
+    files = sorted((ROOT / "stdlib" / "std").rglob("*.pp"))
     files += sorted((ROOT / "packages").glob("*/src/main.pp"))
     return files
 

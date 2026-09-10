@@ -4,5 +4,5 @@ fn greeting(name: String) -> String {
 
 launch {
     println(greeting("world"));
-    return 0;
+    return;
 }

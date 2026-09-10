@@ -24,7 +24,7 @@ fn cursor_set(cursor: nums, value: i64) -> void {
     put(cursor, 0, value);
 }
 
-fn char_at(source: String, index: i64) -> String {
+fn self_char_at(source: String, index: i64) -> String {
     return slice(source, index, index + 1);
 }
 
@@ -49,13 +49,13 @@ fn skip_trivia(source: String, cursor: nums) -> void {
     let length: i64 = len(source);
     let mut scanning: bool = true;
     while scanning && position < length {
-        let current: String = char_at(source, position);
+        let current: String = self_char_at(source, position);
         if is_space(current) {
             position = position + 1;
         } else {
-            if same(current, "/") && position + 1 < length && same(char_at(source, position + 1), "/") {
+            if same(current, "/") && position + 1 < length && same(self_char_at(source, position + 1), "/") {
                 position = position + 2;
-                while position < length && !same(char_at(source, position), "\n") {
+                while position < length && !same(self_char_at(source, position), "\n") {
                     position = position + 1;
                 }
             } else {
@@ -73,11 +73,11 @@ fn next_token(source: String, cursor: nums) -> String {
     if start >= length {
         return "<eof>";
     }
-    let first: String = char_at(source, start);
+    let first: String = self_char_at(source, start);
     let mut position: i64 = start;
     if is_alpha(first) {
         position = position + 1;
-        while position < length && is_ident_continue(char_at(source, position)) {
+        while position < length && is_ident_continue(self_char_at(source, position)) {
             position = position + 1;
         }
         cursor_set(cursor, position);
@@ -85,7 +85,7 @@ fn next_token(source: String, cursor: nums) -> String {
     }
     if is_digit(first) {
         position = position + 1;
-        while position < length && is_digit(char_at(source, position)) {
+        while position < length && is_digit(self_char_at(source, position)) {
             position = position + 1;
         }
         cursor_set(cursor, position);
@@ -95,7 +95,7 @@ fn next_token(source: String, cursor: nums) -> String {
         position = position + 1;
         let mut closed: bool = false;
         while position < length && !closed {
-            let current: String = char_at(source, position);
+            let current: String = self_char_at(source, position);
             if same(current, "\\") {
                 position = position + 2;
             } else {
@@ -136,12 +136,12 @@ fn expect_token(source: String, cursor: nums, expected: String) -> void {
 }
 
 fn is_identifier(value: String) -> bool {
-    if len(value) == 0 || !is_alpha(char_at(value, 0)) {
+    if len(value) == 0 || !is_alpha(self_char_at(value, 0)) {
         return false;
     }
     let mut index: i64 = 1;
     while index < len(value) {
-        if !is_ident_continue(char_at(value, index)) {
+        if !is_ident_continue(self_char_at(value, index)) {
             return false;
         }
         index = index + 1;
@@ -221,10 +221,10 @@ fn parse_primary(source: String, cursor: nums) -> String {
     if same(token, "true") || same(token, "false") {
         return token;
     }
-    if len(token) > 0 && same(char_at(token, 0), "\"") {
+    if len(token) > 0 && same(self_char_at(token, 0), "\"") {
         return token;
     }
-    if is_digit(char_at(token, 0)) {
+    if is_digit(self_char_at(token, 0)) {
         return token;
     }
     if is_identifier(token) {
@@ -463,7 +463,7 @@ fn compile_program(source: String) -> String {
                 next_token(source, first_pass);
                 skip_block(source, first_pass);
                 if !has_launch {
-                    declarations = concat(declarations, "static int64_t pp_self_main(void);\n");
+                    declarations = concat(declarations, "static void pp_self_main(void);\n");
                     has_launch = true;
                 }
             } else {
@@ -483,21 +483,21 @@ fn compile_program(source: String) -> String {
         } else {
             if same(token, "launch") {
                 next_token(source, second_pass);
-                definitions = concat(definitions, concat("static int64_t pp_self_main(void) ", concat(parse_block(source, second_pass, 0), "\n\n")));
+                definitions = concat(definitions, concat("static void pp_self_main(void) ", concat(parse_block(source, second_pass, 0), "\n\n")));
             } else {
                 panic(concat("selfhost parser: unsupported top-level token ", token));
             }
         }
     }
-    let header: String = "#include \"punpun.h\"\n#include <stdint.h>\n#include <stdbool.h>\n\n";
-    let entry: String = "int main(int argc, char **argv) {\n    pp_runtime_init(argc, argv);\n    return (int)pp_self_main();\n}\n";
+    let header: String = "#include \"ppcrt.h\"\n#include <stdint.h>\n#include <stdbool.h>\n\n";
+    let entry: String = "int main(int argc, char **argv) {\n    pp_runtime_init(argc, argv);\n    pp_self_main();\n    pp_runtime_cleanup();\n    return 0;\n}\n";
     return concat(header, concat(declarations, concat("\n", concat(definitions, entry))));
 }
 
 launch {
     if arg_count() != 2 {
         println("usage: ppc-self INPUT.pp OUTPUT.c");
-        return 2;
+        return;
     }
     let input: String = arg(0);
     let output: String = arg(1);
@@ -505,5 +505,5 @@ launch {
     let generated: String = compile_program(source);
     write_text(output, generated);
     println(concat("ppc-self: wrote ", output));
-    return 0;
+    return;
 }

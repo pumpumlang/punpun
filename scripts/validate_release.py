@@ -47,7 +47,6 @@ def validate_vsix(vsix: Path):
         required={
             "extension/package.json",
             "extension/extension.js",
-            "extension/server/server.js",
             "extension/syntaxes/punpun.tmLanguage.json",
             "extension/assets/punpun-icon-128.png",
         }
@@ -57,7 +56,7 @@ def validate_vsix(vsix: Path):
         languages=package.get("contributes",{}).get("languages",[])
         require(any(".pp" in item.get("extensions",[]) for item in languages), "VSIX does not register .pp")
         require(package.get("version") == VERSION, f"VSIX version is not {VERSION}")
-    return "manifest, bundled LSP, icon, grammar and .pp registration verified"
+    return "manifest, compiler-native LSP client, icon, grammar and .pp registration verified"
 
 
 def list_tar(path: Path):
@@ -139,7 +138,7 @@ def main():
         # Installed compiler diagnostics must also work outside the repository.
         source.write_text('launch { sdds; }\n',encoding="utf-8")
         bad=run([pp,"check"],cwd=project,env=env,check=False)
-        require(bad.returncode != 0 and "E0201" in bad.stderr,"installed compiler did not report E0201")
+        require(bad.returncode != 0 and "E0300" in bad.stderr,"installed compiler did not report E0300")
         source.write_text('launch { say("benchmark"); }\n',encoding="utf-8")
 
         version_med,_=median_ms([pp,"--version"],env=env)
@@ -157,21 +156,16 @@ def main():
         async_out=run([pp,"run"],cwd=project,env=env).stdout
         require("42" in async_out,"installed async example failed")
 
-        clang = shutil.which("clang")
-        if clang:
-            source.write_text('launch { say(42); }\n',encoding="utf-8")
-            llvm_env=env.copy(); llvm_env["PUNPUN_LLVM_CC"]=clang
-            llvm_out=run([pp,"run","--llvm-backend","--no-cache"],cwd=project,env=llvm_env).stdout
-            require(llvm_out.strip()=="42","installed optional LLVM backend failed")
-            llvm_ir=run([prefix/"share/punpun/bin/ppc","emit-llvm",source],cwd=project,env=llvm_env).stdout
-            require("target triple" in llvm_ir and "define" in llvm_ir,"installed emit-llvm produced invalid IR")
-            results.append(("Installed LLVM backend", "PASS", "Clang-backed build/run and LLVM IR emission passed outside source tree"))
-        else:
-            results.append(("Installed LLVM backend", "HOST-LIMITED", "Clang is not installed on this host"))
+        source.write_text('launch { say(42); }\n',encoding="utf-8")
+        native_out=run([pp,"run","--backend=native","--no-cache"],cwd=project,env=env).stdout
+        require(native_out.strip()=="42","installed native backend failed")
+        bytecode_out=run([pp,"run","--backend=bytecode"],cwd=project,env=env).stdout
+        require(bytecode_out.strip()=="42","installed bytecode backend failed")
+        results.append(("Installed backends", "PASS", "C, native x86-64, and bytecode builds passed outside the source tree"))
 
         results.append(("Linux installer", "PASS", "self-extractor installed into isolated HOME and native smoke test passed"))
         results.append(("Installed stale-build regression", "PASS", "one -> two rebuilt correctly even with preserved mtime"))
-        results.append(("Installed diagnostics", "PASS", "unknown identifier produced compiler E0201 outside repository"))
+        results.append(("Installed diagnostics", "PASS", "unknown identifier produced compiler E0300 outside repository"))
         results.append(("Installed async", "PASS", "native async/await example produced 42"))
 
         self_c=td/"selfhost-hello.c"
@@ -193,11 +187,10 @@ def main():
         results.append((site,"PASS","production static build completed"))
 
     # Actual controlled first-party package / async HTTP tests are part of the suite; run the focused acceptance here too.
-    focused=run(["python3","-m","unittest",
-                 "tests.test_ecosystem.FirstPartyPackageTests.test_requests_package_gets_from_local_server_and_async_awaits",
-                 "tests.test_ecosystem.PpxRegistryIntegrationTests.test_search_add_and_build_from_local_registry",
-                 "tests.test_toolchain.AsyncRuntimeTest.test_async_tasks_execute_concurrently_direct_and_c_backends"],cwd=ROOT)
-    results.append(("HTTP + PPX + async acceptance","PASS","controlled local HTTP, registry install/cache, and concurrent async direct/C tests passed"))
+    run(["python3","compiler/tests/run_tests.py","--ppc","./build/ppc",
+         "--backend","c","--backend","native","--backend","bytecode"],cwd=ROOT)
+    run(["python3","scripts/abi_check.py","--ppc","./build/ppc"],cwd=ROOT)
+    results.append(("Compiler + runtime acceptance","PASS","all compiler backends and the runtime ABI gate passed"))
 
     report=[f"# PunPun {VERSION} release validation", "", "Generated on the available Linux x86-64 release host.", "", "| Check | Status | Detail |", "|---|---|---|"]
     for name,status,detail in results:

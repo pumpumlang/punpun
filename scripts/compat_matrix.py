@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import argparse
 from pathlib import Path
-import shutil
 import subprocess
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -27,14 +26,20 @@ def main() -> int:
     parser.add_argument("--ppc", default=str(ROOT / "build" / "ppc"))
     parser.add_argument("--quick", action="store_true")
     args = parser.parse_args()
-    backends = [("direct", []) , ("portable-c", ["--cc-backend"])]
-    if shutil.which("clang"):
-        backends.append(("llvm", ["--llvm-backend"]))
+    backends = [
+        ("portable-c", ["--backend=c"]),
+        ("native", ["--backend=native"]),
+        ("bytecode", ["--backend=bytecode"]),
+    ]
     cases = CASES[:2] if args.quick else CASES
     total = 0
     for case in cases:
         baseline = None
-        for name, flags in backends:
+        case_backends = backends
+        if "task_group" in case.name:
+            # Native x86-64 diagnoses async as E1000; C and bytecode cover it.
+            case_backends = [item for item in backends if item[0] != "native"]
+        for name, flags in case_backends:
             result = run(args.ppc, case, flags)
             if result[0] != 0:
                 raise SystemExit(f"{case.name} failed on {name}:\n{result[2]}")
@@ -46,7 +51,7 @@ def main() -> int:
                     f"backend mismatch for {case.name}: direct={baseline!r}, {name}={observable!r}"
                 )
             total += 1
-    print(f"compat matrix: {len(cases)} program(s) x {len(backends)} backend(s) = {total} passes")
+    print(f"compat matrix: {len(cases)} program(s), {total} backend passes")
     return 0
 
 

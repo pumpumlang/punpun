@@ -22,7 +22,7 @@ def main() -> int:
     case = ROOT / "tests" / "fixtures" / "language_0_8" / "task_group_run.pp"
     started = time.monotonic()
     for index in range(iterations):
-        flags = [] if index % 2 == 0 else ["--cc-backend"]
+        flags = ["--backend=c"] if index % 2 == 0 else ["--backend=bytecode"]
         result = subprocess.run([args.ppc, "run", str(case), "--no-cache", *flags], cwd=ROOT,
                                 text=True, capture_output=True, timeout=30)
         if result.returncode != 0 or result.stdout.strip().splitlines()[-1:] != ["42"]:

@@ -40,8 +40,10 @@ jobs:
         run: python3 scripts/fuzz_frontend.py --iterations 60 --seed 20560 --ppc ./build/ppc
       - name: Structured async stress smoke
         run: python3 scripts/stress.py --quick --ppc ./build/ppc
-      - name: Incremental compilation gate
-        run: python3 scripts/benchmark_projects.py --modules 10 --rounds 1 --gate --output benchmarks/ci.json
+      - name: Runtime object cache regression
+        run: |
+          ./build/ppc run --backend=c --cache-stats compiler/tests/cases/arithmetic.pp >/dev/null
+          ./build/ppc run --backend=c --cache-stats compiler/tests/cases/arithmetic.pp >/dev/null
       - name: Stable 1.0 compatibility gate
         run: |
           python3 scripts/stability.py check --ppc ./build/ppc

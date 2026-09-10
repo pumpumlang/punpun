@@ -1,7 +1,7 @@
 [package]
 name = "gui"
-version = "0.1.0"
-description = "Minimal native GUI foundation for PunPun (X11 beta / Windows MessageBox path)"
+version = "1.3.0"
+description = "PunPun native GUI foundation backed by compiler/runtime builtins"
 entry = "src/main.pp"
 
 [dependencies]

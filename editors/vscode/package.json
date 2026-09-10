@@ -1,8 +1,8 @@
 {
   "name": "punpun",
   "displayName": "PunPun",
-  "description": "PunPun language support powered by the compiler semantic engine: live diagnostics, semantic completion, navigation, rename, formatting, inlay hints, semantic highlighting, and build commands.",
-  "version": "1.0.0",
+  "description": "PunPun language support powered by PPC: live diagnostics, completion, hover, definitions, document symbols, and build commands.",
+  "version": "1.3.0",
   "publisher": "punpun",
   "license": "MIT",
   "engines": {
@@ -72,14 +72,6 @@
         "title": "PunPun: Check Current File"
       },
       {
-        "command": "punpun.buildWindows",
-        "title": "PunPun: Build Windows x86-64 .exe"
-      },
-      {
-        "command": "punpun.format",
-        "title": "PunPun: Format Current File"
-      },
-      {
         "command": "punpun.test",
         "title": "PunPun: Run Project Tests"
       },
@@ -100,11 +92,6 @@
           "type": "string",
           "default": "",
           "description": "Path to ppc. Empty automatically discovers the compiler installed with PunPun."
-        },
-        "punpun.languageServerPath": {
-          "type": "string",
-          "default": "",
-          "description": "Path to PunPun LSP server.js. Empty uses the server bundled with this extension."
         }
       }
     }

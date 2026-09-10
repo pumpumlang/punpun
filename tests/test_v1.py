@@ -9,7 +9,7 @@ def run(args,cwd=ROOT,timeout=90):
  return r
 class StableMetadata(unittest.TestCase):
  def test_language_info_is_stable(self):
-  i=json.loads(run([PPC,'language-info']).stdout); self.assertEqual(i['compiler_version'],'1.0.0'); self.assertEqual(i['language_version'],'1.0'); self.assertEqual(i['language_stability'],'stable'); self.assertEqual(i['abi_version'],1); self.assertEqual(i['runtime_abi_version'],1); self.assertEqual(i['lockfile_format'],1); self.assertEqual(i['package_format'],1)
+  i=json.loads(run([PPC,'language-info']).stdout); self.assertEqual(i['compiler_version'],'1.3.0'); self.assertEqual(i['language_version'],'1.0'); self.assertEqual(i['language_stability'],'stable'); self.assertEqual(i['abi_version'],1); self.assertEqual(i['runtime_abi_version'],1); self.assertEqual(i['lockfile_format'],1); self.assertEqual(i['package_format'],1)
  def test_stability_and_runtime_abi(self): run([sys.executable,ROOT/'scripts/stability.py','check','--ppc',PPC]); run([sys.executable,ROOT/'scripts/abi_check.py','--ppc',PPC])
  def test_new_project_freezes_language_and_abi(self):
   with tempfile.TemporaryDirectory() as td:

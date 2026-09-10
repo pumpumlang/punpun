@@ -1,0 +1,6 @@
+build/
+build-debug/
+/ppc
+ppc-debug
+*.o
+*.ppb

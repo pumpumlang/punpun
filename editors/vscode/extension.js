@@ -1,8 +1,8 @@
 'use strict';
 
-// PunPun VS Code client. Editor intelligence is served by the standalone PunPun
-// language server, which in turn uses the compiler's persistent semantic worker.
-// This file intentionally contains no second parser/type checker.
+// PunPun VS Code client. Editor intelligence is served directly by PPC's
+// built-in language server. This file intentionally contains no second
+// parser/type checker.
 
 const vscode = require('vscode');
 const fs = require('fs');
@@ -11,8 +11,6 @@ const childProcess = require('child_process');
 const { pathToFileURL } = require('url');
 
 const LANGUAGE_SELECTOR = { language: 'punpun', scheme: 'file' };
-const TOKEN_TYPES = ['namespace','type','class','interface','struct','typeParameter','parameter','variable','property','enumMember','function','method','keyword','string','number','operator'];
-const TOKEN_MODIFIERS = ['declaration','definition','readonly','static','deprecated','abstract','async','modification','documentation','defaultLibrary'];
 
 function projectRoot(document) {
   const folder = document ? vscode.workspace.getWorkspaceFolder(document.uri) : vscode.workspace.workspaceFolders?.[0];
@@ -53,20 +51,7 @@ function compilerPath(document, extensionPath) {
   return executable;
 }
 
-function serverPath(extensionPath) {
-  const configured = vscode.workspace.getConfiguration('punpun').get('languageServerPath', '');
-  if (configured) return configured;
-  const candidates = [
-    path.join(extensionPath, 'server', 'server.js'),
-    path.resolve(extensionPath, '..', '..', 'tooling', 'lsp', 'server.js'),
-  ];
-  if (process.env.HOME) candidates.push(path.join(process.env.HOME, '.local', 'share', 'punpun', 'tooling', 'lsp', 'server.js'));
-  for (const candidate of candidates) if (fs.existsSync(candidate)) return candidate;
-  return candidates[0];
-}
-
 function toLspPosition(position) { return { line: position.line, character: position.character }; }
-function toLspRange(range) { return { start: toLspPosition(range.start), end: toLspPosition(range.end) }; }
 function fromPosition(position) { return new vscode.Position(position.line, position.character); }
 function fromRange(range) { return new vscode.Range(fromPosition(range.start), fromPosition(range.end)); }
 function uri(value) { return vscode.Uri.parse(value); }
@@ -101,12 +86,11 @@ class LspClient {
 
   async _start() {
     const active = vscode.window.activeTextEditor?.document;
-    const server = serverPath(this.context.extensionPath);
-    if (!fs.existsSync(server)) throw new Error(`PunPun language server not found: ${server}`);
-    const env = { ...process.env, PUNPUN_PPC: compilerPath(active, this.context.extensionPath) };
-    this.output.appendLine(`Starting PunPun language server: ${server}`);
-    this.output.appendLine(`Compiler: ${env.PUNPUN_PPC}`);
-    this.proc = childProcess.spawn(process.execPath, [server], { stdio: ['pipe','pipe','pipe'], windowsHide: true, env });
+    const compiler = compilerPath(active, this.context.extensionPath);
+    this.output.appendLine(`Starting PPC language server: ${compiler} serve --stdio`);
+    this.proc = childProcess.spawn(compiler, ['serve', '--stdio'], {
+      stdio: ['pipe','pipe','pipe'], windowsHide: true, env: process.env,
+    });
     this.proc.stdout.on('data', chunk => { this.buffer = Buffer.concat([this.buffer, chunk]); this.consume(); });
     this.proc.stderr.on('data', chunk => this.output.append(chunk.toString('utf8')));
     this.proc.on('error', error => this.fail(error));
@@ -124,9 +108,6 @@ class LspClient {
         textDocument: {
           publishDiagnostics: { relatedInformation: true, versionSupport: true },
           completion: { completionItem: { snippetSupport: true } },
-          semanticTokens: { requests: { full: true }, tokenTypes: TOKEN_TYPES, tokenModifiers: TOKEN_MODIFIERS, formats: ['relative'] },
-          inlayHint: { dynamicRegistration: false },
-          codeAction: { codeActionLiteralSupport: { codeActionKind: { valueSet: ['quickfix'] } } },
         },
         workspace: { workspaceFolders: true },
       },
@@ -254,13 +235,6 @@ function convertCompletion(item) {
   return result;
 }
 
-function convertWorkspaceEdit(edit) {
-  if (!edit) return undefined;
-  const result = new vscode.WorkspaceEdit();
-  for (const [rawUri, edits] of Object.entries(edit.changes || {})) for (const item of edits) result.replace(uri(rawUri), fromRange(item.range), item.newText);
-  return result;
-}
-
 function runTool(action, extra = []) {
   const document = vscode.window.activeTextEditor?.document;
   if (!document || document.languageId !== 'punpun') return vscode.window.showErrorMessage('Open a PunPun .pp file first.');
@@ -295,82 +269,11 @@ function registerProviders(context, client) {
     }
   }));
 
-  context.subscriptions.push(vscode.languages.registerReferenceProvider(LANGUAGE_SELECTOR, {
-    async provideReferences(document, position, options) {
-      const value = await client.request('textDocument/references', { ...textDocumentParams(document, position), context: { includeDeclaration: options.includeDeclaration } });
-      return (value || []).map(item => new vscode.Location(uri(item.uri), fromRange(item.range)));
-    }
-  }));
-
-  context.subscriptions.push(vscode.languages.registerRenameProvider(LANGUAGE_SELECTOR, {
-    async provideRenameEdits(document, position, newName) {
-      return convertWorkspaceEdit(await client.request('textDocument/rename', { ...textDocumentParams(document, position), newName }));
-    }
-  }));
-
   context.subscriptions.push(vscode.languages.registerDocumentSymbolProvider(LANGUAGE_SELECTOR, {
     async provideDocumentSymbols(document) {
       return (await client.request('textDocument/documentSymbol', textDocumentParams(document)) || []).map(item => new vscode.DocumentSymbol(item.name, item.detail || '', item.kind, fromRange(item.range), fromRange(item.selectionRange || item.range)));
     }
   }));
-
-  context.subscriptions.push(vscode.languages.registerWorkspaceSymbolProvider({
-    async provideWorkspaceSymbols(query) {
-      return (await client.request('workspace/symbol', { query }) || []).map(item => new vscode.SymbolInformation(item.name, item.kind, item.containerName || '', new vscode.Location(uri(item.location.uri), fromRange(item.location.range))));
-    }
-  }));
-
-  context.subscriptions.push(vscode.languages.registerDocumentFormattingEditProvider(LANGUAGE_SELECTOR, {
-    async provideDocumentFormattingEdits(document, options) {
-      const edits = await client.request('textDocument/formatting', { textDocument: { uri: document.uri.toString() }, options: { tabSize: options.tabSize, insertSpaces: options.insertSpaces } });
-      return (edits || []).map(item => vscode.TextEdit.replace(fromRange(item.range), item.newText));
-    }
-  }));
-
-  context.subscriptions.push(vscode.languages.registerSignatureHelpProvider(LANGUAGE_SELECTOR, {
-    async provideSignatureHelp(document, position) {
-      const value = await client.request('textDocument/signatureHelp', textDocumentParams(document, position));
-      if (!value) return undefined;
-      const result = new vscode.SignatureHelp();
-      result.activeSignature = value.activeSignature || 0;
-      result.activeParameter = value.activeParameter || 0;
-      result.signatures = (value.signatures || []).map(item => {
-        const sig = new vscode.SignatureInformation(item.label, markdown(item.documentation));
-        sig.parameters = (item.parameters || []).map(param => new vscode.ParameterInformation(param.label, markdown(param.documentation)));
-        return sig;
-      });
-      return result;
-    }
-  }, '(', ','));
-
-  const legend = new vscode.SemanticTokensLegend(TOKEN_TYPES, TOKEN_MODIFIERS);
-  context.subscriptions.push(vscode.languages.registerDocumentSemanticTokensProvider(LANGUAGE_SELECTOR, {
-    async provideDocumentSemanticTokens(document) {
-      const value = await client.request('textDocument/semanticTokens/full', textDocumentParams(document));
-      return new vscode.SemanticTokens(new Uint32Array(value?.data || []));
-    }
-  }, legend));
-
-  context.subscriptions.push(vscode.languages.registerInlayHintsProvider(LANGUAGE_SELECTOR, {
-    async provideInlayHints(document, range) {
-      const value = await client.request('textDocument/inlayHint', { textDocument: { uri: document.uri.toString() }, range: toLspRange(range) });
-      return (value || []).map(item => {
-        const hint = new vscode.InlayHint(fromPosition(item.position), typeof item.label === 'string' ? item.label : item.label.map(p => p.value).join(''), item.kind === 2 ? vscode.InlayHintKind.Parameter : vscode.InlayHintKind.Type);
-        hint.paddingLeft = item.paddingLeft; hint.paddingRight = item.paddingRight; return hint;
-      });
-    }
-  }));
-
-  context.subscriptions.push(vscode.languages.registerCodeActionsProvider(LANGUAGE_SELECTOR, {
-    async provideCodeActions(document, range, contextInfo) {
-      const diagnostics = contextInfo.diagnostics.map(d => ({ range: toLspRange(d.range), severity: d.severity + 1, code: typeof d.code === 'object' ? d.code.value : d.code, source: d.source, message: d.message, data: d._punpunData }));
-      const actions = await client.request('textDocument/codeAction', { textDocument: { uri: document.uri.toString() }, range: toLspRange(range), context: { diagnostics } });
-      return (actions || []).map(item => {
-        const action = new vscode.CodeAction(item.title, vscode.CodeActionKind.QuickFix);
-        action.edit = convertWorkspaceEdit(item.edit); action.isPreferred = item.isPreferred; return action;
-      });
-    }
-  }, { providedCodeActionKinds: [vscode.CodeActionKind.QuickFix] }));
 }
 
 async function activate(context) {
@@ -388,9 +291,7 @@ async function activate(context) {
   context.subscriptions.push(vscode.commands.registerCommand('punpun.build', () => runTool('build')));
   context.subscriptions.push(vscode.commands.registerCommand('punpun.run', () => runTool('run')));
   context.subscriptions.push(vscode.commands.registerCommand('punpun.check', () => runTool('check')));
-  context.subscriptions.push(vscode.commands.registerCommand('punpun.format', () => vscode.commands.executeCommand('editor.action.formatDocument')));
   context.subscriptions.push(vscode.commands.registerCommand('punpun.test', () => runTool('test')));
-  context.subscriptions.push(vscode.commands.registerCommand('punpun.buildWindows', () => runTool('build', ['--target', 'windows-x86_64'])));
   context.subscriptions.push(vscode.commands.registerCommand('punpun.restartLanguageServer', async () => {
     await client.stop(); client.ready = false; client.readyPromise = null; await client.start();
     vscode.window.showInformationMessage('PunPun language server restarted.');

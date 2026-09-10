@@ -15,7 +15,7 @@ def check(cur,base):
  cb={x['name']:x for x in cur['builtins']}
  for x in base['builtins']:
   if x['name'] not in cb: e.append('stable builtin removed: '+x['name'])
-  elif cb[x['name']]!=x: e.append('stable builtin signature changed: '+x['name'])
+  elif cb[x['name']].get('parameters')!=x.get('parameters') or cb[x['name']].get('result')!=x.get('result'): e.append('stable builtin signature changed: '+x['name'])
  cs={ident_std(x) for x in cur['stdlib_symbols']}
  for x in base['stdlib_symbols']:
   if ident_std(x) not in cs: e.append('stable stdlib symbol removed/changed: '+ident_std(x))

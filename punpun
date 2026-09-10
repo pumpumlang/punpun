@@ -21,7 +21,7 @@ usage:
   pp toolchain probe [clang|gcc|zig|mingw ...]
   pp selfhost <input.pp> <output.c>
   pp migrate [file.pp]
-  pp build [file.pp] [--release] [--target native|linux-x86_64|windows-x86_64] [-o output]
+  pp build [file.pp] [--release] [--backend c|native|bytecode] [-o output]
   pp run   [file.pp] [--release] [-- args...]
   pp check [file.pp]
   pp test [--doc]
@@ -30,15 +30,12 @@ usage:
   pp compat [--quick]
   pp stress [--quick] [--iterations N]
   pp pgo [file.pp] [-o output] [-- training args...]
-  pp fmt   [file.pp] [--check]
-  pp lint  [file.pp]
   pp clean
   pp debug-map [file.pp] [-o map.json]
   pp debug [file.pp] [-- args...]
   pp emit-tokens [file.pp] [-o output.txt]
   pp emit-ast    [file.pp] [-o output.txt]
   pp emit-machine-ir [file.pp] [-o output.txt]
-  pp emit-abi [file.pp] [-o output.txt]
   pp emit-c      [file.pp] [-o output.c]
   pp emit-asm    [file.pp] [-o output.s]
   pp ast|ir|machine-ir|asm  [file.pp]
@@ -55,9 +52,8 @@ TXT
 compiler() {
     if [ -f "$SCRIPT_DIR/Makefile" ] && [ -d "$SCRIPT_DIR/compiler" ]; then
         ppc="$SCRIPT_DIR/build/ppc"
-        runtime_lib="$SCRIPT_DIR/runtime/libpunpun.a"
         rebuild=0
-        if [ ! -x "$ppc" ] || [ ! -f "$runtime_lib" ] || [ "$SCRIPT_DIR/VERSION" -nt "$ppc" ]; then
+        if [ ! -x "$ppc" ] || [ "$SCRIPT_DIR/VERSION" -nt "$ppc" ]; then
             rebuild=1
         elif find "$SCRIPT_DIR/compiler" "$SCRIPT_DIR/runtime" -type f \
             \( -name '*.cpp' -o -name '*.hpp' -o -name '*.c' -o -name '*.h' \) \
@@ -299,7 +295,7 @@ toolchain_info() {
     fi
     echo "c++:        $cxx"
     echo "linker:     $linker"
-    echo "selection:  pp build --toolchain $name"
+    echo "selection:  pp build --cc $cc"
 }
 
 [ $# -gt 0 ] || { usage; exit 2; }
@@ -435,7 +431,7 @@ case "$command_name" in
         echo "compiler              OK  $($PPC --version)"
         if "$PPC" language-info >/dev/null 2>&1; then echo "semantic metadata      OK"; else echo "semantic metadata      FAILED"; fi
         if command -v cc >/dev/null 2>&1; then echo "native C/linker        OK  $(cc --version 2>/dev/null | head -n 1)"; else echo "native C/linker        MISSING"; fi
-        if command -v node >/dev/null 2>&1; then echo "LSP Node runtime       OK  $(node --version)"; else echo "LSP Node runtime       MISSING (editor LSP unavailable)"; fi
+        if "$PPC" serve --help >/dev/null 2>&1; then echo "built-in LSP           OK  ppc serve --stdio"; else echo "built-in LSP           FAILED"; fi
         if command -v code >/dev/null 2>&1; then echo "VS Code CLI            OK"; elif command -v codium >/dev/null 2>&1; then echo "VSCodium CLI           OK"; else echo "VS Code CLI            optional/unavailable"; fi
         if command -v cc >/dev/null 2>&1; then echo "C injection compiler   OK  $(command -v cc)"; else echo "C injection compiler   unavailable until @inject->c is used"; fi
         if command -v python3 >/dev/null 2>&1 && [ -f "$SCRIPT_DIR/ppx/ppx.py" ]; then echo "PPX package client     OK  $VERSION"; else echo "PPX package client     MISSING (python3 required)"; fi
@@ -452,10 +448,10 @@ case "$command_name" in
         echo "compiler:      $PPC"
         echo "toolchain:     $SCRIPT_DIR"
         echo "target:        $(uname -m 2>/dev/null || echo unknown)-$(uname -s 2>/dev/null | tr '[:upper:]' '[:lower:]' || echo unknown)"
-        echo "backend:       direct x86-64 on supported Linux hosts; portable C otherwise"
+        echo "backends:      c (default), native x86-64, bytecode"
         echo "cache:         $PROJECT_DIR/.punpun/cache"
         echo "stdlib:        $SCRIPT_DIR/stdlib"
-        echo "LSP:           $SCRIPT_DIR/tooling/lsp/server.js"
+        echo "LSP:           $PPC serve --stdio"
         echo "PPX:           $SCRIPT_DIR/ppx/ppx.py"
         echo "packages:      $SCRIPT_DIR/packages"
         echo "docs:          $SCRIPT_DIR/docs-site/dist"
@@ -476,14 +472,12 @@ case "$command_name" in
         [ -f "$migrator" ] || { echo "pp: migration tool is unavailable" >&2; exit 1; }
         command -v python3 >/dev/null 2>&1 || { echo "pp: pp migrate currently requires python3" >&2; exit 1; }
         python3 "$migrator" "$source_file"
-        "$(compiler)" fmt "$source_file"
         "$(compiler)" check "$source_file"
         exit $?
         ;;
     ast) command_name=emit-ast ;;
     ir) command_name=emit-ir ;;
     machine-ir) command_name=emit-machine-ir ;;
-    abi) command_name=emit-abi ;;
     asm) command_name=emit-asm ;;
     language-info)
         [ $# -eq 0 ] || { echo "pp: language-info accepts no arguments" >&2; exit 2; }
@@ -491,24 +485,25 @@ case "$command_name" in
         ;;
     lsp)
         [ $# -eq 0 ] || { echo "pp: lsp accepts no arguments" >&2; exit 2; }
-        server="$SCRIPT_DIR/tooling/lsp/server.js"
-        [ -f "$server" ] || { echo "pp: LSP server is not available beside this launcher" >&2; exit 1; }
-        command -v node >/dev/null 2>&1 || { echo "pp: Node.js is required for the LSP server" >&2; exit 1; }
-        PUNPUN_PPC="$(compiler)" exec node "$server"
+        exec "$(compiler)" serve --stdio
         ;;
     add)
         [ $# -eq 2 ] || { echo "pp: usage: pp add <name> <path>" >&2; exit 2; }
-        exec "$(compiler)" package-add "$1" "$2"
+        exec python3 "$SCRIPT_DIR/ppx/ppx.py" add "$1" --path "$2"
         ;;
     remove)
         [ $# -eq 1 ] || { echo "pp: usage: pp remove <name>" >&2; exit 2; }
-        exec "$(compiler)" package-remove "$1"
+        exec python3 "$SCRIPT_DIR/ppx/ppx.py" remove "$1"
         ;;
-    tree|update|fetch)
+    tree|update)
         [ $# -eq 0 ] || { echo "pp: $command_name accepts no arguments" >&2; exit 2; }
-        exec "$(compiler)" "package-$command_name"
+        exec python3 "$SCRIPT_DIR/ppx/ppx.py" "$command_name"
         ;;
-    build|run|go|check|fmt|lint|emit-tokens|emit-ast|emit-hir|emit-ir|emit-machine-ir|emit-abi|emit-c|emit-asm)
+    fetch)
+        [ $# -eq 0 ] || { echo "pp: fetch accepts no arguments" >&2; exit 2; }
+        exec python3 "$SCRIPT_DIR/ppx/ppx.py" install
+        ;;
+    build|run|go|check|emit-tokens|emit-ast|emit-hir|emit-ir|emit-machine-ir|emit-c|emit-asm)
         ;;
     *)
         echo "pp: unknown command '$command_name'" >&2
