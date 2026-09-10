@@ -75,13 +75,17 @@ def incremental_function_counts(lines: list[str]) -> tuple[int, int] | None:
 def benchmark(project: Path, count: int, rounds: int) -> dict:
     check = samples([str(PP), "check"], project, rounds)
     subprocess.run([str(PP), "clean"], cwd=project, check=True, stdout=subprocess.DEVNULL)
-    cold = [run_timed([str(PP), "build", "--release"], project)["milliseconds"]]
-    warm = samples([str(PP), "build", "--release"], project, rounds)
+
+    executable = project / ".punpun" / "bin" / ("main.exe" if os.name == "nt" else "main")
+    executable.parent.mkdir(parents=True, exist_ok=True)
+    output_args = ["-o", str(executable)]
+
+    cold = [run_timed([str(PP), "build", "--release", *output_args], project)["milliseconds"]]
+    warm = samples([str(PP), "build", "--release", *output_args], project, rounds)
 
     changed = project / "src" / f"module_{count - 1}.pp"
     changed.write_text(f"fn value_{count - 1}() -> i64 {{ return 2; }}\n", encoding="utf-8")
-    incremental = run_timed([str(PP), "build", "--release", "--stats"], project)
-    executable = project / ".punpun" / "bin" / "main"
+    incremental = run_timed([str(PP), "build", "--release", "--stats", *output_args], project)
     executed = subprocess.run([str(executable)], cwd=project, text=True,
                               stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=60)
     expected = str(count + 1)
