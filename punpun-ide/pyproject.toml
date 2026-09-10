@@ -1,0 +1,16 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "punpun-ide"
+version = "0.1.0"
+description = "Small cross-platform desktop IDE for PunPun, C/C++, headers, and Markdown"
+requires-python = ">=3.10"
+dependencies = ["PySide6>=6.7,<7"]
+
+[project.scripts]
+punpun-ide = "punpun_ide.app:main"
+
+[tool.setuptools]
+packages = ["punpun_ide"]
