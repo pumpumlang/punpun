@@ -66,6 +66,7 @@ jobs:
             archlinux:latest bash -lc '
               set -euxo pipefail
               pacman -Syu --noconfirm --needed base-devel gcc python python-pillow nodejs zstd curl git sudo shared-mime-info hicolor-icon-theme
+              git config --global --add safe.directory /work
               python3 scripts/build_brand.py --repo-root .
               git diff --exit-code -- assets editors/vscode/icon.png editors/vscode/assets editors/vscode/fileicons
               make -j2 test
