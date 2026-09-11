@@ -11,6 +11,34 @@ SOURCE_DATE_EPOCH=int(os.environ.get('SOURCE_DATE_EPOCH','1788753600'))
 PROJECT_URL=os.environ.get('PUNPUN_PROJECT_URL','https://github.com/pumpumlang/punpun')
 
 
+def ppx_source() -> Path:
+    """Return the separately versioned PPX client used by this release.
+
+    PPX remains owned by pumpumlang/punpun-ppx. Release builds consume a
+    matching checkout instead of silently shipping a stale vendored copy.
+    """
+    candidates=[]
+    if os.environ.get('PUNPUN_PPX_ROOT'):
+        candidates.append(Path(os.environ['PUNPUN_PPX_ROOT']))
+    candidates.extend((ROOT.parent/'punpun-ppx',ROOT/'.release'/'punpun-ppx'))
+    for candidate in candidates:
+        version_file=candidate/'VERSION'
+        client=candidate/'ppx'/'ppx'
+        if not version_file.is_file() or not client.is_file():
+            continue
+        ppx_version=version_file.read_text(encoding='utf-8').strip()
+        if ppx_version != VERSION:
+            raise RuntimeError(
+                f'PPX checkout {candidate} is {ppx_version}; PunPun {VERSION} '
+                'requires the matching PPX release'
+            )
+        return candidate
+    raise RuntimeError(
+        'matching PPX checkout not found; clone pumpumlang/punpun-ppx beside '
+        'this repository or set PUNPUN_PPX_ROOT'
+    )
+
+
 def run(cmd,cwd=ROOT,**kw):
     print('+',' '.join(map(str,cmd)))
     return subprocess.run(list(map(str,cmd)),cwd=cwd,check=True,**kw)
@@ -37,7 +65,7 @@ def copy_clean_source(dst:Path):
     # Source/publication copies are rebuilt from an allow-source tree rather than
     # inheriting whatever a developer happened to generate locally.
     ignored_dirs={
-        '.git','.punpun','build','dist','__pycache__','.pytest_cache','.mypy_cache',
+        '.git','.punpun','.release','build','dist','__pycache__','.pytest_cache','.mypy_cache',
         '.ruff_cache','.idea','node_modules','__MACOSX','.ppx-registry','htmlcov'
     }
     ignored_names={'.DS_Store','Thumbs.db','desktop.ini','.coverage'}
@@ -65,6 +93,7 @@ def make_sdk(stage:Path):
         copy_part(ROOT/f,sdk/f)
     for d in ('runtime','stdlib','packages','tooling','editors','docs','spec','assets','packaging','selfhost'):
         copy_part(ROOT/d,sdk/d)
+    copy_part(ppx_source()/'ppx',sdk/'ppx')
     # The release PKGBUILD embeds the SDK archive checksum. Keeping that generated
     # file inside the SDK creates a checksum feedback loop across release runs.
     # The SDK does not need the Arch build recipe at runtime; the exact, checksummed
@@ -81,6 +110,7 @@ def make_sdk(stage:Path):
         'pp':'ROOT=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)\nexport PATH="$ROOT/bin:$PATH"\nexec "$ROOT/punpun" "$@"',
         'punpun':'ROOT=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)\nexport PATH="$ROOT/bin:$PATH"\nexec "$ROOT/punpun" "$@"',
         'punpun-lsp':'ROOT=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)\nexec "$ROOT/bin/ppc" serve --stdio "$@"',
+        'ppx':'ROOT=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)\nexec "$ROOT/ppx/ppx" "$@"',
     }
     for name,body in wrappers.items():
         p=sdk/'bin'/name; p.write_text('#!/usr/bin/env sh\nset -eu\n'+body+'\n'); executable(p)
@@ -116,7 +146,7 @@ backup="$DEST.previous.$$"; rm -rf "$backup"; mkdir -p "$(dirname "$DEST")" "$BI
 [ ! -e "$DEST" ] || mv "$DEST" "$backup"
 if ! mv "$src" "$DEST"; then [ ! -e "$backup" ] || mv "$backup" "$DEST"; exit 1; fi
 rm -rf "$backup"
-for n in pp ppc punpun punpun-lsp; do
+for n in pp ppc ppx punpun punpun-lsp; do
   cat > "$BIN/$n" <<EOF
 #!/usr/bin/env sh
 exec "$DEST/bin/$n" "\$@"
@@ -173,7 +203,7 @@ sha256sums=('{sdk_sha}')
 package() {{
   mkdir -p "$pkgdir/usr/lib/punpun" "$pkgdir/usr/bin" "$pkgdir/usr/share/licenses/punpun" "$pkgdir/usr/share/doc/punpun"
   cp -a "$srcdir/PunPun-{VERSION}-{TARGET}/." "$pkgdir/usr/lib/punpun/"
-  for name in pp ppc punpun punpun-lsp; do
+  for name in pp ppc ppx punpun punpun-lsp; do
     printf '#!/bin/sh\nexec /usr/lib/punpun/bin/%s "$@"\n' "$name" > "$pkgdir/usr/bin/$name"
     chmod 755 "$pkgdir/usr/bin/$name"
   done
@@ -193,7 +223,7 @@ def make_arch_package(sdk:Path,out:Path):
         root=Path(td)
         lib=root/'usr/lib/punpun'; lib.mkdir(parents=True); shutil.copytree(sdk,lib,dirs_exist_ok=True)
         (root/'usr/bin').mkdir(parents=True)
-        for name in ('pp','ppc','punpun','punpun-lsp'):
+        for name in ('pp','ppc','ppx','punpun','punpun-lsp'):
             p=root/'usr/bin'/name; p.write_text(f'#!/bin/sh\nexec /usr/lib/punpun/bin/{name} "$@"\n'); executable(p)
         lic=root/'usr/share/licenses/punpun'; lic.mkdir(parents=True); shutil.copy2(sdk/'LICENSE',lic/'LICENSE')
         doc=root/'usr/share/doc/punpun'; doc.mkdir(parents=True); shutil.copy2(sdk/'README.md',doc/'README.md')

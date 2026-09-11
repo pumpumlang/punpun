@@ -9,7 +9,7 @@
 </p>
 
 <p align="center">
-  <img alt="PunPun 1.4.0" src="https://img.shields.io/badge/version-1.4.0-b9ff4a?style=for-the-badge&labelColor=11151e">
+  <img alt="PunPun 1.4.5" src="https://img.shields.io/badge/version-1.4.5-b9ff4a?style=for-the-badge&labelColor=11151e">
   <img alt="Linux x86-64 validated" src="https://img.shields.io/badge/validated-Linux%20x86--64-66e3ff?style=for-the-badge&labelColor=11151e">
   <img alt="MIT license" src="https://img.shields.io/badge/license-MIT-f6f7fa?style=for-the-badge&labelColor=11151e">
 </p>

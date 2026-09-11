@@ -1,4 +1,4 @@
-# PunPun 1.4.0 release notes
+# PunPun 1.4.5 release notes
 
 PunPun 1.4 closes three gaps that kept ordinary programs from being expressible:
 behaviour could not be passed around, sequences could not be walked, and an
@@ -69,6 +69,18 @@ decision. Warning codes now render with a `W` prefix.
 The repository's own examples were split between the two grammars and have been
 converted, each verified to produce identical output.
 
+## 1.4.5 package and release integration
+
+The stable patch release coordinates the compiler, documentation, and PPX at
+one version. Linux, Arch/CachyOS, and Windows release jobs fetch the exact
+`v1.4.5` PPX tag; packaging stops if that client does not match the compiler.
+The Linux SDK and Arch package now actually contain the `ppx` command that
+their installer and validator promise.
+
+For projects with a `Punpun.toml`, `pp build`, `pp run`, and `pp check` obtain
+the materialized package roots from PPX automatically. `ppx outdated` now
+reports current and latest versions instead of its earlier placeholder answer.
+
 ## Known limitations
 
 - Function literals cannot capture their surroundings.
@@ -80,6 +92,7 @@ converted, each verified to produce identical output.
 
 ## Validation
 
-118 compiler cases across all three backends, plus the self-host bootstrap
+118 compiler cases across all three backends, plus PPX dependency-path and
+archive regressions, the self-host bootstrap
 fixed point, the ABI gate, the backend compatibility matrix, async stress,
 frontend mutation fuzzing, documentation link checking and the privacy audit.

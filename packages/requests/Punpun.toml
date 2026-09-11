@@ -1,6 +1,6 @@
 [package]
 name = "requests"
-version = "1.3.0"
+version = "1.4.5"
 description = "Compatibility request helpers backed by PunPun's verified HTTPS runtime"
 entry = "src/main.pp"
 

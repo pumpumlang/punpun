@@ -1,5 +1,16 @@
 # Changelog
 
+## 1.4.5 — 2026-09-11
+
+- Coordinated the language, documentation, and PPX package manager on the
+  `1.4.5` stable release number.
+- Fixed release packaging to embed the exact matching PPX client in Linux SDK,
+  self-extracting installer, Arch/CachyOS package, and Windows payloads.
+- Made `pp build`, `pp run`, `pp check`, and emit commands automatically pass
+  materialized PPX dependency roots to the compiler.
+- Added release tests that reject missing or mismatched PPX companion sources.
+- Corrected stale 1.3 labels in the live example and first-party package docs.
+
 ## 1.4.0 — 2026-09-11
 
 Three language gaps closed. Every addition is source-compatible with 1.0: the
@@ -175,67 +186,6 @@ language version, ABI, package format and lockfile format all stay put.
 - Added optional `--llvm-backend` and `emit-llvm` using Clang/LLVM after the shared PunPun frontend/MIR pipeline.
 - Preserved 0.5 `nums` shared-handle behavior while keeping explicit `move(nums)` available for binding-lifetime transfer.
 - Fixed Step 3 portable-backend match warnings, method-receiver ownership, minimum-int HIR typing, and regressions exposed by mandatory MIR verification.
-
-# Changelog
-
-## 1.4.0 — 2026-09-11
-
-Three gaps closed. Every addition is source-compatible with 1.0: the language
-version, ABI, package format and lockfile format all stay where they were.
-
-### Functions are values
-
-- `fn(T, U) -> R` is a type, usable for parameters, locals and results.
-- A function named without parentheses is a value. An expected function type
-  picks between overloads; a generic function is refused, having no single
-  address until its type arguments are given.
-- `fn(x: int) -> int { ... }` may be written in expression position. It is
-  lifted to a module-level function at parse time, so nothing after the parser
-  needs a second notion of what a function is.
-- A function value is the callee's index in the module function table: one
-  word, and the reason the three backends share one calling sequence.
-- Literals do not capture. Naming a local from around one is refused with an
-  error that says so, rather than claiming the name does not exist. Capturing
-  needs an environment that owns the captured values, and the ownership rules
-  have to say what that means first.
-- `sort_by` joins the standard library — the comparator that could not be
-  written before.
-
-### Sequences iterate
-
-- `for element in sequence` over nums, List<T> and Slice<T>, including lists of
-  aggregates. It is rewritten in the checker into the indexed loop it replaces,
-  so all three backends gained it without change.
-
-### Contracts are types
-
-- `fn draw(s: Shape)` is accepted, and `List<Shape>` holds values of several
-  concrete types at once.
-- An object carries its type identity in a hidden leading field, which is what
-  lets a contract value be the bare handle and therefore fit a List slot.
-- Dispatch compares that identity against the types declaring they meet the
-  contract, expanded inline. With many implementors this is linear per call
-  site; a jump table is the next step.
-
-### One grammar
-
-- The migration dialect warns, as W2000, naming the modern spelling and
-  pointing at `pp migrate`. It still parses: 1.x promised valid 0.6 source
-  keeps building, and removing the forms is a major-version decision.
-- Warning codes render with a W prefix. Every code printed as E before, so a
-  warning quoted alone looked like an error.
-- The repository's own examples were converted, having been split between the
-  two grammars. Each produces identical output.
-- `pp migrate` left `keep name as Type = value` half-converted, dropping only
-  the arrow; it handles the annotated form now.
-
-### Still missing
-
-- Function literals cannot capture.
-- Contract dispatch is a comparison chain, not a table.
-- `for` does not walk Map<V> or the characters of a str.
-- Windows has still never been compiled; macOS has never been tested.
-
 
 ## PunPun 0.6 development — Steps 2 and 3
 

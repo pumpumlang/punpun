@@ -707,4 +707,27 @@ case "${1:-}" in
 esac
 
 PPC=$(compiler)
+
+# PPX owns dependency resolution. Once it has materialized the graph, expose
+# each package root to the compiler automatically for ordinary project commands.
+if [ -f "$PROJECT_DIR/Punpun.toml" ]; then
+    if ppx=$(ppx_command); then
+        package_paths=$(mktemp "${TMPDIR:-/tmp}/punpun-package-paths.XXXXXX")
+        if ! (cd "$PROJECT_DIR" && "$ppx" paths) > "$package_paths"; then
+            rm -f "$package_paths"
+            exit 1
+        fi
+        while IFS= read -r package_path; do
+            [ -n "$package_path" ] || continue
+            set -- "$@" --module-path "$package_path"
+        done < "$package_paths"
+        rm -f "$package_paths"
+    elif grep -A 100000 '^\[dependencies\][[:space:]]*$' "$PROJECT_DIR/Punpun.toml" 2>/dev/null \
+            | grep -Eq '^[[:space:]]*[^#[:space:]][^=]*='; then
+        echo "pp: this project has dependencies but PPX is not installed" >&2
+        echo "    install https://github.com/pumpumlang/punpun-ppx" >&2
+        exit 1
+    fi
+fi
+
 exec "$PPC" "$command_name" "$source_file" "$@"

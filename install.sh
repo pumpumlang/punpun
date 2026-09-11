@@ -102,6 +102,27 @@ mkdir -p "$stage"
 cp -a "$ROOT/." "$stage/"
 rm -rf "$stage/.punpun" "$stage/tests/tmp"
 
+# PPX is developed in its own repository, but a matching client is part of the
+# consumer SDK. Source-tree installs may obtain it from an adjacent checkout.
+if [ ! -x "$stage/ppx/ppx" ]; then
+    for candidate in \
+        "${PUNPUN_PPX_ROOT:-}" \
+        "$ROOT/../punpun-ppx"
+    do
+        [ -n "$candidate" ] || continue
+        [ -x "$candidate/ppx/ppx" ] || continue
+        [ -f "$candidate/VERSION" ] || continue
+        ppx_version=$(tr -d '\r\n' < "$candidate/VERSION")
+        if [ "$ppx_version" != "$VERSION" ]; then
+            rm -rf "$stage"
+            echo "PunPun installer: PPX $ppx_version does not match PunPun $VERSION" >&2
+            exit 1
+        fi
+        cp -a "$candidate/ppx" "$stage/ppx"
+        break
+    done
+fi
+
 # Prefer rebuilding the bootstrap compiler locally when the normal development
 # toolchain exists. This avoids depending on the distribution used to build the
 # bundled binary. The prebuilt compiler remains a fallback for minimal systems.
@@ -143,7 +164,11 @@ rm -rf "$backup"
 write_wrapper pp "$INSTALL_DIR/pp"
 write_wrapper punpun "$INSTALL_DIR/punpun"
 write_wrapper ppc "$INSTALL_DIR/build/ppc"
-write_wrapper ppx "$INSTALL_DIR/ppx/ppx"
+if [ -x "$INSTALL_DIR/ppx/ppx" ]; then
+    write_wrapper ppx "$INSTALL_DIR/ppx/ppx"
+else
+    warn "matching PPX client was not found; install pumpumlang/punpun-ppx separately"
+fi
 write_wrapper punpun-uninstall "$INSTALL_DIR/uninstall.sh"
 
 if [ -x "$INSTALL_DIR/packaging/linux/install-file-icons.sh" ]; then

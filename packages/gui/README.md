@@ -1,6 +1,6 @@
 # gui
 
-First-party PunPun 1.3 native GUI foundation.
+First-party PunPun 1.4 native GUI foundation.
 
 ```sh
 ppx add gui

@@ -28,7 +28,7 @@ namespace ppc {
 namespace version {
 
 /// This build of the compiler.
-inline constexpr const char *kCompilerVersion = "1.4.0";
+inline constexpr const char *kCompilerVersion = "1.4.5";
 
 /// The PunPun language version PPC targets.
 ///

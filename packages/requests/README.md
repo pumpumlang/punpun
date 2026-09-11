@@ -1,7 +1,7 @@
 # requests
 
 Compatibility package for the PunPun 1.0 requests API, now backed by the
-verified PunPun 1.3 HTTPS runtime.
+verified PunPun 1.4 HTTPS runtime.
 
 ```sh
 ppx add requests

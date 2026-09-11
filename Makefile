@@ -78,6 +78,7 @@ test: version-sync compiler compiler-test package-test
 	python3 tests/test_desktop_integration.py
 	python3 tests/test_publish_cleanup.py
 	python3 tests/test_release_hygiene.py
+	python3 tests/test_ppx_integration.py
 	python3 tests/test_toolchain_update.py
 	python3 -m json.tool editors/vscode/package.json >/dev/null
 	python3 -m json.tool editors/vscode/snippets.json >/dev/null

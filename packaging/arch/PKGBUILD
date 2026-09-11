@@ -1,5 +1,5 @@
 pkgname=punpun
-pkgver=1.3.0
+pkgver=1.4.5
 pkgrel=1
 pkgdesc="PunPun native programming language SDK"
 arch=('x86_64')
@@ -7,12 +7,12 @@ url="https://github.com/pumpumlang/punpun"
 license=('MIT')
 depends=('glibc' 'gcc-libs' 'python' 'shared-mime-info' 'hicolor-icon-theme')
 optdepends=('base-devel: rebuild compiler and use C injection' 'libcurl: requests package' 'libx11: PunUI Linux backend')
-source=('PunPun-1.3.0-linux-x86_64.tar.zst')
-sha256sums=('6c31081b4f519075aa3da52b7481a2e49a351d0658aa54595aa43b93ecf0c57e')
+source=('PunPun-1.4.5-linux-x86_64.tar.zst')
+sha256sums=('ad47d34f522a7a69885de7665491240a21ff20122d8be6d39e0915760ee73d9f')
 
 package() {
   mkdir -p "$pkgdir/usr/lib/punpun" "$pkgdir/usr/bin" "$pkgdir/usr/share/licenses/punpun" "$pkgdir/usr/share/doc/punpun"
-  cp -a "$srcdir/PunPun-1.3.0-linux-x86_64/." "$pkgdir/usr/lib/punpun/"
+  cp -a "$srcdir/PunPun-1.4.5-linux-x86_64/." "$pkgdir/usr/lib/punpun/"
   for name in pp ppc ppx punpun punpun-lsp; do
     printf '#!/bin/sh
 exec /usr/lib/punpun/bin/%s "$@"
