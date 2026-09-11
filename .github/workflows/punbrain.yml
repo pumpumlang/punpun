@@ -1,4 +1,4 @@
-name: punbrain-legal
+name: punbrain
 
 on:
   pull_request:
@@ -16,7 +16,7 @@ permissions:
   contents: read
 
 jobs:
-  legal-mode:
+  standalone:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
@@ -24,34 +24,37 @@ jobs:
       - name: Build PunPun compiler
         run: make -j2 compiler
 
-      - name: Check and build legal relay
+      - name: Check and build PunBrain
         run: |
           ./build/ppc check examples/punbrain/main.pp
-          ./build/ppc build --backend=c -O2 -o /tmp/punbrain-legal examples/punbrain/main.pp
-          /tmp/punbrain-legal legal-version | grep -F 'PunBrain Legal Relay 0.2.0'
+          ./build/ppc build --backend=c -O2 -o /tmp/punbrain examples/punbrain/main.pp
+          /tmp/punbrain version | grep -F 'PunBrain 0.3.0'
+          /tmp/punbrain selftest
 
-      - name: Check external overlay syntax
-        run: python3 -m py_compile examples/punbrain/legal-overlay.py
-
-      - name: Enforce leaderboard-facing boundaries
+      - name: Deterministic F3+C parser check
         run: |
-          test ! -d examples/punbrain/fabric
-          ! grep -E 'EyeOfEnderEntity|MinecraftClient|fabric-api|fabricmc' examples/punbrain/main.pp examples/punbrain/legal-overlay.py
-          grep -F 'http://127.0.0.1:52533/api/v1/' examples/punbrain/main.pp >/dev/null
-          grep -F 'http://127.0.0.1:52533/api/v1' examples/punbrain/legal-overlay.py >/dev/null
+          /tmp/punbrain parse '/execute in minecraft:overworld run tp @s 100.300 64.000 -200.700 -45.000 0.000' | grep -F '"ok":true'
 
-      - name: Package PunBrain Legal Mode
+      - name: Ensure standalone architecture
         run: |
-          mkdir -p dist/PunBrain_Legal
-          cp examples/punbrain/main.pp dist/PunBrain_Legal/
-          cp examples/punbrain/legal-overlay.py dist/PunBrain_Legal/
-          cp examples/punbrain/README.md dist/PunBrain_Legal/
-          cp examples/punbrain/LEGALITY.md dist/PunBrain_Legal/
-          cp /tmp/punbrain-legal dist/PunBrain_Legal/punbrain-legal
-          chmod +x dist/PunBrain_Legal/punbrain-legal
+          ! grep -F '127.0.0.1:52533' examples/punbrain/main.pp
+          grep -F 'PB_GUI_PORT 52534' examples/punbrain/main.pp
+          test -f examples/punbrain/NOTICE.md
+          test -f examples/punbrain/LICENSE
+
+      - name: Package PunBrain
+        run: |
+          mkdir -p dist/PunBrain
+          cp examples/punbrain/main.pp dist/PunBrain/
+          cp examples/punbrain/README.md dist/PunBrain/
+          cp examples/punbrain/NOTICE.md dist/PunBrain/
+          cp examples/punbrain/LICENSE dist/PunBrain/
+          cp examples/punbrain/SPEEDRUN_RULES.md dist/PunBrain/
+          cp /tmp/punbrain dist/PunBrain/punbrain
+          chmod +x dist/PunBrain/punbrain
 
       - uses: actions/upload-artifact@v4
         with:
-          name: PunBrain_Legal_Bundle
-          path: dist/PunBrain_Legal
+          name: PunBrain_Standalone_Bundle
+          path: dist/PunBrain
           if-no-files-found: error
