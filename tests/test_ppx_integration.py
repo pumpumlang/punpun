@@ -7,7 +7,8 @@ import unittest
 
 
 ROOT = Path(__file__).resolve().parents[1]
-PPX = ROOT.parent / "punpun-ppx" / "ppx" / "ppx"
+PPX_ROOT = Path(os.environ.get("PUNPUN_PPX_ROOT", ROOT.parent / "punpun-ppx"))
+PPX = PPX_ROOT / "ppx" / "ppx"
 
 
 class PPXIntegrationTests(unittest.TestCase):
