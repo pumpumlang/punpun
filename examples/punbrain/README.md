@@ -1,123 +1,100 @@
-# PunBrain Legal Mode
+# PunBrain
 
-PunBrain Legal Mode is a deliberately rule-conservative PunPun showcase for Minecraft Java speedrunning. It does **not** replace Ninjabrain Bot's approved calculator during leaderboard runs. Instead, it connects to Ninjabrain Bot's documented local HTTP API and displays or relays only the data that Ninjabrain Bot already supplies.
+PunBrain is a standalone stronghold calculator implemented as a PunPun program. It is a PunPun-native reimplementation of the Ninjabrain Bot workflow and probability model, not a relay to a running Ninjabrain Bot process.
 
-This version was redesigned after reviewing Minecraft Java Edition Speedrunning rules v7. The earlier experimental Fabric/direct-eye-telemetry prototype has been removed from the distributable.
+The application owns its eye measurements, stronghold prior, Bayesian conditioning, prediction state, clipboard watcher, GUI, blind helper, calibration, and local API. Ninjabrain Bot does not need to be installed or running.
 
-## What Legal Mode does
+> **License:** PunBrain is a modified/translated work based on Ninjabrain Bot's GPLv3 source and behavior. PunBrain is therefore distributed under GPLv3. See `NOTICE.md` and `LICENSE`.
 
-- Connects only to Ninjabrain Bot's local API at `127.0.0.1:52533`.
-- Supports the API's `stronghold`, `all-advancements`, `blind`, `divine`, `boat`, `information-messages`, `version`, and `ping` endpoints.
-- Includes a PunPun CLI relay that prints the selected Ninjabrain API response without deriving new predictions.
-- Includes an external always-on-top overlay that formats fields supplied by Ninjabrain Bot for easier viewing while playing.
-- Leaves stronghold calculations, eye processing, corrections, probabilities, and player-state interpretation to Ninjabrain Bot.
+## What is implemented
 
-## What Legal Mode deliberately does not do
+- Minecraft eight-ring stronghold distribution and ring counts.
+- Biome-snapping-smoothed radial prior based on Ninjabrain Bot's approximated density model.
+- Ray-local prior construction around the first eye.
+- Any-number-of-eyes Bayesian conditioning.
+- Ninjabrain-style horizontal-angle correction for client packet rounding.
+- Crosshair correction.
+- Player-position-imprecision contribution to angular variance.
+- Ranked stronghold chunks with certainty, distance, and direction.
+- Pre-1.19 `(8,8)` and 1.19+ `(0,0)` stronghold coordinate modes.
+- Automatic `F3+C` clipboard ingestion.
+- Manual `x z yaw [correction increments]` entry.
+- Undo, reset, lock, and ±0.01° subpixel correction.
+- Standard-deviation configuration and calibration command.
+- Blind-coordinate helper.
+- Standalone self-hosted GUI.
+- JSON CLI output suitable for scripts and overlays.
+- Local GUI/state HTTP endpoint.
 
-- No Fabric mod and no Fabric API dependency.
-- No Minecraft memory or entity inspection.
-- No direct `EyeOfEnderEntity` trajectory capture.
-- No OCR, screen scraping, or audio analysis.
-- No simulated Minecraft input.
-- No automatic clipboard manipulation.
-- No independent stronghold triangulation or extra interpretation layered on Ninjabrain Bot output.
+The default inference path is the compatibility path. Experimental precision work should be kept separate so a convenience feature cannot silently change the calculator's statistical meaning.
 
-Those omissions are intentional. A useful tool that gets a submitted run rejected is a remarkably elaborate way to lose time.
-
-## Requirements
-
-1. A Ninjabrain Bot version that is legal for the category and ruleset you are running.
-2. Ninjabrain Bot's HTTP API enabled in its advanced settings.
-3. PunPun 1.3 to build the CLI relay.
-4. `curl` available for the CLI relay. Modern Windows includes `curl.exe`; Linux and macOS commonly provide `curl` through the system package manager.
-5. Python 3 with Tk support for the overlay.
-
-Rules and legal-build lists can change. Always verify the current MCSR rules before a submitted run. This project is designed around the v7 allowance for displaying Ninjabrain Bot API data; it is not a declaration by the leaderboard moderators that every future version is approved.
-
-## Build the PunPun relay
+## Build
 
 From the PunPun repository root:
 
 ```sh
 make compiler
 ./build/ppc check examples/punbrain/main.pp
-./build/ppc build --backend=c -O2 -o punbrain-legal examples/punbrain/main.pp
-./punbrain-legal legal-version
+./build/ppc build --backend=c -O2 -o punbrain examples/punbrain/main.pp
+./punbrain selftest
 ```
 
-Expected version output:
+The program uses PunPun 1.3's documented `@inject->c` native interop for the performance-sensitive probability kernel and operating-system integration. The program entry point and distributable source remain `main.pp`.
 
-```text
-PunBrain Legal Relay 0.2.0
-```
-
-Query Ninjabrain data directly:
+## Run the GUI
 
 ```sh
-./punbrain-legal stronghold
-./punbrain-legal blind
-./punbrain-legal boat
-./punbrain-legal divine
-./punbrain-legal all-advancements
+./punbrain gui
 ```
 
-The relay does not calculate on the returned values. It prints the selected endpoint response.
+PunBrain starts its own local UI at `http://127.0.0.1:52534` and opens it in your default browser. This is PunBrain's own server and calculator, not Ninjabrain Bot's API.
 
-## Run the external overlay
+While the process is running, throw an Eye of Ender, aim directly at it, and press `F3+C`. PunBrain watches the system clipboard for Minecraft's copied `/execute in minecraft:overworld ...` command, parses the player position and yaw, applies the configured correction, records the eye, and recomputes the posterior.
 
-Enable the API in Ninjabrain Bot first, then run:
+On Wayland Linux the automatic clipboard path prefers `wl-paste`; install `wl-clipboard` if it is missing. X11 fallbacks are `xclip` and `xsel`. Windows uses PowerShell's clipboard command and macOS uses `pbpaste`.
 
-```sh
-python3 examples/punbrain/legal-overlay.py --borderless
-```
-
-On Windows you can also use:
-
-```powershell
-py examples/punbrain/legal-overlay.py --borderless
-```
-
-Useful options:
+## Useful commands
 
 ```text
---endpoint stronghold
---interval-ms 200
---alpha 0.92
---borderless
---geometry 760x430+24+24
+punbrain gui
+punbrain watch
+punbrain solve x z yaw sigma [x z yaw sigma ...]
+punbrain parse "<F3+C command>"
+punbrain blind netherX netherZ
+punbrain calibrate angularError [angularError ...]
+punbrain selftest
+punbrain version
 ```
 
-Press `Esc` to close the overlay.
+`watch` gives the automatic `F3+C` workflow without opening the GUI. Each accepted eye prints the current state as JSON.
 
-The default `stronghold` view displays Ninjabrain's supplied result type, player position fields, prediction chunks/certainties/distances, and eye-throw fields. Other endpoints are shown as their returned JSON.
+## Accuracy and compatibility
 
-## Ninjabrain Bot API
+PunBrain ports the important statistical structure rather than using simple line intersection:
 
-Ninjabrain Bot exposes its API on port `52533` when enabled, under `/api/v1`. Legal Mode allow-lists only these known endpoints:
+1. The first eye creates a ray-local candidate prior.
+2. The prior uses the vanilla stronghold rings and Ninjabrain-style smoothed radial density.
+3. Each eye contributes a Gaussian angular likelihood.
+4. The variance includes the configured eye-measurement standard deviation and player-position imprecision.
+5. Candidate weights are normalized and ranked as posterior probabilities.
 
-```text
-/api/v1/stronghold
-/api/v1/all-advancements
-/api/v1/blind
-/api/v1/divine
-/api/v1/boat
-/api/v1/information-messages
-/api/v1/version
-/api/v1/ping
-```
+The port deliberately includes Ninjabrain Bot's tiny horizontal-angle correction, including the `0.000824 * sin(alpha + 45°)` packet-rounding compensation. This matters once measurements become precise enough that tiny systematic errors stop being tiny in practice.
 
-The overlay never contacts Minecraft itself.
+This is a new port, not a claim that every floating-point result is bit-for-bit identical to a particular Ninjabrain Bot release. Regression tests should be expanded with known Ninjabrain test vectors as the port matures.
 
-## Why automatic eye-coordinate capture was removed
+## Speedrun rules
 
-The original experiment sampled eye entities directly from a custom client mod and automatically ingested those measurements. That is useful for research, but it is not appropriate to ship as a leaderboard-legal mode under the v7 rules reviewed for this project. Legal Mode therefore lets the approved Ninjabrain workflow remain the source of eye measurements and calculations.
+PunBrain being functionally similar to an allowed calculator does **not** automatically make this new executable approved for submitted Minecraft speedruns. The current rules/legal-tool list must be checked independently. See `SPEEDRUN_RULES.md`.
 
-## Rule review
+For practice, development, and testing, PunBrain is fully standalone. No Ninjabrain API server is involved.
 
-See [`LEGALITY.md`](LEGALITY.md) for the design invariants used to keep this mode conservative.
-
-The rules document reviewed during this refactor was:
+## Project layout
 
 ```text
-https://rawcdn.githack.com/Minecraft-Java-Edition-Speedrunning/rules/main/pub/pdf/rules_v7.pdf
+examples/punbrain/
+├── main.pp            PunPun application, calculator core, clipboard integration, and GUI server
+├── README.md          build and usage guide
+├── NOTICE.md          upstream attribution and modification notice
+├── LICENSE            GNU GPL v3
+└── SPEEDRUN_RULES.md  submission/approval boundary
 ```
