@@ -26,8 +26,9 @@ jobs:
 
       - name: Check and build PunBrain
         run: |
+          chmod +x examples/punbrain/cc-posix.sh
           ./build/ppc check examples/punbrain/main.pp
-          ./build/ppc build --backend=c -O2 -o /tmp/punbrain examples/punbrain/main.pp
+          ./build/ppc build --backend=c --cc "$PWD/examples/punbrain/cc-posix.sh" -O2 -o /tmp/punbrain examples/punbrain/main.pp
           /tmp/punbrain version | grep -F 'PunBrain 0.3.0'
           /tmp/punbrain selftest
 
@@ -41,6 +42,7 @@ jobs:
           grep -F 'PB_GUI_PORT 52534' examples/punbrain/main.pp
           test -f examples/punbrain/NOTICE.md
           test -f examples/punbrain/LICENSE
+          test -f examples/punbrain/cc-posix.sh
 
       - name: Package PunBrain
         run: |
@@ -50,8 +52,9 @@ jobs:
           cp examples/punbrain/NOTICE.md dist/PunBrain/
           cp examples/punbrain/LICENSE dist/PunBrain/
           cp examples/punbrain/SPEEDRUN_RULES.md dist/PunBrain/
+          cp examples/punbrain/cc-posix.sh dist/PunBrain/
           cp /tmp/punbrain dist/PunBrain/punbrain
-          chmod +x dist/PunBrain/punbrain
+          chmod +x dist/PunBrain/punbrain dist/PunBrain/cc-posix.sh
 
       - uses: actions/upload-artifact@v4
         with:
