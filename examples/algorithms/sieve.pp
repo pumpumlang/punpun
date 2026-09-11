@@ -1,62 +1,62 @@
-craft sieve_count(flags as nums, limit as int) gives int:
-    each i from 2 until limit + 1:
-        flags[i] <- 1
-    done
+fn sieve_count(flags: nums, limit: i64) -> i64 {
+    for i in 2..limit + 1 {
+        flags[i] = 1;
+    }
 
-    keep factor <- 2
-    whilst factor <= limit / factor:
-        when flags[factor] == 0:
-            factor <- factor + 1
-            next
-        done
-        keep multiple <- factor * factor
-        whilst multiple <= limit:
-            flags[multiple] <- 0
-            multiple <- multiple + factor
-        done
-        factor <- factor + 1
-    done
+    let mut factor = 2;
+    while factor <= limit / factor {
+        if flags[factor] == 0 {
+            factor = factor + 1;
+            continue;
+        }
+        let mut multiple = factor * factor;
+        while multiple <= limit {
+            flags[multiple] = 0;
+            multiple = multiple + factor;
+        }
+        factor = factor + 1;
+    }
 
-    keep count <- 0
-    each i from 2 until limit + 1:
-        when flags[i] == 1:
-            count <- count + 1
-        done
-    done
-    give count
-done
+    let mut count = 0;
+    for i in 2..limit + 1 {
+        if flags[i] == 1 {
+            count = count + 1;
+        }
+    }
+    return count;
+}
 
-launch:
-    assert(arg_count() <= 2, "usage: sieve [limit [rounds]]")
-    keep limit <- 200000
-    keep rounds <- 5
-    when arg_count() >= 1:
-        limit <- parse_int(arg(0))
-    done
-    when arg_count() == 2:
-        rounds <- parse_int(arg(1))
-    done
-    assert(limit >= 2 and limit <= 5000000, "limit must be between 2 and 5000000")
-    assert(rounds >= 1 and rounds <= 100, "rounds must be between 1 and 100")
+launch {
+    assert(arg_count() <= 2, "usage: sieve [limit [rounds]]");
+    let mut limit = 200000;
+    let mut rounds = 5;
+    if arg_count() >= 1 {
+        limit = parse_int(arg(0));
+    }
+    if arg_count() == 2 {
+        rounds = parse_int(arg(1));
+    }
+    assert(limit >= 2 && limit <= 5000000, "limit must be between 2 and 5000000");
+    assert(rounds >= 1 && rounds <= 100, "rounds must be between 1 and 100");
 
     // Allocate once outside the timer; every round resets and reuses this list.
-    pin flags <- numbers()
-    each i from 0 until limit + 1:
-        push(flags, 0)
-    done
-    keep count <- 0
-    keep checksum <- 0
-    pin started <- clock_ms()
-    each round from 0 until rounds:
-        count <- sieve_count(flags, limit)
-        checksum <- checksum + count
-    done
-    pin elapsed <- clock_ms() - started
+    let flags = numbers();
+    for i in 0..limit + 1 {
+        push(flags, 0);
+    }
+    let mut count = 0;
+    let mut checksum = 0;
+    let started = clock_ms();
+    for round in 0..rounds {
+        count = sieve_count(flags, limit);
+        checksum = checksum + count;
+    }
+    let elapsed = clock_ms() - started;
 
-    when limit == 200000:
-        assert(count == 17984, "unexpected prime count for the default limit")
-    done
-    say "Primes <= " + text(limit) + ": " + text(count)
-    say "Rounds: " + text(rounds) + ", checksum: " + text(checksum)
-    say "Sieve/reset/count time (ms): " + text(elapsed)
-done
+    if limit == 200000 {
+        assert(count == 17984, "unexpected prime count for the default limit");
+    }
+    say("Primes <= " + text(limit) + ": " + text(count));
+    say("Rounds: " + text(rounds) + ", checksum: " + text(checksum));
+    say("Sieve/reset/count time (ms): " + text(elapsed));
+}

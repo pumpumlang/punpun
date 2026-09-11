@@ -59,6 +59,9 @@ class Parser {
     void end_statement();
     Symbol expect_identifier(const char *what, bool allow_self = false);
 
+    /// Report a migration-dialect form, naming the modern spelling.
+    void deprecated_syntax(const Token &token, const std::string &legacy,
+                           const std::string &modern);
     void error_at(const Token &token, Code code, const std::string &message,
                   const std::string &help = {});
     /// Skips ahead to a plausible restart point after a parse error.

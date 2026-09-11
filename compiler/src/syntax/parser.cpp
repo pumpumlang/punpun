@@ -173,6 +173,19 @@ Symbol Parser::expect_identifier(const char *what, bool allow_self) {
     return interner_.intern("<error>");
 }
 
+void Parser::deprecated_syntax(const Token &token, const std::string &legacy,
+                               const std::string &modern) {
+    // A warning, not an error: 1.x promised that valid 0.6 source keeps
+    // compiling. The point is to stop the second grammar being learned, and to
+    // say what to write instead.
+    diagnostics_
+        .warning(Code::DeprecatedSyntax, "`" + legacy + "` belongs to the migration dialect")
+        .label(token.span)
+        .note("PunPun has one grammar; the migration forms are kept only so "
+              "0.6 source still builds")
+        .with_help("write " + modern + ", or run `pp migrate` over the file");
+}
+
 void Parser::error_at(const Token &token, Code code, const std::string &message,
                       const std::string &help) {
     // While recovering, suppress follow-on errors; they are almost always
@@ -423,6 +436,7 @@ void Parser::parse_declaration(Module &module) {
             if (EnumDecl *decl = parse_enum()) module.enums.push_back(decl);
             return;
         case Tok::Shape:
+            deprecated_syntax(peek(), "shape", "`struct`");
             advance();
             if (ShapeDecl *shape = parse_legacy_shape()) module.shapes.push_back(shape);
             return;
@@ -636,6 +650,7 @@ FunctionDecl *Parser::parse_function(Symbol owner, bool is_method, Visibility vi
 }
 
 FunctionDecl *Parser::parse_legacy_function() {
+    deprecated_syntax(peek(), "craft", "`fn`");
     expect(Tok::Craft, "'craft'");
     FunctionDecl *fn = arena_.make<FunctionDecl>();
     fn->span = previous().span;

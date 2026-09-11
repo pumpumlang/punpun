@@ -106,6 +106,10 @@ enum class Code : u16 {
     FeatureReserved = 900,
     FeatureUnsupported = 901,
 
+    /// Warnings start at 2000 and render with a W prefix, so a deprecation
+    /// reads as W2000 rather than as an error code that happens to warn.
+    DeprecatedSyntax = 2000,
+
     // Backend
     BackendUnavailable = 1000,
     LinkFailed = 1001,

@@ -61,7 +61,10 @@ const char *severity_name(Severity severity) {
 
 std::string code_string(Code code) {
     char buffer[8];
-    std::snprintf(buffer, sizeof(buffer), "E%04u", static_cast<unsigned>(code));
+    const unsigned value = static_cast<unsigned>(code);
+    // Codes from 2000 up are warnings and carry a W so the two ranges cannot be
+    // confused when a code is quoted on its own.
+    std::snprintf(buffer, sizeof(buffer), "%c%04u", value >= 2000 ? 'W' : 'E', value);
     return buffer;
 }
 

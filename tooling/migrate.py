@@ -81,12 +81,17 @@ def migrate(source: str) -> str:
         if stack and stack[-1]=='shape':
             m=re.fullmatch(r"([A-Za-z_]\w*)\s+as\s+([A-Za-z_]\w*)\s*;?",text)
             if m: out.append(indent+f"{m.group(1)}: {ty(m.group(2))},"); continue
-        m=re.fullmatch(r"(pin|keep)\s+([A-Za-z_]\w*)\s*<-\s*(.+)\s*;?",text)
+        # A binding, with or without an explicit type. The annotated form was
+        # missed before, which left `keep name as Type = value` half-converted.
+        m=re.fullmatch(r"(pin|keep)\s+([A-Za-z_]\w*)"
+                       r"(?:\s+as\s+([A-Za-z_]\w*(?:<[^>]*>)?))?"
+                       r"\s*(?:<-|=)\s*(.+?)\s*;?",text)
         if m:
             # Legacy `keep` is mutable; legacy `pin` is immutable.
             mut=' mut' if m.group(1)=='keep' else ''
-            expr=modern_expr(m.group(3).rstrip(';'))
-            out.append(indent+f"let{mut} {m.group(2)} = {expr};"); continue
+            annotation=f": {ty(m.group(3))}" if m.group(3) else ''
+            expr=modern_expr(m.group(4).rstrip(';'))
+            out.append(indent+f"let{mut} {m.group(2)}{annotation} = {expr};"); continue
         m=re.fullmatch(r"say\s+(.+)\s*;?",text)
         if m: out.append(indent+f"say({modern_expr(m.group(1).rstrip(';'))});"); continue
         m=re.fullmatch(r"give(?:\s+(.+))?\s*;?",text)

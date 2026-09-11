@@ -1,5 +1,5 @@
-bring greeter
+bring greeter;
 
-launch:
-    say greeting()
-done
+launch {
+    say(greeting());
+}

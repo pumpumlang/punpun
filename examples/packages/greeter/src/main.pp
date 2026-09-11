@@ -1,3 +1,3 @@
-craft greeting() gives str:
-    give "hello from a local PunPun package"
-done
+fn greeting() -> String {
+    return "hello from a local PunPun package";
+}

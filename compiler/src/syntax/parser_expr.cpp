@@ -12,7 +12,13 @@ namespace ppc {
 
 Parser::BlockStyle Parser::open_block(const char *what) {
     if (match(Tok::LeftBrace)) return BlockStyle::Brace;
-    if (match(Tok::Colon)) return BlockStyle::Legacy;
+    if (check(Tok::Colon)) {
+        // One warning per block, at the colon that opened it. Reporting the
+        // matching `done` as well would double the count for one decision.
+        deprecated_syntax(peek(), ": ... done", "`{ ... }`");
+        advance();
+        return BlockStyle::Legacy;
+    }
     error_at(peek(), Code::UnexpectedToken,
              std::string("expected '{' or ':' to start ") + what + ", found " +
                  token_spelling(peek().kind));
@@ -84,24 +90,32 @@ Stmt *Parser::parse_statement() {
             return parse_let(false, true, false);
         // `keep` is a mutable binding; `pin` is immutable.
         case Tok::Keep:
+            deprecated_syntax(peek(), "keep", "`let mut`");
             advance();
             return parse_let(true, false, true);
         case Tok::Pin:
+            deprecated_syntax(peek(), "pin", "`let`");
             advance();
             return parse_let(false, false, true);
         case Tok::If:
+            return parse_if();
         case Tok::When:
+            deprecated_syntax(peek(), "when", "`if`");
             return parse_if();
         case Tok::While:
+            return parse_while();
         case Tok::Whilst:
+            deprecated_syntax(peek(), "whilst", "`while`");
             return parse_while();
         case Tok::For:
             return parse_for();
         case Tok::Each:
+            deprecated_syntax(peek(), "each", "`for name in start..end`");
             return parse_each();
         case Tok::Return:
             return parse_return(false);
         case Tok::Give:
+            deprecated_syntax(peek(), "give", "`return`");
             return parse_return(true);
         case Tok::Say:
             return parse_say();

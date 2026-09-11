@@ -232,7 +232,10 @@ int Driver::command_language_info() {
     std::printf("  \"package_format\": %d,\n", version::kPackageFormat);
     std::printf("  \"lockfile_format\": %d,\n", version::kLockfileFormat);
     std::printf("  \"cache_epoch\": %d,\n", version::kCacheEpoch);
-    std::printf("  \"dialects\": [\"modern\", \"migration\"],\n");
+    // One grammar. The migration forms still parse so 0.6 source keeps
+    // building, but they warn and are not part of the language being taught.
+    std::printf("  \"dialect\": \"modern\",\n");
+    std::printf("  \"deprecated_dialects\": [\"migration\"],\n");
     std::printf("  \"backends\": [\"c\", \"native\", \"bytecode\"],\n");
     std::printf("  \"checked_arithmetic\": true,\n");
     std::printf("  \"keywords\": %s,\n", version::kStableKeywordsJson);
