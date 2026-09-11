@@ -78,6 +78,45 @@ compiler() {
     exit 1
 }
 
+# PPX is the separate package manager (github.com/pumpumlang/punpun-ppx).
+# The package subcommands below are a convenience front end for it; the
+# toolchain itself never needs it.
+ppx_command() {
+    if [ -n "${PUNPUN_PPX:-}" ]; then
+        printf '%s\n' "$PUNPUN_PPX"
+        return
+    fi
+    if command -v ppx >/dev/null 2>&1; then
+        command -v ppx
+        return
+    fi
+    for candidate in \
+        "$SCRIPT_DIR/../punpun-ppx/ppx/ppx" \
+        "$(dirname -- "$SCRIPT_DIR")/punpun-ppx/ppx/ppx"
+    do
+        if [ -x "$candidate" ]; then
+            printf '%s\n' "$candidate"
+            return
+        fi
+    done
+    return 1
+}
+
+run_ppx() {
+    ppx=$(ppx_command) || {
+        cat >&2 <<'TXT'
+pp: the PPX package manager is not installed
+
+PPX lives in its own repository and is not part of the language toolchain:
+  https://github.com/pumpumlang/punpun-ppx
+
+Put its `ppx` on your PATH, or point PUNPUN_PPX at it.
+TXT
+        exit 1
+    }
+    exec "$ppx" "$@"
+}
+
 selfhost_compiler() {
     if [ -x "$SCRIPT_DIR/bin/ppc-self" ]; then
         printf '%s\n' "$SCRIPT_DIR/bin/ppc-self"
@@ -332,7 +371,7 @@ case "$command_name" in
         fi
         if [ $# -eq 1 ] && [ "$1" = "--doc" ]; then
             run_tests
-            python3 "$SCRIPT_DIR/scripts/doctest.py" --ppc "$(compiler)"
+            python3 "$SCRIPT_DIR/scripts/doctest.py" --ppc "$(compiler)" --root "$PROJECT_DIR"
             exit $?
         fi
         echo "pp: usage: pp test [--doc]" >&2
@@ -434,10 +473,9 @@ case "$command_name" in
         if "$PPC" serve --help >/dev/null 2>&1; then echo "built-in LSP           OK  ppc serve --stdio"; else echo "built-in LSP           FAILED"; fi
         if command -v code >/dev/null 2>&1; then echo "VS Code CLI            OK"; elif command -v codium >/dev/null 2>&1; then echo "VSCodium CLI           OK"; else echo "VS Code CLI            optional/unavailable"; fi
         if command -v cc >/dev/null 2>&1; then echo "C injection compiler   OK  $(command -v cc)"; else echo "C injection compiler   unavailable until @inject->c is used"; fi
-        if command -v python3 >/dev/null 2>&1 && [ -f "$SCRIPT_DIR/ppx/ppx.py" ]; then echo "PPX package client     OK  $VERSION"; else echo "PPX package client     MISSING (python3 required)"; fi
+        if ppx=$(ppx_command); then echo "PPX package manager    OK  $ppx"; else echo "PPX package manager    not installed (optional; see punpun-ppx)"; fi
         if [ -x "$SCRIPT_DIR/bin/ppc-self" ] || [ -x "$SCRIPT_DIR/build/selfhost/ppc-self" ]; then echo "self-hosted compiler   OK"; else echo "self-hosted compiler   source available; run make selfhost"; fi
         [ -d "$SCRIPT_DIR/packages" ] && echo "first-party packages   OK  $SCRIPT_DIR/packages" || echo "first-party packages   MISSING"
-        [ -f "$SCRIPT_DIR/docs-site/dist/index.html" ] && echo "offline docs site      OK" || echo "offline docs site      source only"
         echo "cache                  $PROJECT_DIR/.punpun/cache"
         exit 0
         ;;
@@ -452,9 +490,9 @@ case "$command_name" in
         echo "cache:         $PROJECT_DIR/.punpun/cache"
         echo "stdlib:        $SCRIPT_DIR/stdlib"
         echo "LSP:           $PPC serve --stdio"
-        echo "PPX:           $SCRIPT_DIR/ppx/ppx.py"
+        echo "PPX:           $(ppx_command || echo 'not installed (see github.com/pumpumlang/punpun-ppx)')"
         echo "packages:      $SCRIPT_DIR/packages"
-        echo "docs:          $SCRIPT_DIR/docs-site/dist"
+        echo "docs:          https://pumpumlang.github.io/punpun-docs/"
         exit 0
         ;;
     explain)
@@ -489,19 +527,19 @@ case "$command_name" in
         ;;
     add)
         [ $# -eq 2 ] || { echo "pp: usage: pp add <name> <path>" >&2; exit 2; }
-        exec python3 "$SCRIPT_DIR/ppx/ppx.py" add "$1" --path "$2"
+        run_ppx add "$1" --path "$2"
         ;;
     remove)
         [ $# -eq 1 ] || { echo "pp: usage: pp remove <name>" >&2; exit 2; }
-        exec python3 "$SCRIPT_DIR/ppx/ppx.py" remove "$1"
+        run_ppx remove "$1"
         ;;
     tree|update)
         [ $# -eq 0 ] || { echo "pp: $command_name accepts no arguments" >&2; exit 2; }
-        exec python3 "$SCRIPT_DIR/ppx/ppx.py" "$command_name"
+        run_ppx "$command_name"
         ;;
     fetch)
         [ $# -eq 0 ] || { echo "pp: fetch accepts no arguments" >&2; exit 2; }
-        exec python3 "$SCRIPT_DIR/ppx/ppx.py" install
+        run_ppx install
         ;;
     build|run|go|check|emit-tokens|emit-ast|emit-hir|emit-ir|emit-machine-ir|emit-c|emit-asm)
         ;;

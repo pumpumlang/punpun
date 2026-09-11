@@ -61,18 +61,15 @@ def copy_part(src:Path,dst:Path):
 def make_sdk(stage:Path):
     sdk=stage/f'PunPun-{VERSION}-{TARGET}'
     sdk.mkdir(parents=True)
-    for f in ('VERSION','punpun','pp','README.md','LICENSE','CHANGELOG.md','ROADMAP.md','PROJECT_STATUS.txt','COMPLETION_REPORT.md','PUBLISHING.md','RELEASE_NOTES.md','publish-punpun.sh'):
+    for f in ('VERSION','punpun','pp','README.md','LICENSE','CHANGELOG.md','ROADMAP.md','PUBLISHING.md','RELEASE_NOTES.md','publish-punpun.sh'):
         copy_part(ROOT/f,sdk/f)
-    for d in ('runtime','stdlib','packages','ppx','tooling','editors','docs','spec','assets','packaging','gui-maker','selfhost'):
+    for d in ('runtime','stdlib','packages','tooling','editors','docs','spec','assets','packaging','selfhost'):
         copy_part(ROOT/d,sdk/d)
     # The release PKGBUILD embeds the SDK archive checksum. Keeping that generated
     # file inside the SDK creates a checksum feedback loop across release runs.
     # The SDK does not need the Arch build recipe at runtime; the exact, checksummed
     # PKGBUILD remains a top-level release/source artifact instead.
     (sdk/'packaging'/'arch'/'PKGBUILD').unlink(missing_ok=True)
-    # Built docs are consumer-facing; source stays in source/full bundle.
-    copy_part(ROOT/'docs-site'/'dist',sdk/'docs-site'/'dist')
-    copy_part(ROOT/'ppx-site'/'dist',sdk/'ppx-site'/'dist')
     (sdk/'dist').mkdir(exist_ok=True)
     copy_part(ROOT/'dist'/f'punpun-vscode-{VERSION}.vsix',sdk/'dist'/f'punpun-vscode-{VERSION}.vsix')
     (sdk/'bin').mkdir()
@@ -83,7 +80,6 @@ def make_sdk(stage:Path):
     wrappers={
         'pp':'ROOT=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)\nexport PATH="$ROOT/bin:$PATH"\nexec "$ROOT/punpun" "$@"',
         'punpun':'ROOT=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)\nexport PATH="$ROOT/bin:$PATH"\nexec "$ROOT/punpun" "$@"',
-        'ppx':'ROOT=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)\nexec "$ROOT/ppx/ppx" "$@"',
         'punpun-lsp':'ROOT=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)\nexec "$ROOT/bin/ppc" serve --stdio "$@"',
     }
     for name,body in wrappers.items():
@@ -120,7 +116,7 @@ backup="$DEST.previous.$$"; rm -rf "$backup"; mkdir -p "$(dirname "$DEST")" "$BI
 [ ! -e "$DEST" ] || mv "$DEST" "$backup"
 if ! mv "$src" "$DEST"; then [ ! -e "$backup" ] || mv "$backup" "$DEST"; exit 1; fi
 rm -rf "$backup"
-for n in pp ppc ppx punpun punpun-lsp; do
+for n in pp ppc punpun punpun-lsp; do
   cat > "$BIN/$n" <<EOF
 #!/usr/bin/env sh
 exec "$DEST/bin/$n" "\$@"
@@ -132,7 +128,7 @@ cat > "$BIN/punpun-uninstall" <<EOF
 set -eu
 [ ! -x "$DEST/packaging/linux/uninstall-file-icons.sh" ] || "$DEST/packaging/linux/uninstall-file-icons.sh" >/dev/null 2>&1 || true
 rm -rf "$DEST"
-for n in pp ppc ppx punpun punpun-lsp punpun-uninstall; do rm -f "$BIN/\$n"; done
+for n in pp ppc punpun punpun-lsp punpun-uninstall; do rm -f "$BIN/\$n"; done
 echo "PunPun $VERSION removed; user projects and PPX cache were kept."
 EOF
 chmod 755 "$BIN/punpun-uninstall"
@@ -177,7 +173,7 @@ sha256sums=('{sdk_sha}')
 package() {{
   mkdir -p "$pkgdir/usr/lib/punpun" "$pkgdir/usr/bin" "$pkgdir/usr/share/licenses/punpun" "$pkgdir/usr/share/doc/punpun"
   cp -a "$srcdir/PunPun-{VERSION}-{TARGET}/." "$pkgdir/usr/lib/punpun/"
-  for name in pp ppc ppx punpun punpun-lsp; do
+  for name in pp ppc punpun punpun-lsp; do
     printf '#!/bin/sh\nexec /usr/lib/punpun/bin/%s "$@"\n' "$name" > "$pkgdir/usr/bin/$name"
     chmod 755 "$pkgdir/usr/bin/$name"
   done
@@ -197,7 +193,7 @@ def make_arch_package(sdk:Path,out:Path):
         root=Path(td)
         lib=root/'usr/lib/punpun'; lib.mkdir(parents=True); shutil.copytree(sdk,lib,dirs_exist_ok=True)
         (root/'usr/bin').mkdir(parents=True)
-        for name in ('pp','ppc','ppx','punpun','punpun-lsp'):
+        for name in ('pp','ppc','punpun','punpun-lsp'):
             p=root/'usr/bin'/name; p.write_text(f'#!/bin/sh\nexec /usr/lib/punpun/bin/{name} "$@"\n'); executable(p)
         lic=root/'usr/share/licenses/punpun'; lic.mkdir(parents=True); shutil.copy2(sdk/'LICENSE',lic/'LICENSE')
         doc=root/'usr/share/doc/punpun'; doc.mkdir(parents=True); shutil.copy2(sdk/'README.md',doc/'README.md')
@@ -214,7 +210,7 @@ def make_publisher_bundle():
     destination=RELEASE/f'PunPun-{VERSION}-publisher.zip'
     with tempfile.TemporaryDirectory() as td:
         bundle=Path(td)/f'PunPun-{VERSION}-publisher'
-        groups={name:bundle/name for name in ('source','linux','arch','editor','websites','windows','reports')}
+        groups={name:bundle/name for name in ('source','linux','arch','editor','windows','reports')}
         for directory in groups.values(): directory.mkdir(parents=True)
         copies={
             ROOT/'VERSION':bundle/'VERSION',
@@ -228,8 +224,6 @@ def make_publisher_bundle():
             RELEASE/f'punpun-{PKGVER}-1-x86_64.pkg.tar.zst':groups['arch']/f'punpun-{PKGVER}-1-x86_64.pkg.tar.zst',
             RELEASE/'PKGBUILD':groups['arch']/'PKGBUILD',
             RELEASE/f'punpun-vscode-{VERSION}.vsix':groups['editor']/f'punpun-vscode-{VERSION}.vsix',
-            RELEASE/f'PunPun-{VERSION}-docs-site.zip':groups['websites']/f'PunPun-{VERSION}-docs-site.zip',
-            RELEASE/f'PunPun-{VERSION}-ppx-site.zip':groups['websites']/f'PunPun-{VERSION}-ppx-site.zip',
             RELEASE/f'PunPun-{VERSION}-windows-installer-source.zip':groups['windows']/f'PunPun-{VERSION}-windows-installer-source.zip',
             RELEASE/'RELEASE_VALIDATION.md':groups['reports']/'RELEASE_VALIDATION.md',
             RELEASE/'release-manifest.json':groups['reports']/'release-manifest.json',
@@ -265,7 +259,6 @@ def main():
     run(['python3','scripts/privacy_audit.py',str(ROOT)])
     run(['./selfhost/bootstrap.sh'])
     run(['python3','scripts/package_vsix.py'])
-    run(['python3','docs-site/build.py']); run(['python3','ppx-site/build.py'])
     if not args.skip_tests: run(['./tests/run.sh'])
     with tempfile.TemporaryDirectory() as td:
         stage=Path(td)
@@ -285,8 +278,6 @@ def main():
         (RELEASE/'RELEASE_PROVENANCE.json').write_text(json.dumps(provenance,indent=2,sort_keys=True)+'\n')
     # Deploy-ready static sites plus the Windows installer project. All other
     # source already lives in the single authoritative source archive.
-    zip_tree(ROOT/'docs-site'/'dist',RELEASE/f'PunPun-{VERSION}-docs-site.zip','')
-    zip_tree(ROOT/'ppx-site'/'dist',RELEASE/f'PunPun-{VERSION}-ppx-site.zip','')
     zip_tree(ROOT/'installers'/'windows',RELEASE/f'PunPun-{VERSION}-windows-installer-source.zip',f'PunPun-{VERSION}-windows-installer')
     shutil.copy2(ROOT/'dist'/f'punpun-vscode-{VERSION}.vsix',RELEASE/f'punpun-vscode-{VERSION}.vsix')
 

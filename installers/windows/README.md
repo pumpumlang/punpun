@@ -4,7 +4,7 @@ This is the **real WiX v6 build project** for the PunPun MSI and graphical Burn 
 
 On Windows x64:
 
-1. Build/stage the PunPun Windows SDK into `payload/` (including `bin/pp.exe`, `bin/ppc.exe`, `bin/ppx.exe`/launcher, runtime, stdlib, VSIX and assets).
+1. Build/stage the PunPun Windows SDK into `payload/` (including `bin/pp.exe`, `bin/ppc.exe`, runtime, stdlib, VSIX and assets).
 2. Install WiX Toolset v6 and the BootstrapperApplications extension.
 3. Run `./build.ps1`.
 4. Validate install, `pp --version`, Hello World, upgrade and uninstall in Windows CI/VM.

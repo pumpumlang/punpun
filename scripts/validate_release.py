@@ -180,11 +180,8 @@ def main():
         require(not pp.exists(),"uninstaller left pp wrapper")
         results.append(("Linux uninstall", "PASS", "SDK removed; project/cache locations preserved"))
 
-    # Sites build from source on this host.
-    for site in ("docs-site","ppx-site"):
-        proc=run(["python3","build.py"],cwd=ROOT/site)
-        require((ROOT/site/"dist/index.html").is_file(),f"{site} did not emit index.html")
-        results.append((site,"PASS","production static build completed"))
+    # The documentation and PPX catalog sites build and publish from their own
+    # repositories (punpun-docs, punpun-ppx) and are not release artifacts here.
 
     # Actual controlled first-party package / async HTTP tests are part of the suite; run the focused acceptance here too.
     run(["python3","compiler/tests/run_tests.py","--ppc","./build/ppc",

@@ -83,15 +83,12 @@ def main() -> int:
     md, js = build()
     md_path = ROOT / "docs" / "api" / "REFERENCE.md"
     json_path = ROOT / "docs" / "api" / "index.json"
-    site_path = ROOT / "docs-site" / "content" / "api-reference.md"
     if args.check:
         mismatches = []
         if not md_path.is_file() or md_path.read_text(encoding="utf-8") != md:
             mismatches.append(str(md_path.relative_to(ROOT)))
         if not json_path.is_file() or json_path.read_text(encoding="utf-8") != js:
             mismatches.append(str(json_path.relative_to(ROOT)))
-        if not site_path.is_file() or site_path.read_text(encoding="utf-8") != md:
-            mismatches.append(str(site_path.relative_to(ROOT)))
         if mismatches:
             raise SystemExit("generated API docs are stale: " + ", ".join(mismatches) + "; run `pp doc`")
         print("generated API docs are current")
@@ -99,8 +96,6 @@ def main() -> int:
     md_path.parent.mkdir(parents=True, exist_ok=True)
     md_path.write_text(md, encoding="utf-8")
     json_path.write_text(js, encoding="utf-8")
-    site_path.parent.mkdir(parents=True, exist_ok=True)
-    site_path.write_text(md, encoding="utf-8")
     print(f"generated {md_path.relative_to(ROOT)} ({len(json.loads(js)['entries'])} entries)")
     return 0
 

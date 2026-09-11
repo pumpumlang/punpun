@@ -171,18 +171,37 @@ pp doctor                       inspect the installed SDK
 pp lsp                          run the built-in language server
 ```
 
-Projects use `Punpun.toml`; PPX remains the package client. Versioned surfaces
-derive from the repository [`VERSION`](VERSION).
+Projects use `Punpun.toml`. Versioned surfaces derive from the repository
+[`VERSION`](VERSION).
+
+`pp add`, `pp remove`, `pp tree`, `pp update` and `pp fetch` are a front end for
+[PPX](https://github.com/pumpumlang/punpun-ppx), the package manager, which
+installs separately; the toolchain itself does not require it.
+
+## This repository
+
+This repository is the language: the compiler, the runtime, the standard
+library, the first-party packages, the specification and the editor
+integration. Two companion repositories hold the rest of the project:
+
+| Repository | Contents |
+| --- | --- |
+| [`punpun-docs`](https://github.com/pumpumlang/punpun-docs) | Documentation site and long-form reference |
+| [`punpun-ppx`](https://github.com/pumpumlang/punpun-ppx) | PPX package manager, registry and catalog |
 
 ## Documentation
 
-- [Compiler architecture](docs/compiler-architecture.md)
-- [Language reference](docs/language.md)
-- [Standard library](docs/stdlib.md)
-- [Generated API reference](docs/api/REFERENCE.md)
-- [1.3 release notes](docs/releases/1.3.md)
+The full documentation is published at
+<https://pumpumlang.github.io/punpun-docs/>, with its source in
+[`punpun-docs`](https://github.com/pumpumlang/punpun-docs).
+
+In this repository:
+
+- [Generated API reference](docs/api/REFERENCE.md) — produced by `pp doc` from the standard library
+- [Error explanations](docs/errors) — the extended text behind `pp explain <CODE>`
+- [Compiler internals](compiler/docs/architecture.md) — pipeline, diagnostics and language service
+- [Language specification](spec) — the frozen 1.0 epoch
 - [Platform support policy](spec/1.0/platform-support.md)
-- [Third-party integrations](docs/THIRD_PARTY.md)
 
 ## Contributing
 

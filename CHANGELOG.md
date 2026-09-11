@@ -1,3 +1,44 @@
+## Unreleased
+
+- Split the project across three repositories. This one is now the language
+  alone: compiler, runtime, standard library, first-party packages,
+  specification and editor integration.
+- Moved the documentation site, its Markdown sources and the long-form
+  reference to `punpun-docs`, which now builds and publishes itself.
+- Moved the PPX client, the reference registry and the catalog site to
+  `punpun-ppx`, which now builds and publishes itself.
+- Removed the desktop IDE, the GUI designer and the IDE environment probe; they
+  are separate products rather than part of the language.
+- Removed the Python test suite that targeted the replaced pre-1.3 compiler.
+  Nine of its fifteen files failed and one ran no tests at all. The surviving
+  desktop-integration, publish-cleanup and release-hygiene tests now run as
+  part of `make test`, which nothing had been doing.
+- `pp add`, `remove`, `tree`, `update` and `fetch` now resolve PPX through
+  `PUNPUN_PPX`, `PATH` or a sibling checkout, and explain how to install it
+  when it is absent.
+- `pp test --doc` now runs doctests over the current project instead of the
+  toolchain's own documentation tree.
+- Stopped publishing the documentation and catalog sites from this repository's
+  release script, which had been overwriting both companion repositories.
+- Moved the 1.3.0 entry below to the top of this file, where it belongs, and
+  added the missing 1.0.0 entry.
+
+## 1.3.0 — 2026-09-10
+
+- Replaced the legacy compiler with the supplied PPC C++20 compiler, preserving language/runtime ABI epoch 1.
+- Integrated portable C, direct x86-64, and bytecode backends plus the compiler-native LSP.
+- Added verified HTTPS builtins, `std.net.https`, a first-party `https` package, and a compatibility-preserving `requests` implementation.
+- Added native GUI availability/message APIs backed by Win32 or dynamically loaded X11/XWayland.
+- Expanded the standard library and generated API reference.
+- Updated the launcher, VS Code extension, self-host bootstrap, CI/release tooling, and platform documentation for the canonical compiler.
+
+## 1.0.0 — 2026-09-09
+
+- Froze the first stable compatibility line: language/runtime ABI epoch 1 and package/lockfile format 1.
+- Added a machine-enforced public language and standard-library baseline, checked by `pp stable-check`.
+- Added `pp platform-info` and explicit platform support tiers.
+- Added Ed25519-capable release and PPX verification, plus source SBOM and provenance generation.
+
 ## 0.9.0-dev.5 — 2026-09-08
 
 - Completed Step 9 ecosystem/security/production hardening on the Linux x86-64 development host.
@@ -174,11 +215,3 @@ This beta is a substantial compiler/toolchain rework rather than a cosmetic vers
 - The self-hosted compiler currently covers its documented bootstrap subset;
   the full production language continues to use the C++ compiler.
 - ABI stability is not promised during the 0.x series.
-## 1.3.0 — 2026-09-10
-
-- Replaced the legacy compiler with the supplied PPC C++20 compiler, preserving language/runtime ABI epoch 1.
-- Integrated portable C, direct x86-64, and bytecode backends plus the compiler-native LSP.
-- Added verified HTTPS builtins, `std.net.https`, a first-party `https` package, and a compatibility-preserving `requests` implementation.
-- Added native GUI availability/message APIs backed by Win32 or dynamically loaded X11/XWayland.
-- Expanded the standard library and generated API reference.
-- Updated the launcher, VS Code extension, self-host bootstrap, CI/release tooling, and platform documentation for the canonical compiler.

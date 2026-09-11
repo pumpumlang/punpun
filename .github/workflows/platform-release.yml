@@ -26,7 +26,7 @@ jobs:
       - name: Build and test
         run: make -j2 test
       - name: Validate documentation links
-        run: python3 scripts/check_links.py README.md docs docs-site/content examples editors/vscode/README.md CONTRIBUTING.md SECURITY.md
+        run: python3 scripts/check_links.py README.md docs compiler/docs spec examples editors/vscode/README.md CONTRIBUTING.md SECURITY.md
       - name: Probe installed compiler/linker capabilities
         run: python3 scripts/probe_toolchains.py gcc clang --output toolchain-probes/linux.json
       - name: Large-project smoke benchmark
@@ -126,8 +126,8 @@ jobs:
           Remove-Item $payload -Recurse -Force -ErrorAction SilentlyContinue
           New-Item -ItemType Directory -Force "$payload/bin" | Out-Null
           Copy-Item build/ppc.exe "$payload/bin/ppc.exe"
-          Copy-Item runtime,stdlib,packages,ppx,tooling,editors,docs,spec,assets,gui-maker,selfhost -Destination $payload -Recurse
-          Copy-Item VERSION,README.md,LICENSE,CHANGELOG.md,ROADMAP.md,PROJECT_STATUS.txt,COMPLETION_REPORT.md,PUBLISHING.md,RELEASE_NOTES.md,SECURITY.md,CONTRIBUTING.md -Destination $payload
+          Copy-Item runtime,stdlib,packages,tooling,editors,docs,spec,assets,selfhost -Destination $payload -Recurse
+          Copy-Item VERSION,README.md,LICENSE,CHANGELOG.md,ROADMAP.md,PUBLISHING.md,RELEASE_NOTES.md,SECURITY.md,CONTRIBUTING.md -Destination $payload
       - name: Install WiX and build installers
         shell: pwsh
         run: |

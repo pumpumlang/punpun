@@ -1,6 +1,9 @@
 # PunPun engineering rules
 
-These rules apply to every compiler, runtime, package, documentation and release change.
+These rules apply to every compiler, runtime, package and release change in
+this repository, which holds the language itself. The documentation site lives
+in `punpun-docs` and the PPX package manager in `punpun-ppx`; changes to either
+belong in that repository, not here.
 
 ## Release truthfulness
 
@@ -43,8 +46,11 @@ These rules apply to every compiler, runtime, package, documentation and release
 
 ## Step 9 ecosystem/quality gates
 
-- New PPX archives must remain deterministic and contain a valid internal integrity manifest.
-- Registry transport must remain HTTPS-by-default for non-loopback endpoints.
-- Generated API docs must pass `scripts/docgen.py --check` and explicit doctests must pass.
+- The package archive format and registry transport rules are enforced in
+  `punpun-ppx`: archives stay deterministic with a valid internal integrity
+  manifest, and non-loopback registry transport stays HTTPS-by-default. Changes
+  to the package format here must keep that repository's checks passing.
+- Generated API docs must pass `scripts/docgen.py --check`, and the documented
+  examples must keep passing in `punpun-docs`.
 - Fuzz/compatibility/stress gates must remain deterministic enough for CI and preserve a useful reproduction on internal compiler failure.
 - `pp pgo` is portable-C PGO until direct-native PGO is separately implemented and validated.

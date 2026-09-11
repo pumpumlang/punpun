@@ -46,11 +46,8 @@ def main() -> None:
         require(info.get("lockfile_format") == 1, "PunPun 1.x lockfile format must remain 1")
         require(info.get("package_format") == 1, "PunPun 1.x package format must remain 1")
 
-    ppx = subprocess.run(
-        [sys.executable, str(ROOT / "ppx/ppx.py"), "--version"], cwd=ROOT,
-        check=True, text=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
-    ).stdout.strip()
-    require(VERSION in ppx, f"PPX reports the wrong version: {ppx!r}")
+    # PPX ships from its own repository and carries its own VERSION, so it is
+    # not a version surface of this one.
     print(f"all version surfaces agree on {VERSION}")
 
 

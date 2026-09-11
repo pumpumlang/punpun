@@ -12,15 +12,17 @@ ROOT = Path(__file__).resolve().parents[1]
 OPEN_RE = re.compile(r"^```(?:punpun|pp)\s+(doctest|doctest-run)\s*$", re.I)
 
 
-def markdown_files() -> list[Path]:
-    roots = [ROOT / "README.md", ROOT / "docs", ROOT / "docs-site" / "content", ROOT / "packages"]
+SKIP_DIRS = {".git", "build", "dist", "node_modules", "__pycache__", ".punpun"}
+
+
+def markdown_files(base: Path) -> list[Path]:
+    if base.is_file():
+        return [base]
     result: list[Path] = []
-    for root in roots:
-        if root.is_file():
-            result.append(root)
-        elif root.is_dir():
-            result.extend(sorted(root.rglob("*.md")))
-    return sorted(set(result))
+    for path in sorted(base.rglob("*.md")):
+        if SKIP_DIRS.isdisjoint(path.relative_to(base).parts):
+            result.append(path)
+    return result
 
 
 def blocks(path: Path):
@@ -47,23 +49,33 @@ def blocks(path: Path):
 def main() -> int:
     parser = argparse.ArgumentParser(description="run PunPun documentation examples")
     parser.add_argument("--ppc", default=str(ROOT / "build" / "ppc"))
+    parser.add_argument("--root", default=str(ROOT), metavar="PATH",
+                        help="directory (or single Markdown file) to scan; defaults to the toolchain")
+    parser.add_argument("--require-blocks", action="store_true",
+                        help="fail when no doctest blocks are found")
     args = parser.parse_args()
+    base = Path(args.root).resolve()
+    if not base.exists():
+        raise SystemExit(f"doctest: no such path: {base}")
     total = 0
-    for path in markdown_files():
+    for path in markdown_files(base):
         for mode, line, source in blocks(path):
             total += 1
             with tempfile.TemporaryDirectory(prefix="punpun-doctest-") as td:
                 source_path = Path(td) / "main.pp"
                 source_path.write_text(source, encoding="utf-8")
                 command = [args.ppc, "run" if mode == "doctest-run" else "check", str(source_path)]
-                result = subprocess.run(command, cwd=ROOT, text=True, capture_output=True, timeout=30)
+                result = subprocess.run(command, cwd=td, text=True, capture_output=True, timeout=30)
                 if result.returncode != 0:
                     raise SystemExit(
-                        f"doctest failed: {path.relative_to(ROOT)}:{line}\n"
+                        f"doctest failed: {path}:{line}\n"
                         f"--- stdout ---\n{result.stdout}\n--- stderr ---\n{result.stderr}"
                     )
     if total == 0:
-        raise SystemExit("no PunPun doctest blocks found")
+        if args.require_blocks:
+            raise SystemExit(f"no PunPun doctest blocks found under {base}")
+        print(f"no PunPun doctest blocks found under {base}")
+        return 0
     print(f"{total} PunPun doctest(s) passed")
     return 0
 

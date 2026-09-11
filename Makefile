@@ -75,13 +75,15 @@ test: version-sync compiler compiler-test package-test
 	python3 scripts/doctest.py --ppc ./build/ppc
 	python3 scripts/stability.py check --ppc ./build/ppc
 	python3 scripts/platform_policy.py --check
+	python3 tests/test_desktop_integration.py
+	python3 tests/test_publish_cleanup.py
+	python3 tests/test_release_hygiene.py
 	python3 -m json.tool editors/vscode/package.json >/dev/null
 	python3 -m json.tool editors/vscode/snippets.json >/dev/null
 	@if command -v node >/dev/null 2>&1; then node --check editors/vscode/extension.js; fi
 
 docs: compiler
 	python3 scripts/docgen.py
-	python3 docs-site/build.py
 
 doctest: compiler
 	python3 scripts/doctest.py --ppc ./build/ppc

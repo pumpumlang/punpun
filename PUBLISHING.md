@@ -31,8 +31,11 @@ A successful run:
 5. waits for `platform-release.yml` to qualify that exact commit on Linux, Arch, and Windows;
 6. **stops immediately on any failed platform job**;
 7. only after a green qualification run, promotes the release assets for the candidate tag;
-8. removes stale uploaded assets from that tag only;
-9. replaces the `punpun-docs` and `punpun-ppx` Pages repositories with the built static sites.
+8. removes stale uploaded assets from that tag only.
+
+The documentation site and the PPX catalog are built and published from their
+own repositories (`punpun-docs`, `punpun-ppx`), which hold their own sources.
+This script no longer overwrites them.
 
 The old publish-while-CI-runs behavior is intentionally gone. A red qualification run leaves the candidate source/tag available for diagnosis but does not create a falsely healthy release.
 
@@ -48,7 +51,7 @@ Source/publication cleanup removes machine-local caches, compiled host output, a
 .DS_Store  Thumbs.db  desktop.ini  .coverage
 ```
 
-The cleanup is bounded to temporary release/publisher trees and does not follow symlinks. Project source such as `.github/`, `.vscode/`, compiler/runtime/stdlib code, packages, PPX, editor support, installers, docs/spec/tests/examples, manifests, lock/reproducibility metadata, and governance files is retained.
+The cleanup is bounded to temporary release/publisher trees and does not follow symlinks. Project source such as `.github/`, `.vscode/`, compiler/runtime/stdlib code, packages, editor support, installers, docs/spec/tests/examples, manifests, lock/reproducibility metadata, and governance files is retained.
 
 ## Local release verification
 
@@ -56,7 +59,7 @@ From a clean source checkout:
 
 ```sh
 python3 scripts/build_brand.py --repo-root .
-python3 scripts/check_links.py README.md docs docs-site/content examples editors/vscode/README.md CONTRIBUTING.md SECURITY.md
+python3 scripts/check_links.py README.md docs compiler/docs spec examples editors/vscode/README.md CONTRIBUTING.md SECURITY.md
 make -j2 test
 ./selfhost/bootstrap.sh
 python3 scripts/release.py

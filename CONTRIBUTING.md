@@ -15,7 +15,7 @@ Useful focused gates:
 ```sh
 python3 scripts/check_version.py
 python3 scripts/privacy_audit.py .
-python3 scripts/check_links.py README.md docs docs-site/content examples editors/vscode/README.md
+python3 scripts/check_links.py README.md docs compiler/docs spec examples editors/vscode/README.md
 ./selfhost/bootstrap.sh
 python3 scripts/docgen.py --check
 python3 scripts/doctest.py --ppc ./build/ppc
@@ -25,7 +25,16 @@ python3 scripts/stress.py --quick
 python3 scripts/benchmark_projects.py --modules 10 --rounds 1 --gate
 ```
 
-For PPX integrity changes also exercise package verification/audit paths. For portable-C optimization changes, use `pp pgo` on a controlled training workload.
+For portable-C optimization changes, use `pp pgo` on a controlled training workload.
+
+## Scope of this repository
+
+This repository is the language: compiler, runtime, standard library,
+first-party packages, specification and editor integration. Documentation lives
+in [`punpun-docs`](https://github.com/pumpumlang/punpun-docs) and the package
+manager in [`punpun-ppx`](https://github.com/pumpumlang/punpun-ppx); send
+changes to those there. A language change that needs a documentation change
+needs a pull request in each repository.
 
 ## Language/runtime changes
 

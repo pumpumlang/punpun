@@ -83,8 +83,8 @@ find_publisher() {
         "$HOME/Downloads/$PUBLISHER_NAME"
     do
         [[ -n "$candidate" ]] || continue
-        if [[ -f "$candidate/SHA256SUMS" && -d "$candidate/source" && -d "$candidate/websites" ]]; then
-            if unzip -Z1 "$candidate/websites/PunPun-${VERSION}-ppx-site.zip" 2>/dev/null | grep -qx 'static/catalog.json'; then
+        if [[ -f "$candidate/SHA256SUMS" && -d "$candidate/source" && -d "$candidate/linux" ]]; then
+            if [[ -f "$candidate/VERSION" ]] && [[ "$(tr -d '\r\n' < "$candidate/VERSION")" == "$VERSION" ]]; then
                 CDPATH= cd -- "$candidate" && pwd
                 return
             fi
@@ -175,19 +175,6 @@ wait_for_platform_qualification() {
     ok "exact candidate $sha passed platform qualification"
 }
 
-enable_pages() {
-    local repo_name=$1
-    if gh api "repos/$GH_ACCOUNT/$repo_name/pages" >/dev/null 2>&1; then
-        gh api --method PUT "repos/$GH_ACCOUNT/$repo_name/pages" \
-            -f 'source[branch]=main' -f 'source[path]=/' >/dev/null
-    else
-        gh api --method POST "repos/$GH_ACCOUNT/$repo_name/pages" \
-            -f 'source[branch]=main' -f 'source[path]=/' >/dev/null
-    fi
-    gh api --method POST "repos/$GH_ACCOUNT/$repo_name/pages/builds" >/dev/null 2>&1 || true
-    ok "GitHub Pages enabled for $repo_name"
-}
-
 need bash
 need git
 need gh
@@ -230,7 +217,7 @@ gh run download "$QUALIFICATION_RUN_ID" --repo "$GH_ACCOUNT/$SOURCE_REPO" --dir 
 
 # Start from the deterministic publisher artifacts, then let the exact green CI
 # run override host-specific files with the artifacts it actually qualified.
-for candidate in "$ROOT"/linux/* "$ROOT"/arch/* "$ROOT"/editor/* "$ROOT"/windows/* "$ROOT"/websites/*.zip "$ROOT"/reports/* "$ROOT/SHA256SUMS"; do
+for candidate in "$ROOT"/linux/* "$ROOT"/arch/* "$ROOT"/editor/* "$ROOT"/windows/* "$ROOT"/reports/* "$ROOT/SHA256SUMS"; do
     [[ -f "$candidate" ]] || continue
     cp -f "$candidate" "$PROMOTE/$(basename -- "$candidate")"
 done
@@ -260,19 +247,9 @@ else
     ok "created qualified release $TAG"
 fi
 
-step "Publishing the documentation website"
-mkdir -p "$WORK/docs"
-unzip -q "$ROOT/websites/PunPun-${VERSION}-docs-site.zip" -d "$WORK/docs"
-sanitize_publish_tree "$WORK/docs" website
-sync_repository "$DOCS_REPO" "$WORK/docs" "Publish PunPun $VERSION documentation" yes
-enable_pages "$DOCS_REPO"
-
-step "Publishing the PPX package website"
-mkdir -p "$WORK/ppx"
-unzip -q "$ROOT/websites/PunPun-${VERSION}-ppx-site.zip" -d "$WORK/ppx"
-sanitize_publish_tree "$WORK/ppx" website
-sync_repository "$PPX_REPO" "$WORK/ppx" "Publish PunPunXPac $VERSION catalog" yes
-enable_pages "$PPX_REPO"
+# The documentation site and the PPX catalog are built and published from
+# their own repositories, which hold their own sources. This script must not
+# overwrite them with a build from this tree.
 
 printf '\n%bQualified PunPun release published.%b\n' "$green" "$reset"
 printf 'Source:        https://github.com/%s/%s\n' "$GH_ACCOUNT" "$SOURCE_REPO"

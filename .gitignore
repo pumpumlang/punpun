@@ -7,8 +7,6 @@
 *.pyc
 /.pytest_cache/
 /dist/
-/docs-site/dist/
-/ppx-site/dist/
 .DS_Store
 # Local/editor backup debris must never enter source or release bundles.
 *.bak

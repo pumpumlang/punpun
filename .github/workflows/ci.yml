@@ -24,16 +24,11 @@ jobs:
       - name: Build and test
         run: make -j2 test
       - name: Validate documentation links
-        run: python3 scripts/check_links.py README.md docs docs-site/content examples editors/vscode/README.md CONTRIBUTING.md SECURITY.md
-      - name: Build static sites and VSIX
-        run: |
-          python3 docs-site/build.py
-          python3 ppx-site/build.py
-          python3 scripts/package_vsix.py
-      - name: Generated API docs and doctests
-        run: |
-          python3 scripts/docgen.py --check
-          python3 scripts/doctest.py --ppc ./build/ppc
+        run: python3 scripts/check_links.py README.md docs compiler/docs spec examples editors/vscode/README.md CONTRIBUTING.md SECURITY.md
+      - name: Build the VSIX
+        run: python3 scripts/package_vsix.py
+      - name: Generated API docs
+        run: python3 scripts/docgen.py --check
       - name: Backend compatibility matrix
         run: python3 scripts/compat_matrix.py --quick --ppc ./build/ppc
       - name: Frontend mutation fuzz gate
