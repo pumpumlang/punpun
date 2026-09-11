@@ -87,12 +87,13 @@ reports current and latest versions instead of its earlier placeholder answer.
 - Contract dispatch is a comparison chain, so it is linear in the number of
   implementors at each call site. A jump table is the next step.
 - `for` does not walk `Map<V>` or the characters of a `str`.
-- Windows has never been compiled and macOS has never been tested. Only Linux
-  x86-64 is validated.
+- Windows is release-smoke-tested in CI; macOS remains untested.
 
 ## Validation
 
 118 compiler cases across all three backends, plus PPX dependency-path and
-archive regressions, the self-host bootstrap
-fixed point, the ABI gate, the backend compatibility matrix, async stress,
-frontend mutation fuzzing, documentation link checking and the privacy audit.
+archive regressions, the self-host bootstrap fixed point, the ABI gate, the
+backend compatibility matrix, async stress, frontend mutation fuzzing,
+documentation link checking, the privacy audit, Linux release assembly,
+Arch/CachyOS package install-upgrade-remove validation, and Windows compiler,
+installer, file-association, upgrade, and uninstall smoke tests.
