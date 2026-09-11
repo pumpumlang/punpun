@@ -83,8 +83,14 @@ compiler() {
 # toolchain itself never needs it.
 ppx_command() {
     if [ -n "${PUNPUN_PPX:-}" ]; then
+        # An explicit override that does not resolve is a mistake worth naming,
+        # rather than a reason to silently fall back to some other PPX.
+        [ -x "$PUNPUN_PPX" ] || {
+            echo "pp: PUNPUN_PPX is set to '$PUNPUN_PPX', which is not an executable file" >&2
+            return 1
+        }
         printf '%s\n' "$PUNPUN_PPX"
-        return
+        return 0
     fi
     if command -v ppx >/dev/null 2>&1; then
         command -v ppx
