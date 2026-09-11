@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
   push:
     branches: [main]
-    paths: [VERSION]
+    paths: [VERSION, ".github/workflows/platform-release.yml"]
     tags: ["v*"]
 
 permissions:
@@ -143,9 +143,9 @@ jobs:
           Copy-Item build/ppc.exe "$payload/bin/ppc.exe"
           Copy-Item runtime,stdlib,packages,tooling,editors,docs,spec,assets,selfhost -Destination $payload -Recurse
           Copy-Item "$env:PUNPUN_PPX_ROOT/ppx" -Destination "$payload/ppx" -Recurse
+          Copy-Item VERSION,README.md,LICENSE,CHANGELOG.md,ROADMAP.md,PUBLISHING.md,RELEASE_NOTES.md,SECURITY.md,CONTRIBUTING.md -Destination $payload
           "@echo off`r`npython `"%~dp0..\ppx\ppx.py`" %*`r`n" | Set-Content "$payload/bin/ppx.cmd" -NoNewline
           python "$payload/ppx/ppx.py" --version
-          Copy-Item VERSION,README.md,LICENSE,CHANGELOG.md,ROADMAP.md,PUBLISHING.md,RELEASE_NOTES.md,SECURITY.md,CONTRIBUTING.md -Destination $payload
       - name: Install WiX and build installers
         shell: pwsh
         run: |
