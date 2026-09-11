@@ -72,6 +72,17 @@ std::string CBackend::quote(const std::string &text) {
     return result;
 }
 
+std::string CBackend::handle_cast(const Type *want, const Type *have) {
+    // Widening an object to a contract, or narrowing it back after dispatch has
+    // established the concrete type, is the identity on the representation:
+    // both are the same handle. C still needs to be told, because it sees two
+    // different pointer types.
+    if (!want || !have || want == have) return {};
+    const bool crossing = want->kind == TypeKind::Contract || have->kind == TypeKind::Contract;
+    if (!crossing) return {};
+    return "(" + type_name(want) + ")";
+}
+
 std::string CBackend::function_name(std::size_t index) const {
     // The index guarantees uniqueness even when two specializations sanitize to
     // the same identifier; the readable part is kept for debuggable output.
@@ -92,7 +103,11 @@ std::string CBackend::aggregate_name(const Type *type) {
 const char *CBackend::access(const Type *type) {
     if (!type) return ".";
     // Objects are handles and references are pointers; both are dereferenced.
-    if (type->kind == TypeKind::Object || type->is_pointer_like()) return "->";
+    // A contract value is the same handle an object is, so it joins them.
+    if (type->kind == TypeKind::Object || type->kind == TypeKind::Contract ||
+        type->is_pointer_like()) {
+        return "->";
+    }
     return ".";
 }
 
@@ -129,6 +144,7 @@ std::string CBackend::type_name(const Type *type) {
             // oddities by always appending with a space.
             return inner + " *";
         }
+        case TypeKind::Contract: return "pp_any_object *";
         case TypeKind::Struct: return aggregate_name(type);
         // An object has identity, so the value is always the handle.
         case TypeKind::Object: return aggregate_name(type) + " *";
@@ -251,6 +267,9 @@ void CBackend::emit_aggregates() {
     if (aggregates_.empty()) return;
 
     out_ << "/* ---- type declarations ---- */\n\n";
+    out_ << "/* A value of contract type: an object handle whose concrete type is\n"
+            " * decided at run time. Only the identity slot is reachable through it. */\n";
+    out_ << "typedef struct { int64_t f0; } pp_any_object;\n\n";
     // Forward-declare every tag first so pointers between aggregates resolve
     // regardless of the order the bodies end up in.
     for (const Type *type : aggregates_) {

@@ -297,12 +297,26 @@ void CBackend::emit_instruction(const MirFunction &fn, const MirInst &instructio
                  << quote(types_.interner().text(instruction.text)) << ";\n";
             return;
 
-        case MirOp::LoadLocal:
-            out_ << "    " << reg(instruction.dest) << " = " << local(instruction.index) << ";\n";
+        case MirOp::LoadLocal: {
+            const Type *want = instruction.type;
+            const Type *have = instruction.index < fn.locals.size()
+                                   ? fn.locals[instruction.index].type
+                                   : nullptr;
+            out_ << "    " << reg(instruction.dest) << " = " << handle_cast(want, have)
+                 << local(instruction.index) << ";\n";
             return;
-        case MirOp::StoreLocal:
-            out_ << "    " << local(instruction.index) << " = " << reg(instruction.a) << ";\n";
+        }
+        case MirOp::StoreLocal: {
+            const Type *want = instruction.index < fn.locals.size()
+                                   ? fn.locals[instruction.index].type
+                                   : nullptr;
+            const Type *have = instruction.a < fn.reg_types.size()
+                                   ? fn.reg_types[instruction.a]
+                                   : nullptr;
+            out_ << "    " << local(instruction.index) << " = " << handle_cast(want, have)
+                 << reg(instruction.a) << ";\n";
             return;
+        }
         case MirOp::LocalAddr:
             out_ << "    " << reg(instruction.dest) << " = &" << local(instruction.index) << ";\n";
             return;
@@ -351,7 +365,14 @@ void CBackend::emit_instruction(const MirFunction &fn, const MirInst &instructio
             }
             for (std::size_t i = 0; i < instruction.args.size(); ++i) {
                 if (i) out_ << ", ";
-                out_ << reg(instruction.args[i]);
+                // The callee may take a contract where the caller holds a
+                // concrete object, or the reverse after dispatch.
+                const Type *want =
+                    (target && i < target->locals.size()) ? target->locals[i].type : nullptr;
+                const Type *have = instruction.args[i] < fn.reg_types.size()
+                                       ? fn.reg_types[instruction.args[i]]
+                                       : nullptr;
+                out_ << handle_cast(want, have) << reg(instruction.args[i]);
             }
             out_ << ");\n";
             return;

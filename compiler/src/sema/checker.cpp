@@ -189,6 +189,16 @@ const Type *Checker::resolve_type(const TypeExpr *expr, const Substitution &subs
         return types_.list(arguments[0]);
     }
 
+    if (auto contract = contract_index_.find(name); contract != contract_index_.end()) {
+        if (!arguments.empty()) {
+            diagnostics_
+                .error(Code::GenericArityMismatch, "a contract takes no type arguments")
+                .label(expr->span);
+            return types_.error();
+        }
+        return types_.contract(expr->name, contract->second);
+    }
+
     if (shape_decls_.count(name) || enum_decls_.count(name)) {
         return instantiate_named(expr->name, std::move(arguments), expr->span);
     }
@@ -306,6 +316,22 @@ const Type *Checker::instantiate_named(Symbol name, std::vector<const Type *> ar
             local[decl->generics[i].name.index] = arguments[i];
         }
         StructInfo &stored = types_.struct_at(index);
+        if (decl->is_reference) {
+            // An identity object records which type it is, so a value of
+            // contract type — which is only the handle — can still reach the
+            // right method. Giving it a real slot rather than a header keeps
+            // every backend's field addressing, slot counting and escape
+            // analysis exactly as they were.
+            FieldInfo identity;
+            identity.name = interner_.intern("__pp_type");
+            identity.type = types_.int_type();
+            identity.visibility = Visibility::Private;
+            identity.is_mutable = false;
+            identity.span = decl->span;
+            identity.is_hidden = true;
+            stored.fields.push_back(identity);
+            stored.hidden_fields = 1;
+        }
         for (const Param &field : decl->fields) {
             FieldInfo info_field;
             info_field.name = field.name;
@@ -549,6 +575,20 @@ void Checker::collect(const Program &program) {
     }
 }
 
+void Checker::instantiate_contract_implementors() {
+    // Concrete types are otherwise created on first use, so a function taking a
+    // contract could be checked before any type that meets it existed, and
+    // dispatch would find nothing to dispatch to. Every non-generic object that
+    // declares a contract is created up front so the set is complete no matter
+    // what order the bodies are checked in.
+    for (const auto &entry : shape_decls_) {
+        const ShapeDecl *shape = entry.second;
+        if (!shape->is_reference || shape->contracts.empty()) continue;
+        if (!shape->generics.empty()) continue;  // needs arguments before it exists
+        instantiate_named(shape->name, {}, shape->span);
+    }
+}
+
 // ---------------------------------------------------------------------------
 // Pass 2: rough signatures
 // ---------------------------------------------------------------------------
@@ -752,6 +792,7 @@ HirProgram *Checker::check(const Program &program) {
 
     collect(program);
     if (diagnostics_.has_errors()) return program_;
+    instantiate_contract_implementors();
     resolve_signatures();
 
     // Find the entry point and seed the worklist from it. Everything reachable

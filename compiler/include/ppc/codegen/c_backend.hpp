@@ -35,6 +35,7 @@ class CBackend : public Backend {
     std::string aggregate_name(const Type *type);
     /// Sanitized, unique C identifier for a function.
     std::string function_name(std::size_t index) const;
+    std::string handle_cast(const Type *want, const Type *have);
     static std::string sanitize(const std::string &name);
     static std::string quote(const std::string &text);
 

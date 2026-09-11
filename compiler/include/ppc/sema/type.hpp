@@ -45,6 +45,11 @@ enum class TypeKind {
     /// representation is what lets the C, native and bytecode backends share
     /// one calling sequence instead of three notions of a code address.
     Function,
+    /// A contract used as a type: a value that meets it, whichever concrete
+    /// type that is. The value is the object's handle, exactly as the object
+    /// type would be, so it is one word and fits anywhere an object does; the
+    /// identity the object carries is what selects the method.
+    Contract,
     Param,       // an unsubstituted generic parameter
 };
 
@@ -88,6 +93,7 @@ struct Type {
             case TypeKind::Task:
             case TypeKind::Object:
             case TypeKind::Function:
+            case TypeKind::Contract:
                 return true;
             default:
                 return false;
@@ -101,6 +107,11 @@ struct FieldInfo {
     Visibility visibility = Visibility::Public;
     bool is_mutable = false;
     Span span;
+    /// Compiler-introduced, not written by the author. The type identity an
+    /// object carries is one of these: it occupies a real slot so every backend
+    /// sees an ordinary field, but it is invisible to field lookup, to the
+    /// constructor's positional arguments, and to the generated documentation.
+    bool is_hidden = false;
 };
 
 struct StructInfo {
@@ -110,6 +121,8 @@ struct StructInfo {
     bool is_sealed = false;
     std::vector<FieldInfo> fields;
     std::vector<Symbol> contracts;
+    /// Number of leading hidden fields; author-written fields start here.
+    u32 hidden_fields = 0;
     /// Mangled names of this type's methods, for lookup in the function table.
     std::vector<std::string> methods;
     std::string initializer;
@@ -167,6 +180,8 @@ class TypeContext {
     /// fn(parameters) -> result. `arguments` holds the parameters and
     /// `element` the result.
     const Type *function(std::vector<const Type *> parameters, const Type *result);
+    /// A contract used as a type; `decl` indexes the contract table.
+    const Type *contract(Symbol name, u32 decl);
     const Type *param(Symbol name);
     const Type *named(TypeKind kind, Symbol name, std::vector<const Type *> arguments, u32 decl);
 

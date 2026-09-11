@@ -85,6 +85,7 @@ class Checker {
   private:
     // -- passes -------------------------------------------------------------
     void collect(const Program &program);
+    void instantiate_contract_implementors();
     void resolve_signatures();
     void check_bodies();
 
@@ -142,6 +143,8 @@ class Checker {
     HirExpr *check_name(const Expr *expr, const Type *expected);
     HirExpr *check_path(const Expr *expr, const Type *expected);
     HirExpr *check_function_value(const Expr *expr, const Type *expected);
+    HirExpr *check_contract_call(const Expr *expr, HirExpr *receiver,
+                                 const Type *contract_type, const std::string &method);
     HirExpr *check_indirect_call(const Expr *expr, HirExpr *callee);
     HirExpr *check_field(const Expr *expr);
     HirExpr *check_index(const Expr *expr);

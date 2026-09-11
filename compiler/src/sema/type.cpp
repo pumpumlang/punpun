@@ -30,6 +30,7 @@ std::string key_for(const Type &type, const TypeContext &context) {
             for (const Type *parameter : type.arguments) result += context.mangle(parameter) + ",";
             return result + ")" + context.mangle(type.element);
         }
+        case TypeKind::Contract: return "c" + context.interner().text(type.name);
         case TypeKind::Param: return "P" + context.interner().text(type.name);
         case TypeKind::Struct:
         case TypeKind::Object:
@@ -141,6 +142,14 @@ const Type *TypeContext::function(std::vector<const Type *> parameters, const Ty
     return intern(std::move(candidate));
 }
 
+const Type *TypeContext::contract(Symbol name, u32 decl) {
+    Type candidate;
+    candidate.kind = TypeKind::Contract;
+    candidate.name = name;
+    candidate.decl = decl;
+    return intern(std::move(candidate));
+}
+
 const Type *TypeContext::param(Symbol name) {
     Type candidate;
     candidate.kind = TypeKind::Param;
@@ -187,6 +196,7 @@ std::string TypeContext::describe(const Type *type) const {
                 result += " -> " + describe(type->element);
             return result;
         }
+        case TypeKind::Contract: return interner_.text(type->name);
         case TypeKind::Param: return interner_.text(type->name);
         case TypeKind::Struct:
         case TypeKind::Object:
@@ -229,6 +239,7 @@ std::string TypeContext::mangle(const Type *type) const {
             for (const Type *parameter : type->arguments) result += mangle(parameter) + "_";
             return result + "R" + mangle(type->element);
         }
+        case TypeKind::Contract: return "C" + interner_.text(type->name);
         case TypeKind::Param: return "G" + interner_.text(type->name);
         case TypeKind::Struct:
         case TypeKind::Object:
@@ -253,6 +264,16 @@ bool TypeContext::assignable(const Type *from, const Type *to) const {
     // reverse is not allowed. Nothing else weakens reference strength.
     if (from->kind == TypeKind::MutRef && to->kind == TypeKind::Reference) {
         return from->element == to->element;
+    }
+
+    // An object flows into a contract it declares it meets. Both are a handle,
+    // so this widening costs nothing at run time.
+    if (to->kind == TypeKind::Contract && from->kind == TypeKind::Object &&
+        from->decl < structs_.size()) {
+        const StructInfo &info = *structs_[from->decl];
+        for (Symbol declared : info.contracts) {
+            if (declared == to->name) return true;
+        }
     }
     return false;
 }
@@ -301,6 +322,7 @@ bool TypeContext::is_copy_impl(const Type *type, std::vector<const Type *> &visi
             // "one mutable borrow at a time" rule.
             return false;
         case TypeKind::Object:
+        case TypeKind::Contract:
         case TypeKind::Task:
             return false;
         case TypeKind::Param:

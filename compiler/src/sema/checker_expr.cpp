@@ -346,6 +346,12 @@ HirExpr *Checker::check_constructor(const Expr *expr, const Type *type, u32 stru
 
             HirExpr *allocate = make_expr(HirExpr::Kind::MakeStruct, expr->span, type);
             allocate->target = struct_index;
+            for (u32 i = 0; i < info.hidden_fields; ++i) {
+                HirExpr *identity =
+                    make_expr(HirExpr::Kind::ConstInt, expr->span, types_.int_type());
+                identity->int_value = static_cast<i64>(struct_index);
+                allocate->operands.push_back(identity);
+            }
 
             const u32 slot =
                 declare_local(interner_.intern("$new"), type, true, false, expr->span);
@@ -401,6 +407,7 @@ HirExpr *Checker::check_constructor(const Expr *expr, const Type *type, u32 stru
     std::vector<Param> pseudo;
     std::vector<const Type *> field_types;
     for (const FieldInfo &field : info.fields) {
+        if (field.is_hidden) continue;  // supplied by the compiler, not the author
         Param param;
         param.name = field.name;
         param.span = field.span;
@@ -412,7 +419,13 @@ HirExpr *Checker::check_constructor(const Expr *expr, const Type *type, u32 stru
     if (!bind_arguments(expr->arguments, pseudo, field_types, expr->span, bound, true)) {
         return node;
     }
-    node->operands = std::move(bound);
+    // Hidden fields lead, so their values are prepended in declaration order.
+    for (u32 i = 0; i < info.hidden_fields; ++i) {
+        HirExpr *identity = make_expr(HirExpr::Kind::ConstInt, expr->span, types_.int_type());
+        identity->int_value = static_cast<i64>(struct_index);
+        node->operands.push_back(identity);
+    }
+    for (HirExpr *argument : bound) node->operands.push_back(argument);
     return node;
 }
 
@@ -996,6 +1009,180 @@ HirExpr *Checker::check_call(const Expr *expr, const Type *expected) {
     return node;
 }
 
+/// Call a contract method on a value whose concrete type is not known here.
+///
+/// The receiver is an object handle and carries its own identity, so dispatch
+/// reads that identity and selects among the types that declare they meet the
+/// contract. It is expanded inline as a chain of comparisons rather than a
+/// jump table: a table wants a new runtime structure and a fourth thing for
+/// every backend to agree on, and the chain reuses HIR that already exists.
+/// With many implementors that is linear per call, which is the price of this
+/// first implementation and the reason to revisit it before the count grows.
+HirExpr *Checker::check_contract_call(const Expr *expr, HirExpr *receiver,
+                                      const Type *contract_type, const std::string &method) {
+    const ContractInfo &contract = types_.contract_at(contract_type->decl);
+
+    bool declares_method = false;
+    for (Symbol name : contract.methods) {
+        if (interner_.text(name) == method) declares_method = true;
+    }
+    if (!declares_method) {
+        diagnostics_
+            .error(Code::UnknownMethod,
+                   "contract '" + interner_.text(contract.name) + "' has no method '" +
+                       method + "'")
+            .label(expr->span)
+            .with_help("add it to the contract, or call through the concrete type");
+        return poison(expr->span);
+    }
+
+    // Every type that declares it meets this contract is a candidate. The set is
+    // whatever has been instantiated by now, which is why a program has to name
+    // a type somewhere for it to participate.
+    std::vector<u32> implementors;
+    for (std::size_t index = 0; index < types_.struct_count(); ++index) {
+        const StructInfo &info = types_.struct_at(static_cast<u32>(index));
+        if (!info.is_reference) continue;
+        for (Symbol declared : info.contracts) {
+            if (declared == contract_type->name) implementors.push_back(static_cast<u32>(index));
+        }
+    }
+    if (implementors.empty()) {
+        diagnostics_
+            .error(Code::UnknownMethod,
+                   "no type meets contract '" + interner_.text(contract.name) + "'")
+            .label(expr->span);
+        return poison(expr->span);
+    }
+
+    // Arguments are checked once, against the first implementor's signature;
+    // every implementor must agree on it because the contract fixes it.
+    std::vector<HirExpr *> arguments;
+    for (const Argument &argument : expr->arguments) {
+        arguments.push_back(check_expr(argument.value, nullptr));
+    }
+
+    HirExpr *block = make_expr(HirExpr::Kind::Block, expr->span, types_.error());
+    push_scope();
+
+    // The receiver is evaluated once and reused by every branch.
+    const u32 receiver_slot =
+        declare_local(interner_.intern("__pp_self"), contract_type, false, false, expr->span);
+    HirStmt *bind_receiver = make_stmt(HirStmt::Kind::Let, expr->span);
+    bind_receiver->local = receiver_slot;
+    bind_receiver->value = receiver;
+    block->body.push_back(bind_receiver);
+
+    auto read_receiver = [&](const Type *as) {
+        // Widening and narrowing between a contract and an object are both the
+        // identity on the representation, so this only restates the type.
+        HirExpr *read = make_expr(HirExpr::Kind::Local, expr->span, as);
+        read->local = receiver_slot;
+        return read;
+    };
+
+    // The identity field is the object's first slot.
+    HirExpr *identity = make_expr(HirExpr::Kind::Field, expr->span, types_.int_type());
+    identity->left = read_receiver(contract_type);
+    identity->field = 0;
+    const u32 identity_slot =
+        declare_local(interner_.intern("__pp_id"), types_.int_type(), false, false, expr->span);
+    HirStmt *bind_identity = make_stmt(HirStmt::Kind::Let, expr->span);
+    bind_identity->local = identity_slot;
+    bind_identity->value = identity;
+    block->body.push_back(bind_identity);
+
+    const Type *result_type = nullptr;
+    u32 result_slot = 0;
+    HirStmt *chain_tail = nullptr;
+
+    for (u32 implementor : implementors) {
+        const StructInfo &info = types_.struct_at(implementor);
+        const std::string key = interner_.text(info.name) + "::" + method;
+        auto candidates = by_name_.find(key);
+        if (candidates == by_name_.end() || candidates->second.empty()) {
+            diagnostics_
+                .error(Code::UnknownMethod,
+                       "'" + interner_.text(info.name) + "' says it meets '" +
+                           interner_.text(contract.name) + "' but does not define '" +
+                           method + "'")
+                .label(info.span);
+            pop_scope();
+            return poison(expr->span);
+        }
+        const u32 specialization = specialize(candidates->second.front(), {}, expr->span);
+        if (specialization == 0xFFFFFFFFu) continue;
+        const Specialization &spec = spec_at(specialization);
+
+        const Type *object_type =
+            types_.named(TypeKind::Object, info.name, info.arguments, implementor);
+
+        HirExpr *call = make_expr(HirExpr::Kind::Call, expr->span, spec.result);
+        call->target = specialization;
+        call->operands.push_back(read_receiver(object_type));
+        for (HirExpr *argument : arguments) call->operands.push_back(argument);
+
+        if (!result_type) {
+            result_type = spec.result;
+            block->type = result_type;
+            if (result_type->kind != TypeKind::Void) {
+                result_slot = declare_local(interner_.intern("__pp_result"), result_type, true,
+                                            false, expr->span);
+                HirStmt *declare = make_stmt(HirStmt::Kind::Let, expr->span);
+                declare->local = result_slot;
+                block->body.push_back(declare);
+            }
+        }
+
+        // `if identity == <this type> { result = call(...) } else <next>`
+        HirExpr *tag = make_expr(HirExpr::Kind::ConstInt, expr->span, types_.int_type());
+        tag->int_value = static_cast<i64>(implementor);
+        HirExpr *test = make_expr(HirExpr::Kind::Binary, expr->span, types_.bool_type());
+        test->binary_op = BinaryOp::Equal;
+        HirExpr *left = make_expr(HirExpr::Kind::Local, expr->span, types_.int_type());
+        left->local = identity_slot;
+        test->left = left;
+        test->right = tag;
+
+        HirStmt *branch = make_stmt(HirStmt::Kind::If, expr->span);
+        branch->value = test;
+        if (result_type->kind == TypeKind::Void) {
+            HirStmt *run = make_stmt(HirStmt::Kind::Expression, expr->span);
+            run->value = call;
+            branch->body.push_back(run);
+        } else {
+            HirStmt *assign = make_stmt(HirStmt::Kind::Assign, expr->span);
+            HirExpr *place = make_expr(HirExpr::Kind::Local, expr->span, result_type);
+            place->local = result_slot;
+            assign->place = place;
+            assign->value = call;
+            branch->body.push_back(assign);
+        }
+
+        if (chain_tail) {
+            chain_tail->alternative.push_back(branch);
+        } else {
+            block->body.push_back(branch);
+        }
+        chain_tail = branch;
+    }
+
+    if (!result_type) {
+        pop_scope();
+        return poison(expr->span);
+    }
+
+    if (result_type->kind == TypeKind::Void) {
+        block->left = make_expr(HirExpr::Kind::ConstInt, expr->span, types_.void_type());
+    } else {
+        HirExpr *value = make_expr(HirExpr::Kind::Local, expr->span, result_type);
+        value->local = result_slot;
+        block->left = value;
+    }
+    pop_scope();
+    return block;
+}
+
 HirExpr *Checker::check_method_call(const Expr *expr, const Type *expected) {
     HirExpr *receiver = check_expr(expr->left, nullptr);
     const Type *receiver_type = receiver->type;
@@ -1006,6 +1193,10 @@ HirExpr *Checker::check_method_call(const Expr *expr, const Type *expected) {
     while (owner_type->is_pointer_like() && owner_type->element) owner_type = owner_type->element;
 
     const std::string method = interner_.text(expr->name);
+
+    if (owner_type->kind == TypeKind::Contract) {
+        return check_contract_call(expr, receiver, owner_type, method);
+    }
 
     if (!owner_type->is_aggregate() || owner_type->kind == TypeKind::Enum) {
         diagnostics_
