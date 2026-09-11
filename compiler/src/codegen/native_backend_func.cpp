@@ -162,6 +162,26 @@ void NativeBackend::emit_string_pool() {
     out_ << "\t.text\n";
 }
 
+void NativeBackend::emit_function_table(const MirProgram &program) {
+    // A function value is an index into this table, so an indirect call is an
+    // ordinary load followed by a call through the register.
+    // .data.rel.ro, not .rodata: each entry is a code address that the dynamic
+    // linker has to relocate, and a PIE cannot carry relocations into a section
+    // that is mapped read-only from the start.
+    out_ << "\n\t.section\t.data.rel.ro,\"aw\",@progbits\n";
+    out_ << "\t.align\t8\n";
+    out_ << "pp_fn_table:\n";
+    for (std::size_t i = 0; i < program.functions.size(); ++i) {
+        const MirFunction *fn = program.functions[i];
+        const std::string symbol = fn->is_extern_native ? std::string(fn->native_symbol)
+                                                        : function_label(i);
+        out_ << "\t.quad\t" << symbol << "\n";
+    }
+    // Keeps the symbol well formed for a program that defines no functions.
+    out_ << "\t.quad\t0\n";
+    out_ << "\t.text\n";
+}
+
 void NativeBackend::emit_entry(const MirProgram &program) {
     out_ << "\n\t.globl\tmain\n";
     out_ << "\t.type\tmain, @function\n";
@@ -230,6 +250,7 @@ bool NativeBackend::emit(const MirProgram &program, const CodegenOptions &option
     out_.str({});
     out_.clear();
     emit_string_pool();
+    emit_function_table(program);
     const std::string pool = out_.str();
 
     // Without this section the linker assumes the object wants an executable

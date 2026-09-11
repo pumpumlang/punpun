@@ -69,6 +69,16 @@ std::string TypeExpr::describe(const Interner &interner) const {
         case Kind::Reference: return "&" + (element ? element->describe(interner) : "?");
         case Kind::MutRef: return "&mut " + (element ? element->describe(interner) : "?");
         case Kind::RawPointer: return "*" + (element ? element->describe(interner) : "?");
+        case Kind::Function: {
+            std::string result = "fn(";
+            for (std::size_t i = 0; i < arguments.size(); ++i) {
+                if (i) result += ", ";
+                result += arguments[i] ? arguments[i]->describe(interner) : "?";
+            }
+            result += ")";
+            if (element) result += " -> " + element->describe(interner);
+            return result;
+        }
         case Kind::Named: {
             std::string result = interner.text(name);
             if (!arguments.empty()) {
@@ -255,6 +265,31 @@ TypeExpr *Parser::parse_type() {
         return node;
     }
 
+    // fn(T, U) -> R. A result arrow is optional; without one the function
+    // returns nothing, which keeps `fn(int)` usable for a callback.
+    if (match(Tok::Fn)) {
+        TypeExpr *node = arena_.make<TypeExpr>();
+        node->kind = TypeExpr::Kind::Function;
+        expect(Tok::LeftParen, "'(' after 'fn' in a function type");
+        if (!check(Tok::RightParen)) {
+            do {
+                node->arguments.push_back(parse_type());
+            } while (match(Tok::Comma));
+        }
+        expect(Tok::RightParen, "')' to close the parameter list");
+        if (match(Tok::Arrow)) {
+            node->element = parse_type();
+        } else {
+            TypeExpr *unit = arena_.make<TypeExpr>();
+            unit->kind = TypeExpr::Kind::Named;
+            unit->name = interner_.intern("void");
+            unit->span = previous().span;
+            node->element = unit;
+        }
+        node->span = start.merge(previous().span);
+        return node;
+    }
+
     TypeExpr *node = arena_.make<TypeExpr>();
     node->kind = TypeExpr::Kind::Named;
 
@@ -339,6 +374,8 @@ Module *Parser::parse(FileId file, const std::string &path) {
     Module *module = arena_.make<Module>();
     module->file = file;
     module->path = path;
+    module_ = module;
+    lambda_serial_ = 0;
 
     skip_separators();
     while (!at_end()) {

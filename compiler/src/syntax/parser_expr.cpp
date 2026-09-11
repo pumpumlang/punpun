@@ -637,10 +637,49 @@ Expr *Parser::parse_match() {
     return node;
 }
 
+/// `fn(parameters) -> result { body }` written in expression position.
+///
+/// The literal is lifted to a module-level function with a generated name, and
+/// the expression becomes a reference to it. Everything downstream then treats
+/// it exactly like a named function used as a value, so no later stage needs a
+/// second notion of what a function is.
+///
+/// A lifted function has no enclosing scope, so naming a local from the
+/// surrounding function does not resolve. That is deliberate for now:
+/// capturing closures need an environment to own the captured values, and the
+/// ownership rules have to say what that means before the syntax exists.
+Expr *Parser::parse_lambda() {
+    const Span start = peek().span;
+    expect(Tok::Fn, "'fn'");
+
+    FunctionDecl *fn = arena_.make<FunctionDecl>();
+    fn->span = start;
+    fn->name = interner_.intern("__pp_lambda_" + std::to_string(lambda_serial_++));
+    fn->is_lambda = true;
+    parse_param_list(fn->params, fn);
+
+    if (match(Tok::Arrow) || match(Tok::Gives)) {
+        fn->result = parse_type();
+    } else {
+        fn->result = arena_.make<TypeExpr>();
+        fn->result->kind = TypeExpr::Kind::Named;
+        fn->result->name = interner_.intern("void");
+        fn->result->span = previous().span;
+    }
+    fn->body = parse_block("a function body");
+    fn->span = start.merge(previous().span);
+    if (module_) module_->functions.push_back(fn);
+
+    Expr *reference = make_expr(Expr::Kind::Name, fn->span);
+    reference->name = fn->name;
+    return reference;
+}
+
 Expr *Parser::parse_primary() {
     const Token token = peek();
 
     switch (token.kind) {
+        case Tok::Fn: return parse_lambda();
         case Tok::IntLiteral: {
             advance();
             Expr *node = make_expr(Expr::Kind::IntLiteral, token.span);

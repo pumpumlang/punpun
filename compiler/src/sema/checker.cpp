@@ -127,6 +127,14 @@ const Type *Checker::resolve_type(const TypeExpr *expr, const Substitution &subs
             return types_.reference(resolve_type(expr->element, subst), true);
         case TypeExpr::Kind::RawPointer:
             return types_.raw_pointer(resolve_type(expr->element, subst));
+        case TypeExpr::Kind::Function: {
+            std::vector<const Type *> parameters;
+            parameters.reserve(expr->arguments.size());
+            for (const TypeExpr *parameter : expr->arguments) {
+                parameters.push_back(resolve_type(parameter, subst));
+            }
+            return types_.function(std::move(parameters), resolve_type(expr->element, subst));
+        }
         case TypeExpr::Kind::Named:
             break;
     }
@@ -818,6 +826,10 @@ void Checker::check_function(u32 index) {
 
     const FunctionTemplate &templ = templates_[specialization.templ];
     const FunctionDecl *decl = templ.decl;
+    // Restored rather than cleared: checking one function can trigger checking
+    // another, and the outer one still needs its own answer afterwards.
+    const bool outer_in_lambda = in_lambda_;
+    in_lambda_ = decl->is_lambda;
 
     HirFunction *fn = arena_.make<HirFunction>();
     fn->name = specialization.mangled;
@@ -967,6 +979,7 @@ void Checker::check_function(u32 index) {
     copy_params_ = std::move(saved_copy);
     loop_depth_ = saved_loop;
     in_async_ = saved_async;
+    in_lambda_ = outer_in_lambda;
 }
 
 }  // namespace ppc

@@ -36,6 +36,12 @@ struct HirExpr {
         /// backend.
         MatchSubject,
         Call,         // direct call to a known function index
+        /// A function used as a value. Carries the specialization index in
+        /// `target`; the value itself is that index, which is why a function
+        /// value needs no representation beyond an integer.
+        FuncRef,
+        /// Call through a value of function type. `left` is the callee.
+        CallIndirect,
         CallBuiltin,  // call to a runtime builtin
         Field,        // struct/object field read
         Index,        // nums element read

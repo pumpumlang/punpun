@@ -55,6 +55,7 @@ class NativeBackend : public Backend {
     void emit_copy_helpers();
     void emit_entry(const MirProgram &program);
     void emit_string_pool();
+    void emit_function_table(const MirProgram &program);
 
     /// Loads a value into a GP register, or a double into an SSE register.
     void load(const std::string &reg, int offset);

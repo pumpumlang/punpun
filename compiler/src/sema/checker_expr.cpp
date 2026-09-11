@@ -115,15 +115,8 @@ HirExpr *Checker::check_name(const Expr *expr, const Type *expected) {
         }
     }
 
-    // A zero-argument call to a known function, written without parentheses, is
-    // not valid; say so rather than reporting an unknown name.
-    if (by_name_.count(name)) {
-        diagnostics_
-            .error(Code::NotCallable, "'" + name + "' is a function and must be called")
-            .label(expr->span)
-            .with_help("write `" + name + "()` to call it; PunPun has no first-class functions yet");
-        return poison(expr->span);
-    }
+    // A function named without parentheses is a function value.
+    if (by_name_.count(name)) return check_function_value(expr, expected);
     if (find_builtin(name) != kNotBuiltin) {
         diagnostics_
             .error(Code::NotCallable, "'" + name + "' is a builtin and must be called")
@@ -133,10 +126,113 @@ HirExpr *Checker::check_name(const Expr *expr, const Type *expected) {
     }
 
     (void)expected;
+    if (in_lambda_) {
+        // The name may well exist in the enclosing function. Saying "not found"
+        // would send the reader hunting for a typo that is not there.
+        diagnostics_
+            .error(Code::UnknownName,
+                   "a function literal cannot use '" + name + "' from around it")
+            .label(expr->span)
+            .note("function literals do not capture; they only see their own "
+                  "parameters and module-level names")
+            .with_help("pass '" + name + "' in as a parameter");
+        return poison(expr->span);
+    }
     diagnostics_.error(Code::UnknownName, "cannot find '" + name + "' in this scope")
         .label(expr->span)
         .with_help("check the spelling, or declare it with `let " + name + " = ...`");
     return poison(expr->span);
+}
+
+/// Call through a value of function type.
+///
+/// The callee's type carries the full signature, so arity and argument types
+/// are checked here exactly as they are for a direct call; what is missing is
+/// only the callee's identity, which is decided at run time.
+HirExpr *Checker::check_indirect_call(const Expr *expr, HirExpr *callee) {
+    const Type *type = callee->type;
+    if (!type || type->is_error()) return poison(expr->span);
+
+    if (expr->arguments.size() != type->arguments.size()) {
+        diagnostics_
+            .error(Code::ArityMismatch,
+                   types_.describe(type) + " takes " +
+                       std::to_string(type->arguments.size()) + " argument(s), found " +
+                       std::to_string(expr->arguments.size()))
+            .label(expr->span);
+        return poison(expr->span);
+    }
+
+    HirExpr *node = make_expr(HirExpr::Kind::CallIndirect, expr->span, type->element);
+    node->left = callee;
+    for (std::size_t i = 0; i < expr->arguments.size(); ++i) {
+        HirExpr *argument = check_expr(expr->arguments[i].value, type->arguments[i]);
+        expect_type(argument->type, type->arguments[i], expr->arguments[i].span,
+                    "this argument");
+        node->operands.push_back(argument);
+    }
+    return node;
+}
+
+/// A function named without parentheses, used as a value.
+///
+/// The value is the callee's specialization index, so producing one means
+/// selecting an overload and specializing it. Selection uses the expected type
+/// when there is one, which is what lets two same-named functions be told apart
+/// by the parameter they are being passed to.
+HirExpr *Checker::check_function_value(const Expr *expr, const Type *expected) {
+    const std::string name = interner_.text(expr->name);
+    const auto candidates = by_name_.find(name);
+    const std::vector<u32> &overloads = candidates->second;
+
+    const Type *wanted =
+        (expected && expected->kind == TypeKind::Function) ? expected : nullptr;
+
+    std::vector<u32> viable;
+    for (u32 index : overloads) {
+        const FunctionTemplate &templ = templates_[index];
+        // A generic function has no single address, so it cannot be a value
+        // until it is applied to type arguments.
+        if (!templ.generics.empty()) continue;
+        if (wanted) {
+            if (templ.rough_params.size() != wanted->arguments.size()) continue;
+            bool matches = true;
+            for (std::size_t i = 0; i < templ.rough_params.size(); ++i) {
+                if (templ.rough_params[i] != wanted->arguments[i]) matches = false;
+            }
+            if (templ.rough_result != wanted->element) matches = false;
+            if (!matches) continue;
+        }
+        viable.push_back(index);
+    }
+
+    if (viable.empty()) {
+        auto builder =
+            diagnostics_.error(Code::TypeMismatch,
+                               "no version of '" + name + "' can be used as a value here")
+                .label(expr->span);
+        if (wanted) {
+            builder.note("expected " + types_.describe(wanted));
+        } else {
+            builder.with_help("a generic function needs its type arguments before it "
+                              "can be a value");
+        }
+        return poison(expr->span);
+    }
+    if (viable.size() > 1) {
+        diagnostics_
+            .error(Code::AmbiguousOverload, "'" + name + "' is overloaded, so it is ambiguous here")
+            .label(expr->span)
+            .with_help("annotate the binding with the function type you mean");
+        return poison(expr->span);
+    }
+
+    const u32 specialization = specialize(viable.front(), {}, expr->span);
+    const Specialization &info = spec_at(specialization);
+    HirExpr *node = make_expr(HirExpr::Kind::FuncRef, expr->span,
+                              types_.function(info.params, info.result));
+    node->target = specialization;
+    return node;
 }
 
 HirExpr *Checker::check_path(const Expr *expr, const Type *expected) {
@@ -632,6 +728,15 @@ HirExpr *Checker::check_builtin_call(const Expr *expr, BuiltinId builtin,
 HirExpr *Checker::check_call(const Expr *expr, const Type *expected) {
     const Expr *callee = expr->left;
     if (!callee) return poison(expr->span);
+
+    // A local holding a function value shadows the function table, so calling
+    // it goes through the value rather than resolving a name.
+    if (callee->kind == Expr::Kind::Name) {
+        if (LocalBinding *binding = lookup_local(callee->name);
+            binding && binding->type && binding->type->kind == TypeKind::Function) {
+            return check_indirect_call(expr, check_expr(callee, nullptr));
+        }
+    }
 
     // `Enum::Variant(payload)`
     if (callee->kind == Expr::Kind::Path) {

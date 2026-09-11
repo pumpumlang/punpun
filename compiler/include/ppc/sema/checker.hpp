@@ -141,6 +141,8 @@ class Checker {
     HirExpr *check_unary(const Expr *expr, const Type *expected);
     HirExpr *check_name(const Expr *expr, const Type *expected);
     HirExpr *check_path(const Expr *expr, const Type *expected);
+    HirExpr *check_function_value(const Expr *expr, const Type *expected);
+    HirExpr *check_indirect_call(const Expr *expr, HirExpr *callee);
     HirExpr *check_field(const Expr *expr);
     HirExpr *check_index(const Expr *expr);
     HirExpr *check_match(const Expr *expr, const Type *expected);
@@ -240,6 +242,8 @@ class Checker {
     TypeContext &types_;
     Arena &arena_;
     Interner &interner_;
+    /// True while checking a function lifted from a lambda expression.
+    bool in_lambda_ = false;
     DiagnosticEngine &diagnostics_;
 
     // Global tables.

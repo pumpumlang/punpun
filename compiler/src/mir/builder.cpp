@@ -452,6 +452,33 @@ Reg MirBuilder::lower_expr(const HirExpr *expr) {
         }
         case HirExpr::Kind::Call:
         case HirExpr::Kind::CallBuiltin: return lower_call(expr);
+        case HirExpr::Kind::FuncRef: {
+            // The value of a function is its specialization index.
+            MirInst &instruction = emit(MirOp::ConstInt, expr->span);
+            instruction.dest = function_->add_reg(expr->type);
+            instruction.imm = static_cast<i64>(expr->target);
+            instruction.type = expr->type;
+            return instruction.dest;
+        }
+        case HirExpr::Kind::CallIndirect: {
+            const Reg callee = lower_expr(expr->left);
+            std::vector<Reg> arguments;
+            arguments.reserve(expr->operands.size());
+            for (const HirExpr *operand : expr->operands) {
+                arguments.push_back(lower_expr(operand));
+            }
+            MirInst &instruction = emit(MirOp::CallIndirect, expr->span);
+            if (expr->type && expr->type->kind != TypeKind::Void) {
+                instruction.dest = function_->add_reg(expr->type);
+            }
+            instruction.a = callee;
+            instruction.args = std::move(arguments);
+            instruction.type = expr->type;
+            // The callee's static type is the signature; the backends use it to
+            // pick the right calling sequence.
+            instruction.callee_type = expr->left ? expr->left->type : nullptr;
+            return instruction.dest;
+        }
 
         case HirExpr::Kind::Field: {
             const Reg base = lower_expr(expr->left);

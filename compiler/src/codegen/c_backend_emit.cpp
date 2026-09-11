@@ -356,6 +356,31 @@ void CBackend::emit_instruction(const MirFunction &fn, const MirInst &instructio
             out_ << ");\n";
             return;
         }
+        case MirOp::CallIndirect: {
+            const Type *signature = instruction.callee_type;
+            std::string result = "void";
+            std::string parameters = "void";
+            if (signature) {
+                result = type_name(signature->element);
+                if (!signature->arguments.empty()) {
+                    parameters.clear();
+                    for (std::size_t i = 0; i < signature->arguments.size(); ++i) {
+                        if (i) parameters += ", ";
+                        parameters += type_name(signature->arguments[i]);
+                    }
+                }
+            }
+            out_ << "    ";
+            if (instruction.dest != kNoReg) out_ << reg(instruction.dest) << " = ";
+            out_ << "((" << result << " (*)(" << parameters << "))pp_fn_table["
+                 << reg(instruction.a) << "])(";
+            for (std::size_t i = 0; i < instruction.args.size(); ++i) {
+                if (i) out_ << ", ";
+                out_ << reg(instruction.args[i]);
+            }
+            out_ << ");\n";
+            return;
+        }
         case MirOp::CallBuiltin: emit_builtin(fn, instruction); return;
 
         case MirOp::MakeStruct: {
@@ -565,6 +590,20 @@ void CBackend::emit_prototypes(const MirProgram &program) {
         out_ << ");\n";
     }
     out_ << "\n";
+
+    // A function value is an index into this table. Casting a function pointer
+    // to another function-pointer type and back is well defined; the call is
+    // always made through the signature the checker proved the value has.
+    out_ << "typedef void (*pp_fnptr)(void);\n";
+    out_ << "static pp_fnptr const pp_fn_table[] = {\n";
+    for (std::size_t i = 0; i < program.functions.size(); ++i) {
+        const MirFunction *fn = program.functions[i];
+        const std::string symbol =
+            fn->is_extern_native ? std::string(fn->native_symbol) : function_name(i);
+        out_ << "    (pp_fnptr)" << symbol << ",\n";
+    }
+    // A trailing zero keeps the array non-empty when a program defines nothing.
+    out_ << "    (pp_fnptr)0\n};\n\n";
 }
 
 void CBackend::emit_task_trampolines(const MirProgram &program) {

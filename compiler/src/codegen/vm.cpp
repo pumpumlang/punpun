@@ -505,6 +505,23 @@ Slot Vm::invoke(u32 function_index, const Slot *arguments, u32 argument_count) {
                 ++pc;
                 break;
             }
+            case Op::CallIndirect: {
+                call_arguments.clear();
+                call_arguments.reserve(in.arg_count);
+                for (u32 i = 0; i < in.arg_count; ++i) {
+                    call_arguments.push_back(frame[program_->arguments[in.arg_offset + i]]);
+                }
+                // The callee index is an ordinary value, so it is read from the
+                // register the function value lives in.
+                const u32 callee = static_cast<u32>(frame[in.a].integer);
+                const Slot value =
+                    invoke(callee, call_arguments.data(),
+                           static_cast<u32>(call_arguments.size()));
+                frame = stack_.data() + base;
+                if (in.dest != 0xFFFFFFFFu) frame[in.dest] = value;
+                ++pc;
+                break;
+            }
             case Op::Spawn: {
                 // A task runs on a real worker thread with its own interpreter,
                 // so cancellation and task groups behave the same here as under

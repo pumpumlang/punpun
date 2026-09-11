@@ -37,6 +37,9 @@ enum class MirOp : u8 {
 
     // Calls
     Call,
+    /// Call through a register holding a function value. `a` is the callee
+    /// index; `target` names the signature the backends dispatch on.
+    CallIndirect,
     CallBuiltin,
 
     // Aggregates
@@ -102,6 +105,8 @@ struct MirInst {
 
     /// Static type of `dest`, needed by the backends to pick a representation.
     const Type *type = nullptr;
+    /// CallIndirect: the callee's function type, which carries the signature.
+    const Type *callee_type = nullptr;
 
     bool is_terminator() const {
         return op == MirOp::Jump || op == MirOp::Branch || op == MirOp::Return;
@@ -114,6 +119,7 @@ struct MirInst {
             case MirOp::SetIndex:
             case MirOp::StoreDeref:
             case MirOp::Call:
+            case MirOp::CallIndirect:
             case MirOp::CallBuiltin:
             case MirOp::Await:
             case MirOp::Drop:

@@ -40,6 +40,11 @@ enum class TypeKind {
     /// text with no NUL, and binary data is neither.
     Bytes,
     Task,        // @task:T
+    /// fn(T...) -> R. A value of this type is the callee's index in the
+    /// module function table, so it is one word wide and copies freely. That
+    /// representation is what lets the C, native and bytecode backends share
+    /// one calling sequence instead of three notions of a code address.
+    Function,
     Param,       // an unsubstituted generic parameter
 };
 
@@ -82,6 +87,7 @@ struct Type {
             case TypeKind::Bytes:
             case TypeKind::Task:
             case TypeKind::Object:
+            case TypeKind::Function:
                 return true;
             default:
                 return false;
@@ -158,6 +164,9 @@ class TypeContext {
     const Type *map(const Type *value);
     const Type *bytes_type() const { return bytes_; }
     const Type *task(const Type *result);
+    /// fn(parameters) -> result. `arguments` holds the parameters and
+    /// `element` the result.
+    const Type *function(std::vector<const Type *> parameters, const Type *result);
     const Type *param(Symbol name);
     const Type *named(TypeKind kind, Symbol name, std::vector<const Type *> arguments, u32 decl);
 

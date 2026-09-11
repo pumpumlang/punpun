@@ -67,7 +67,8 @@ void NativeBackend::emit_call(const MirFunction &fn, const MirInst &in) {
     // Setting it unconditionally is harmless for non-variadic ones.
     out_ << "\tmovb\t$" << sse << ", %al\n";
 
-    const MirFunction *target = in.target < program_->functions.size()
+    const MirFunction *target = (in.op != MirOp::CallIndirect &&
+                                 in.target < program_->functions.size())
                                     ? program_->functions[in.target]
                                     : nullptr;
     if (target && target->is_async) {
@@ -79,7 +80,16 @@ void NativeBackend::emit_call(const MirFunction &fn, const MirInst &in) {
         return;
     }
 
-    out_ << "\tcall\t" << function_label(in.target) << "\n";
+    if (in.op == MirOp::CallIndirect) {
+        // %r10 and %r11 are caller-saved and never argument registers, so the
+        // address can be materialised after the arguments are already in place.
+        out_ << "\tmovq\t" << register_offset(in.a) << "(%rbp), %r11\n";
+        out_ << "\tleaq\tpp_fn_table(%rip), %r10\n";
+        out_ << "\tmovq\t(%r10,%r11,8), %r11\n";
+        out_ << "\tcall\t*%r11\n";
+    } else {
+        out_ << "\tcall\t" << function_label(in.target) << "\n";
+    }
 
     if (in.dest != kNoReg) {
         const Type *result = in.type;
@@ -301,7 +311,8 @@ void NativeBackend::emit_instruction(const MirFunction &fn, const MirInst &in) {
             }
         }
 
-        case MirOp::Call: emit_call(fn, in); return;
+        case MirOp::Call:
+        case MirOp::CallIndirect: emit_call(fn, in); return;
         case MirOp::CallBuiltin: emit_builtin(fn, in); return;
 
         case MirOp::MakeStruct: {

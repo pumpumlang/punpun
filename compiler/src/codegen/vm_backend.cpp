@@ -222,8 +222,10 @@ void VmBackend::compile_instruction(const MirFunction &fn, const MirInst &source
             return;
         }
         case MirOp::Call:
+        case MirOp::CallIndirect:
         case MirOp::CallBuiltin: {
             const bool builtin = (source.op == MirOp::CallBuiltin);
+            const bool indirect = (source.op == MirOp::CallIndirect);
             const MirFunction *target =
                 (!builtin && source.target < mir_->functions.size())
                     ? mir_->functions[source.target]
@@ -233,6 +235,7 @@ void VmBackend::compile_instruction(const MirFunction &fn, const MirInst &source
             // Spawn evaluates the body immediately and boxes the result.
             Op op = Op::Call;
             if (builtin) op = Op::CallBuiltin;
+            else if (indirect) op = Op::CallIndirect;
             else if (target && target->is_async) op = Op::Spawn;
 
             // Argument copies emit instructions of their own, which can
@@ -249,6 +252,7 @@ void VmBackend::compile_instruction(const MirFunction &fn, const MirInst &source
             Instr &out = emit_instruction(op, source);
             out.dest = source.dest == kNoReg ? 0xFFFFFFFFu : reg(source.dest);
             out.imm = source.target;
+            if (indirect) out.a = reg(source.a);
 
             // print/println/say are polymorphic in the source language but the
             // runtime has one entry per type. The choice depends on the

@@ -25,6 +25,11 @@ std::string key_for(const Type &type, const TypeContext &context) {
         case TypeKind::Map: return "m" + context.mangle(type.element);
         case TypeKind::Bytes: return "y";
         case TypeKind::Task: return "@" + context.mangle(type.element);
+        case TypeKind::Function: {
+            std::string result = "f(";
+            for (const Type *parameter : type.arguments) result += context.mangle(parameter) + ",";
+            return result + ")" + context.mangle(type.element);
+        }
         case TypeKind::Param: return "P" + context.interner().text(type.name);
         case TypeKind::Struct:
         case TypeKind::Object:
@@ -124,6 +129,18 @@ const Type *TypeContext::task(const Type *result) {
     return intern(std::move(candidate));
 }
 
+const Type *TypeContext::function(std::vector<const Type *> parameters, const Type *result) {
+    if (!result) return error_;
+    for (const Type *parameter : parameters) {
+        if (!parameter) return error_;
+    }
+    Type candidate;
+    candidate.kind = TypeKind::Function;
+    candidate.arguments = std::move(parameters);
+    candidate.element = result;
+    return intern(std::move(candidate));
+}
+
 const Type *TypeContext::param(Symbol name) {
     Type candidate;
     candidate.kind = TypeKind::Param;
@@ -159,6 +176,17 @@ std::string TypeContext::describe(const Type *type) const {
         case TypeKind::Map: return "Map<" + describe(type->element) + ">";
         case TypeKind::Bytes: return "bytes";
         case TypeKind::Task: return "task<" + describe(type->element) + ">";
+        case TypeKind::Function: {
+            std::string result = "fn(";
+            for (std::size_t i = 0; i < type->arguments.size(); ++i) {
+                if (i) result += ", ";
+                result += describe(type->arguments[i]);
+            }
+            result += ")";
+            if (type->element && type->element->kind != TypeKind::Void)
+                result += " -> " + describe(type->element);
+            return result;
+        }
         case TypeKind::Param: return interner_.text(type->name);
         case TypeKind::Struct:
         case TypeKind::Object:
@@ -196,6 +224,11 @@ std::string TypeContext::mangle(const Type *type) const {
         case TypeKind::Map: return "H" + mangle(type->element);
         case TypeKind::Bytes: return "y";
         case TypeKind::Task: return "T" + mangle(type->element);
+        case TypeKind::Function: {
+            std::string result = "F";
+            for (const Type *parameter : type->arguments) result += mangle(parameter) + "_";
+            return result + "R" + mangle(type->element);
+        }
         case TypeKind::Param: return "G" + interner_.text(type->name);
         case TypeKind::Struct:
         case TypeKind::Object:
@@ -261,6 +294,7 @@ bool TypeContext::is_copy_impl(const Type *type, std::vector<const Type *> &visi
         // List: assignment aliases rather than duplicating.
         case TypeKind::Map:
         case TypeKind::Bytes:
+        case TypeKind::Function:
             return true;
         case TypeKind::MutRef:
             // An exclusive borrow cannot be duplicated without breaking the

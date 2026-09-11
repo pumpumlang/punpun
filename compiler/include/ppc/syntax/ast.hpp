@@ -29,6 +29,7 @@ struct TypeExpr {
         RawPointer, // *T
         Infer,      // omitted annotation
         SelfType,   // Self inside an impl body
+        Function,   // fn(T, U) -> R; parameters in `arguments`, result in `element`
     } kind = Kind::Infer;
 
     Span span;
@@ -235,6 +236,8 @@ struct FunctionDecl {
     bool self_mutable = false;
     bool has_explicit_self = false;
     bool is_entry = false;  // `launch` block or `fn main`
+    /// Lifted from a `fn(...) { ... }` written in expression position.
+    bool is_lambda = false;
     Visibility visibility = Visibility::Public;
     Symbol native_symbol;
 

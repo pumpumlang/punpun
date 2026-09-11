@@ -34,6 +34,10 @@ class Parser {
     std::vector<Token> tokens_;
     Arena &arena_;
     Interner &interner_;
+    /// Module currently being parsed, so a lambda can be lifted into it.
+    Module *module_ = nullptr;
+    /// Counter for generated lambda names, unique within a module.
+    u32 lambda_serial_ = 0;
     DiagnosticEngine &diagnostics_;
     std::size_t index_ = 0;
     /// Depth of loop nesting, used to reject `break` outside a loop early.
@@ -108,6 +112,7 @@ class Parser {
     Expr *parse_unary();
     Expr *parse_postfix(Expr *base);
     Expr *parse_primary();
+    Expr *parse_lambda();
     Expr *parse_match();
     Expr *parse_list_literal();
     void parse_arguments(Expr &call);

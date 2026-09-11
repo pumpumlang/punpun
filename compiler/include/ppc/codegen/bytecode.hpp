@@ -90,6 +90,9 @@ enum class Op : u8 {
     Jump,
     BranchTrue,
     Call,
+    /// Call the function whose index is held in register `a`. Everything else
+    /// matches Call; only where the callee comes from differs.
+    CallIndirect,
     CallBuiltin,
     Return,
     ReturnVoid,
