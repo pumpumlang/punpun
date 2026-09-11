@@ -144,6 +144,8 @@ std::string CBackend::type_name(const Type *type) {
             // oddities by always appending with a space.
             return inner + " *";
         }
+        // A function value is an index into the function table.
+        case TypeKind::Function: return "int64_t";
         case TypeKind::Contract: return "pp_any_object *";
         case TypeKind::Struct: return aggregate_name(type);
         // An object has identity, so the value is always the handle.

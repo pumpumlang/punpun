@@ -60,6 +60,7 @@ const char *op_mnemonic(Op op) {
         case Op::Jump: return "jump";
         case Op::BranchTrue: return "branch";
         case Op::Call: return "call";
+        case Op::CallIndirect: return "call.indirect";
         case Op::CallBuiltin: return "call.builtin";
         case Op::Return: return "return";
         case Op::ReturnVoid: return "return.void";

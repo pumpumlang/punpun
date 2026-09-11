@@ -101,6 +101,7 @@ const char *op_name(MirOp op) {
         case MirOp::Binary: return "bin";
         case MirOp::Unary: return "un";
         case MirOp::Call: return "call";
+        case MirOp::CallIndirect: return "call.indirect";
         case MirOp::CallBuiltin: return "call.builtin";
         case MirOp::MakeStruct: return "struct.new";
         case MirOp::GetField: return "field.get";
@@ -180,6 +181,14 @@ std::string dump_mir(const MirProgram &program, const TypeContext &types) {
                     case MirOp::Unary:
                         out << " " << unary_op_spelling(instruction.unary_op) << " "
                             << reg_name(instruction.a);
+                        break;
+                    case MirOp::CallIndirect:
+                        // The callee is a register, so it prints like any other
+                        // operand ahead of the argument list.
+                        out << " " << reg_name(instruction.a);
+                        for (Reg argument : instruction.args) {
+                            out << " " << reg_name(argument);
+                        }
                         break;
                     case MirOp::Call:
                     case MirOp::CallBuiltin:
