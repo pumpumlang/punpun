@@ -26,8 +26,8 @@ jobs:
 
       - name: Test native PunPun probability core
         run: |
-          ./build/ppc check -I examples/punbrain examples/punbrain/native_selftest.pp
-          ./build/ppc build --backend=c -I examples/punbrain -O2 -o /tmp/punbrain-native-selftest examples/punbrain/native_selftest.pp
+          ./build/ppc check examples/punbrain/native_selftest.pp
+          ./build/ppc build --backend=c -O2 -o /tmp/punbrain-native-selftest examples/punbrain/native_selftest.pp
           /tmp/punbrain-native-selftest | grep -F 'PunBrain native PunPun core selftest OK'
 
       - name: Check and build standalone PunBrain app
