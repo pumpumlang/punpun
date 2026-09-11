@@ -28,15 +28,18 @@ namespace ppc {
 namespace version {
 
 /// This build of the compiler.
-inline constexpr const char *kCompilerVersion = "1.3.0";
+inline constexpr const char *kCompilerVersion = "1.4.0";
 
 /// The PunPun language version PPC targets.
 ///
-/// PPC implements the 1.0 stable language surface: both dialects, generics with
+/// PPC implements the 1.0 stable language surface: generics with
 /// monomorphization, algebraic enums with exhaustiveness checking, ownership and
 /// borrow checking, checked arithmetic, structured task groups, verified HTTPS,
-/// and the native GUI foundation. PunPun 1.3 remains source-compatible with the
-/// stable 1.0 language surface, so the language version and ABI stay at 1.0/1.
+/// and the native GUI foundation. 1.4 adds function types and literals,
+/// iteration over a sequence, and contracts usable as types with dispatch on
+/// them. All three are additions: 1.4 remains source-compatible with the stable
+/// 1.0 language surface, so the language version and ABI stay at 1.0/1. The
+/// migration dialect still parses, and now warns.
 inline constexpr const char *kLanguageVersion = "1.0";
 
 /// Source-compatibility epoch, per spec/1.0/abi-and-packages.md.
@@ -62,7 +65,7 @@ inline constexpr int kCacheEpoch = 3;
 /// Which language features this build actually implements, as opposed to what
 /// the language defines. Reported by `ppc language-info` so a build system can
 /// see the difference between "the language has this" and "this compiler does".
-inline constexpr const char *kImplementationStatus = "stable-1.3-compiler";
+inline constexpr const char *kImplementationStatus = "stable-1.4-compiler";
 
 }  // namespace version
 }  // namespace ppc

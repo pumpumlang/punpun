@@ -9,30 +9,50 @@
 </p>
 
 <p align="center">
-  <img alt="PunPun 1.3.0" src="https://img.shields.io/badge/version-1.3.0-b9ff4a?style=for-the-badge&labelColor=11151e">
+  <img alt="PunPun 1.4.0" src="https://img.shields.io/badge/version-1.4.0-b9ff4a?style=for-the-badge&labelColor=11151e">
   <img alt="Linux x86-64 validated" src="https://img.shields.io/badge/validated-Linux%20x86--64-66e3ff?style=for-the-badge&labelColor=11151e">
   <img alt="MIT license" src="https://img.shields.io/badge/license-MIT-f6f7fa?style=for-the-badge&labelColor=11151e">
 </p>
 
-## PunPun 1.3
+## PunPun 1.4
 
-PunPun 1.3 makes PPC the repository's canonical compiler. The supplied C++20
-compiler is integrated in place, not reimplemented: its lexer, parser, semantic
-checker, HIR/MIR pipeline, optimizer, three code generators, VM, and built-in
-language server now build and release as the main `ppc` executable.
+PunPun 1.4 closes three gaps that kept ordinary programs from being
+expressible: behaviour could not be passed around, sequences could not be
+walked, and an interface could not be held as a value.
 
 The language compatibility epoch remains `1.0`; language ABI, runtime ABI,
-package format, and lockfile format remain at epoch `1`. The frozen 1.0 builtin
-and standard-library surface is checked on every test run.
+package format, and lockfile format remain at epoch `1`. Everything below is an
+addition, and 0.6 source still builds.
 
-New in 1.3:
+```punpun
+contract Shape { fn area() -> int; }
 
-- C, direct x86-64, and register-bytecode backends behind one frontend.
-- Built-in LSP over stdio; the editor no longer needs a Node.js language-server bridge.
-- Verified HTTPS builtins and `std.net.https`, backed by a dynamically loaded system libcurl.
-- Native GUI availability and message-window APIs through `std.gui` (Win32 or X11/XWayland).
-- A substantially expanded standard library, compiler regression suite, and generated API reference.
-- Compatibility aliases for `go`, `--release`, `--cc-backend`, and `emit-machine-ir`.
+fn total(shapes: List<Shape>) -> int {
+    let mut sum = 0;
+    for s in shapes { sum = sum + s.area(); }
+    return sum;
+}
+
+fn apply(g: fn(int) -> int, v: int) -> int { return g(v); }
+```
+
+New in 1.4:
+
+- **Functions are values.** `fn(T) -> R` is a type; a named function is a
+  value; `fn(x: int) -> int { ... }` can be written inline. Literals do not
+  capture yet.
+- **Sequences iterate.** `for element in sequence` walks `nums`, `List<T>` and
+  `Slice<T>`.
+- **Contracts are types.** `fn draw(s: Shape)` works, and `List<Shape>` holds
+  several concrete types at once, dispatching on each value's own identity.
+- **One grammar.** The migration dialect warns and names the modern spelling.
+  It still parses; `pp migrate` converts a file.
+- `sort_by` in the standard library, the comparator that could not previously
+  be written.
+
+Carried from 1.3: C, direct x86-64 and register-bytecode backends behind one
+frontend; a built-in LSP over stdio; verified HTTPS through `std.net.https`;
+the native GUI foundation in `std.gui`.
 
 ## Build from source
 
@@ -133,7 +153,7 @@ import std.gui
 
 launch {
     if gui_supported() {
-        gui_message("PunPun", "Hello from PunPun 1.3");
+        gui_message("PunPun", "Hello from PunPun 1.4");
     }
 }
 ```
