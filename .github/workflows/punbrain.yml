@@ -24,7 +24,13 @@ jobs:
       - name: Build PunPun compiler
         run: make -j2 compiler
 
-      - name: Check and build PunBrain
+      - name: Test native PunPun probability core
+        run: |
+          ./build/ppc check -I examples/punbrain examples/punbrain/native_selftest.pp
+          ./build/ppc build --backend=c -I examples/punbrain -O2 -o /tmp/punbrain-native-selftest examples/punbrain/native_selftest.pp
+          /tmp/punbrain-native-selftest | grep -F 'PunBrain native PunPun core selftest OK'
+
+      - name: Check and build standalone PunBrain app
         run: |
           chmod +x examples/punbrain/cc-posix.sh
           ./build/ppc check examples/punbrain/main.pp
@@ -40,6 +46,7 @@ jobs:
         run: |
           ! grep -F '127.0.0.1:52533' examples/punbrain/main.pp
           grep -F 'PB_GUI_PORT 52534' examples/punbrain/main.pp
+          grep -F 'public fn pb_solve' examples/punbrain/core.pp
           test -f examples/punbrain/NOTICE.md
           test -f examples/punbrain/LICENSE
           test -f examples/punbrain/cc-posix.sh
@@ -48,13 +55,16 @@ jobs:
         run: |
           mkdir -p dist/PunBrain
           cp examples/punbrain/main.pp dist/PunBrain/
+          cp examples/punbrain/core.pp dist/PunBrain/
+          cp examples/punbrain/native_selftest.pp dist/PunBrain/
           cp examples/punbrain/README.md dist/PunBrain/
           cp examples/punbrain/NOTICE.md dist/PunBrain/
           cp examples/punbrain/LICENSE dist/PunBrain/
           cp examples/punbrain/SPEEDRUN_RULES.md dist/PunBrain/
           cp examples/punbrain/cc-posix.sh dist/PunBrain/
           cp /tmp/punbrain dist/PunBrain/punbrain
-          chmod +x dist/PunBrain/punbrain dist/PunBrain/cc-posix.sh
+          cp /tmp/punbrain-native-selftest dist/PunBrain/punbrain-native-selftest
+          chmod +x dist/PunBrain/punbrain dist/PunBrain/punbrain-native-selftest dist/PunBrain/cc-posix.sh
 
       - uses: actions/upload-artifact@v4
         with:
