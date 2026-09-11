@@ -1,142 +1,123 @@
-# PunBrain
+# PunBrain Legal Mode
 
-PunBrain is a clean-room, in-game stronghold calculator built as a PunPun showcase. It is inspired by the workflow of Ninjabrain Bot, but does not copy Ninjabrain Bot source code or branding.
+PunBrain Legal Mode is a deliberately rule-conservative PunPun showcase for Minecraft Java speedrunning. It does **not** replace Ninjabrain Bot's approved calculator during leaderboard runs. Instead, it connects to Ninjabrain Bot's documented local HTTP API and displays or relays only the data that Ninjabrain Bot already supplies.
 
-The project is split deliberately:
+This version was redesigned after reviewing Minecraft Java Edition Speedrunning rules v7. The earlier experimental Fabric/direct-eye-telemetry prototype has been removed from the distributable.
 
-- `main.pp` is the PunPun core executable. It owns the stronghold ring prior, robust angular likelihood, candidate posterior, blind calculator, calibration command, and machine-readable JSON protocol.
-- `fabric/` is a thin Minecraft client companion. It captures Eye of Ender trajectories, renders the HUD, handles hotkeys/clipboard, and exposes a localhost API.
+## What Legal Mode does
 
-## Why the eye measurement is different
+- Connects only to Ninjabrain Bot's local API at `127.0.0.1:52533`.
+- Supports the API's `stronghold`, `all-advancements`, `blind`, `divine`, `boat`, `information-messages`, `version`, and `ping` endpoints.
+- Includes a PunPun CLI relay that prints the selected Ninjabrain API response without deriving new predictions.
+- Includes an external always-on-top overlay that formats fields supplied by Ninjabrain Bot for easier viewing while playing.
+- Leaves stronghold calculations, eye processing, corrections, probabilities, and player-state interpretation to Ninjabrain Bot.
 
-Traditional external calculators usually receive an F3 coordinate and a crosshair angle. PunBrain can do better when the Fabric companion is installed:
+## What Legal Mode deliberately does not do
 
-1. It detects the actual `EyeOfEnderEntity` in the client world.
-2. It samples the entity's native double-precision X/Z position over multiple game ticks.
-3. It discards edge samples when enough data exists.
-4. It fits the whole horizontal trajectory with iteratively reweighted orthogonal regression.
-5. Huber-style weights suppress one-frame/tick outliers.
-6. The residual RMS and track length produce a per-throw angular uncertainty instead of assuming every throw is equally precise.
-7. The fitted eye trajectory itself is the ray origin, so player movement and boat movement do not corrupt the measurement.
-8. The PunPun core uses a Gaussian likelihood with a broad outlier component, so one bad measurement cannot zero an otherwise coherent posterior.
+- No Fabric mod and no Fabric API dependency.
+- No Minecraft memory or entity inspection.
+- No direct `EyeOfEnderEntity` trajectory capture.
+- No OCR, screen scraping, or audio analysis.
+- No simulated Minecraft input.
+- No automatic clipboard manipulation.
+- No independent stronghold triangulation or extra interpretation layered on Ninjabrain Bot output.
 
-That replaces "subpixel crosshair correction" with direct game-state measurement. No OCR and no F3 coordinate rounding are involved.
+Those omissions are intentional. A useful tool that gets a submitted run rejected is a remarkably elaborate way to lose time.
 
-## Current feature surface
+## Requirements
 
-- Any-number-of-eyes stronghold prediction
-- Vanilla eight-ring stronghold prior
-- Posterior candidate probabilities and top-five candidates
-- Per-throw uncertainty
-- Robust outlier handling
-- One-eye ring intersections
-- Pairwise multi-eye triangulation neighborhoods
-- Live distance and facing angle while travelling
-- Suggested lateral position for the next throw
-- Automatic Eye of Ender detection
-- Automatic exact eye-coordinate ingestion
-- Automatic result clipboard copy above a configurable confidence threshold
-- Manual result copy hotkey
-- Boat/moving-player-safe eye rays
-- Lock/reset/toggle hotkeys
-- In-game HUD with dark/light/speedrun themes
-- Local HTTP API for integrations/OBS tooling
-- Blind-coordinate helper
-- Robust calibration command (median/MAD based)
-- Divine-sector protocol command for combining fossil-derived constraints in tooling
-- All stronghold rings are supported, so long-distance / All Advancements-style routes are not restricted to ring zero
+1. A Ninjabrain Bot version that is legal for the category and ruleset you are running.
+2. Ninjabrain Bot's HTTP API enabled in its advanced settings.
+3. PunPun 1.3 to build the CLI relay.
+4. `curl` available for the CLI relay. Modern Windows includes `curl.exe`; Linux and macOS commonly provide `curl` through the system package manager.
+5. Python 3 with Tk support for the overlay.
 
-The Fabric module currently targets Minecraft Java **1.21.1** with Yarn mappings. The PunPun core is not tied to a client version.
+Rules and legal-build lists can change. Always verify the current MCSR rules before a submitted run. This project is designed around the v7 allowance for displaying Ninjabrain Bot API data; it is not a declaration by the leaderboard moderators that every future version is approved.
 
-## Build the PunPun core
+## Build the PunPun relay
 
-From the repository root:
+From the PunPun repository root:
 
 ```sh
 make compiler
 ./build/ppc check examples/punbrain/main.pp
-./build/ppc build --backend=c -O2 -o punbrain-core examples/punbrain/main.pp
-./punbrain-core version
+./build/ppc build --backend=c -O2 -o punbrain-legal examples/punbrain/main.pp
+./punbrain-legal legal-version
 ```
 
-The core uses PunPun's documented `@inject->c` FFI for numeric parsing and the low-level probability kernel. The executable entrypoint, build, packaging, and protocol remain a normal PunPun program.
-
-Copy the resulting binary to one of these locations:
+Expected version output:
 
 ```text
-.minecraft/config/punbrain/punbrain-core       Linux/macOS
-.minecraft/config/punbrain/punbrain-core.exe   Windows
+PunBrain Legal Relay 0.2.0
 ```
 
-Alternatively set `corePath` in `.minecraft/config/punbrain/config.json`.
-
-## Build the Fabric companion
-
-Java 21 is required for Minecraft 1.21.1.
+Query Ninjabrain data directly:
 
 ```sh
-cd examples/punbrain/fabric
-gradle build
+./punbrain-legal stronghold
+./punbrain-legal blind
+./punbrain-legal boat
+./punbrain-legal divine
+./punbrain-legal all-advancements
 ```
 
-Put `build/libs/punbrain-fabric-0.1.0.jar` in the Minecraft `mods` directory with Fabric Loader and Fabric API.
+The relay does not calculate on the returned values. It prints the selected endpoint response.
 
-Pinned development dependencies:
+## Run the external overlay
+
+Enable the API in Ninjabrain Bot first, then run:
+
+```sh
+python3 examples/punbrain/legal-overlay.py --borderless
+```
+
+On Windows you can also use:
+
+```powershell
+py examples/punbrain/legal-overlay.py --borderless
+```
+
+Useful options:
 
 ```text
-Minecraft   1.21.1
-Yarn        1.21.1+build.3
-Loader      0.16.14
-Fabric API  0.116.17+1.21.1
-Loom        1.8.13
+--endpoint stronghold
+--interval-ms 200
+--alpha 0.92
+--borderless
+--geometry 760x430+24+24
 ```
 
-## In game
+Press `Esc` to close the overlay.
 
-Throw an Eye of Ender normally. PunBrain detects it automatically, waits for a usable trajectory, fits the eye line, sends all recorded throws to the PunPun core, and updates the HUD.
+The default `stronghold` view displays Ninjabrain's supplied result type, player position fields, prediction chunks/certainties/distances, and eye-throw fields. Other endpoints are shown as their returned JSON.
 
-Default keys:
+## Ninjabrain Bot API
 
-| Key | Action |
-|---|---|
-| `P` | reset measurements |
-| `O` | toggle HUD |
-| `K` | copy predicted stronghold coordinates |
-| `L` | lock/unlock the current calculation |
-
-The generated config controls HUD position, theme, model sigma, boat sigma, sample count, core path, API port, and automatic clipboard threshold.
-
-## Core CLI
+Ninjabrain Bot exposes its API on port `52533` when enabled, under `/api/v1`. Legal Mode allow-lists only these known endpoints:
 
 ```text
-punbrain-core solve x z bearing sigma [x z bearing sigma ...]
-punbrain-core blind netherX netherZ
-punbrain-core divine x z bearing [spread]
-punbrain-core calibrate errorDeg [errorDeg ...]
-punbrain-core version
+/api/v1/stronghold
+/api/v1/all-advancements
+/api/v1/blind
+/api/v1/divine
+/api/v1/boat
+/api/v1/information-messages
+/api/v1/version
+/api/v1/ping
 ```
 
-Minecraft yaw convention is used: `0` points +Z, `-90` points +X, and `90` points -X.
+The overlay never contacts Minecraft itself.
 
-## Local API
+## Why automatic eye-coordinate capture was removed
 
-The Fabric companion binds only to loopback by default:
+The original experiment sampled eye entities directly from a custom client mod and automatically ingested those measurements. That is useful for research, but it is not appropriate to ship as a leaderboard-legal mode under the v7 rules reviewed for this project. Legal Mode therefore lets the approved Ninjabrain workflow remain the source of eye measurements and calculations.
+
+## Rule review
+
+See [`LEGALITY.md`](LEGALITY.md) for the design invariants used to keep this mode conservative.
+
+The rules document reviewed during this refactor was:
 
 ```text
-GET /v1/status
-GET /v1/reset
-GET /v1/eye?x=...&z=...&bearing=...&sigma=...
-GET /v1/blind?x=...&z=...
+https://rawcdn.githack.com/Minecraft-Java-Edition-Speedrunning/rules/main/pub/pdf/rules_v7.pdf
 ```
-
-Default address: `127.0.0.1:52533`.
-
-`/v1/eye` is useful for external tools or manual fallback input. Normal in-game usage does not need it because eye capture is automatic.
-
-## Relationship to Ninjabrain Bot
-
-Ninjabrain Bot is a separate GPL-3.0 project by its own contributors. PunBrain is a fresh implementation based on public Minecraft mechanics and the general calculator workflow. No Ninjabrain source is vendored into this directory. If code is later copied or adapted from Ninjabrain Bot rather than independently implemented, the licensing for that derivative work must be handled accordingly.
-
-## Precision work still worth measuring
-
-The companion deliberately reports fit residuals and sample counts so real-run telemetry can be used to calibrate defaults. The next useful accuracy experiment is to compare trajectory windows (for example ticks 2-8 vs. 2-14), boat vs. foot throws, and network conditions against known stronghold positions, then tune `baseModelSigma` from those residual distributions rather than guessing.

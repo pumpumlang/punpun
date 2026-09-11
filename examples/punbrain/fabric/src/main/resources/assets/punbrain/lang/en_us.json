@@ -1,7 +1,0 @@
-{
-  "category.punbrain": "PunBrain",
-  "key.punbrain.reset": "Reset eye measurements",
-  "key.punbrain.toggle": "Toggle PunBrain HUD",
-  "key.punbrain.copy": "Copy predicted stronghold coordinates",
-  "key.punbrain.lock": "Lock/unlock current calculation"
-}

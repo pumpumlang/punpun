@@ -1,4 +1,4 @@
-name: punbrain
+name: punbrain-legal
 
 on:
   pull_request:
@@ -16,47 +16,42 @@ permissions:
   contents: read
 
 jobs:
-  core:
+  legal-mode:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
+
       - name: Build PunPun compiler
         run: make -j2 compiler
-      - name: Check and build PunBrain core
+
+      - name: Check and build legal relay
         run: |
           ./build/ppc check examples/punbrain/main.pp
-          ./build/ppc build --backend=c -O2 -o /tmp/punbrain-core examples/punbrain/main.pp
-          /tmp/punbrain-core version
-      - name: Deterministic solver smoke test
-        run: |
-          python3 - <<'PY'
-          import json, math, subprocess
-          target=(1608.0,1608.0)
-          starts=[(0.0,0.0),(200.0,0.0)]
-          args=['/tmp/punbrain-core','solve']
-          for x,z in starts:
-              b=-math.degrees(math.atan2(target[0]-x,target[1]-z))
-              args += [str(x),str(z),str(b),'0.04']
-          out=json.loads(subprocess.check_output(args,text=True))
-          assert out['ok'] is True, out
-          assert abs(out['x']-target[0]) <= 16.0, out
-          assert abs(out['z']-target[1]) <= 16.0, out
-          assert out['confidence'] > 0.1, out
-          blind=json.loads(subprocess.check_output(['/tmp/punbrain-core','blind','100','100'],text=True))
-          assert blind['ok'] is True and blind['mode']=='blind', blind
-          print(json.dumps(out, indent=2))
-          PY
+          ./build/ppc build --backend=c -O2 -o /tmp/punbrain-legal examples/punbrain/main.pp
+          /tmp/punbrain-legal legal-version | grep -F 'PunBrain Legal Relay 0.2.0'
 
-  fabric:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v7
-      - uses: actions/setup-java@v4
+      - name: Check external overlay syntax
+        run: python3 -m py_compile examples/punbrain/legal-overlay.py
+
+      - name: Enforce leaderboard-facing boundaries
+        run: |
+          test ! -d examples/punbrain/fabric
+          ! grep -E 'EyeOfEnderEntity|MinecraftClient|fabric-api|fabricmc' examples/punbrain/main.pp examples/punbrain/legal-overlay.py
+          grep -F 'http://127.0.0.1:52533/api/v1/' examples/punbrain/main.pp >/dev/null
+          grep -F 'http://127.0.0.1:52533/api/v1' examples/punbrain/legal-overlay.py >/dev/null
+
+      - name: Package PunBrain Legal Mode
+        run: |
+          mkdir -p dist/PunBrain_Legal
+          cp examples/punbrain/main.pp dist/PunBrain_Legal/
+          cp examples/punbrain/legal-overlay.py dist/PunBrain_Legal/
+          cp examples/punbrain/README.md dist/PunBrain_Legal/
+          cp examples/punbrain/LEGALITY.md dist/PunBrain_Legal/
+          cp /tmp/punbrain-legal dist/PunBrain_Legal/punbrain-legal
+          chmod +x dist/PunBrain_Legal/punbrain-legal
+
+      - uses: actions/upload-artifact@v4
         with:
-          distribution: temurin
-          java-version: '21'
-      - uses: gradle/actions/setup-gradle@v4
-        with:
-          gradle-version: '8.10.2'
-      - name: Build Fabric companion
-        run: gradle -p examples/punbrain/fabric build --no-daemon
+          name: PunBrain_Legal_Bundle
+          path: dist/PunBrain_Legal
+          if-no-files-found: error
