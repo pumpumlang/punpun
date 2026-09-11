@@ -14,7 +14,8 @@ usage:
   pp init [name]
   pp add <name> <path>
   pp remove <name>
-  pp update | fetch | tree
+  pp update | fetch | tree        (dependency graph; needs PPX)
+  pp --update [--check]           update the PunPun toolchain itself
   pp doctor | info | explain <CODE>
   pp stable-check | platform-info | release-verify <release-dir>
   pp toolchain detect|list|info <name>
@@ -343,6 +344,141 @@ toolchain_info() {
     echo "selection:  pp build --cc $cc"
 }
 
+# ---------------------------------------------------------------------------
+# Toolchain update
+#
+# `pp update` already means "resolve this project's dependency graph", so
+# updating the toolchain itself is spelled `pp --update` and cannot be confused
+# with it.
+# ---------------------------------------------------------------------------
+
+RELEASE_API="https://api.github.com/repos/pumpumlang/punpun/releases/latest"
+
+fetch_url() {
+    # Prefer curl, fall back to wget; a machine has one or the other.
+    if command -v curl >/dev/null 2>&1; then
+        curl -fsSL --retry 2 "$1"
+    elif command -v wget >/dev/null 2>&1; then
+        wget -qO- "$1"
+    else
+        echo "pp: --update needs curl or wget" >&2
+        return 1
+    fi
+}
+
+fetch_to_file() {
+    if command -v curl >/dev/null 2>&1; then
+        curl -fsSL --retry 2 -o "$2" "$1"
+    else
+        wget -qO "$2" "$1"
+    fi
+}
+
+# Read one string field out of the release JSON without needing a JSON parser.
+release_field() {
+    sed -n 's/.*"'"$1"'"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' | head -n 1
+}
+
+# Compare dotted versions. Prints "newer", "same", or "older" for $1 against $2.
+version_order() {
+    left=$(printf '%s' "$1" | sed 's/^v//')
+    right=$(printf '%s' "$2" | sed 's/^v//')
+    [ "$left" = "$right" ] && { echo same; return; }
+    first=$(printf '%s\n%s\n' "$left" "$right" | sort -t. -k1,1n -k2,2n -k3,3n | head -n 1)
+    if [ "$first" = "$left" ]; then echo older; else echo newer; fi
+}
+
+self_update() {
+    check_only=0
+    for argument in "$@"; do
+        case "$argument" in
+            --check) check_only=1 ;;
+            *) echo "pp: usage: pp --update [--check]" >&2; exit 2 ;;
+        esac
+    done
+
+    # A source checkout is updated with git, not by unpacking a release over it.
+    if [ -f "$SCRIPT_DIR/Makefile" ] && [ -d "$SCRIPT_DIR/compiler" ]; then
+        echo "pp: this is a source checkout, so git owns its version"
+        echo "    installed: $VERSION"
+        echo "    update it with: git -C $(printf '%s' "$SCRIPT_DIR") pull && make compiler"
+        exit 0
+    fi
+
+    echo "Checking the latest stable PunPun release…"
+    release=$(fetch_url "$RELEASE_API") || {
+        echo "pp: could not reach the release feed; check the network and retry" >&2
+        exit 1
+    }
+    latest=$(printf '%s' "$release" | release_field tag_name)
+    [ -n "$latest" ] || { echo "pp: the release feed carried no version tag" >&2; exit 1; }
+
+    order=$(version_order "$VERSION" "$latest")
+    if [ "$order" != "older" ]; then
+        echo "PunPun $VERSION is current (latest release is $latest)."
+        exit 0
+    fi
+
+    echo "PunPun $latest is available; $VERSION is installed."
+    if [ "$check_only" -eq 1 ]; then
+        echo "Run \`pp --update\` to install it."
+        exit 0
+    fi
+
+    case "$(uname -s 2>/dev/null || true)" in
+        Linux) ;;
+        *)
+            echo "pp: automatic update currently supports Linux only" >&2
+            echo "    download $latest from https://github.com/pumpumlang/punpun/releases" >&2
+            exit 1
+            ;;
+    esac
+
+    asset="PunPun-$(printf '%s' "$latest" | sed 's/^v//')-Linux-x86_64-Installer.run"
+    url=$(printf '%s' "$release" | tr ',' '\n' | grep -F "$asset" |
+          sed -n 's/.*"\(https:[^"]*\)".*/\1/p' | head -n 1)
+    if [ -z "$url" ]; then
+        echo "pp: release $latest has no Linux installer named $asset" >&2
+        echo "    download it manually from https://github.com/pumpumlang/punpun/releases" >&2
+        exit 1
+    fi
+
+    work=$(mktemp -d "${TMPDIR:-/tmp}/punpun-update.XXXXXX") || exit 1
+    trap 'rm -rf "$work"' EXIT HUP INT TERM
+    echo "Downloading $asset…"
+    fetch_to_file "$url" "$work/installer.run" || {
+        echo "pp: download failed" >&2
+        exit 1
+    }
+
+    # Verify against the release's own SHA256SUMS when it publishes one. An
+    # unverified installer is still refused rather than run on trust.
+    sums_url=$(printf '%s' "$release" | tr ',' '\n' | grep -F "SHA256SUMS" |
+               sed -n 's/.*"\(https:[^"]*\)".*/\1/p' | head -n 1)
+    if [ -n "$sums_url" ] && command -v sha256sum >/dev/null 2>&1; then
+        if fetch_to_file "$sums_url" "$work/SHA256SUMS"; then
+            expected=$(grep -F "$asset" "$work/SHA256SUMS" | awk '{print $1}' | head -n 1)
+            actual=$(sha256sum "$work/installer.run" | awk '{print $1}')
+            if [ -n "$expected" ] && [ "$expected" != "$actual" ]; then
+                echo "pp: checksum mismatch for $asset; refusing to install" >&2
+                echo "    expected $expected" >&2
+                echo "    actual   $actual" >&2
+                exit 1
+            fi
+            [ -n "$expected" ] && echo "Checksum verified."
+        fi
+    else
+        echo "pp: this release publishes no checksums; refusing to install unverified" >&2
+        echo "    download it manually from https://github.com/pumpumlang/punpun/releases" >&2
+        exit 1
+    fi
+
+    chmod +x "$work/installer.run"
+    echo "Installing PunPun $latest…"
+    "$work/installer.run" || { echo "pp: the installer failed" >&2; exit 1; }
+    echo "PunPun $latest installed. Open a new shell, or re-read your profile."
+}
+
 [ $# -gt 0 ] || { usage; exit 2; }
 command_name=$1
 shift
@@ -350,6 +486,10 @@ shift
 case "$command_name" in
     help|-h|--help)
         usage
+        exit 0
+        ;;
+    --update|self-update)
+        self_update "$@"
         exit 0
         ;;
     version|--version|-V)
