@@ -190,6 +190,9 @@ struct Stmt {
     // For: `for name in start..end` and `each name from start until end`.
     Expr *range_start = nullptr;
     Expr *range_end = nullptr;
+    /// For: the sequence in `for name in sequence`. Mutually exclusive with the
+    /// range bounds above; the checker desugars it to an indexed range loop.
+    Expr *iterable = nullptr;
 
     std::vector<Stmt *> body;
     std::vector<Stmt *> alternative;

@@ -371,6 +371,8 @@ HirStmt *Checker::check_while(const Stmt *statement) {
 }
 
 HirStmt *Checker::check_for(const Stmt *statement) {
+    if (statement->iterable) return check_for_each(statement);
+
     HirExpr *start = check_expr(statement->range_start, types_.int_type());
     HirExpr *end = check_expr(statement->range_end, types_.int_type());
     expect_type(start->type, types_.int_type(), statement->range_start->span, "a range bound");
@@ -390,6 +392,124 @@ HirStmt *Checker::check_for(const Stmt *statement) {
     --loop_depth_;
     pop_scope();
     return node;
+}
+
+/// `for element in sequence` over an owning or borrowed sequence.
+///
+/// Lowered here rather than in MIR so the three backends keep exactly one loop
+/// form to implement. The rewrite is:
+///
+///     {
+///         let __seq = <sequence>;               // evaluated once
+///         for __index in 0 .. <length>(__seq) {
+///             let element = <element-at>(__seq, __index);
+///             <body>
+///         }
+///     }
+///
+/// The length is read once per iteration rather than hoisted, which is what
+/// makes pushing to the sequence inside the loop behave the way the indexed
+/// form it replaces already did.
+HirStmt *Checker::check_for_each(const Stmt *statement) {
+    HirExpr *sequence = check_expr(statement->iterable, nullptr);
+    const Type *type = sequence->type;
+    if (!type || type->is_error()) return make_stmt(HirStmt::Kind::Block, statement->span);
+
+    // Each sequence kind names its own length and element-access builtins.
+    const char *length_builtin = nullptr;
+    const char *element_builtin = nullptr;
+    const Type *element_type = nullptr;
+    switch (type->kind) {
+        case TypeKind::Nums:
+            length_builtin = "size";
+            element_type = types_.int_type();
+            break;
+        case TypeKind::List:
+            length_builtin = "list_size";
+            element_builtin = "list_at";
+            element_type = type->element;
+            break;
+        case TypeKind::Slice:
+            length_builtin = "slice_len";
+            element_type = type->element;
+            break;
+        default:
+            diagnostics_
+                .error(Code::FeatureUnsupported,
+                       types_.describe(type) + " cannot be iterated")
+                .label(statement->iterable->span)
+                .with_help("`for` walks nums, List<T> and Slice<T>; "
+                           "for a count write `for i in 0..n`");
+            return make_stmt(HirStmt::Kind::Block, statement->span);
+    }
+
+    // The whole rewrite lives in its own scope so the two synthetic locals
+    // cannot collide with anything the body declares.
+    push_scope();
+    HirStmt *outer = make_stmt(HirStmt::Kind::Block, statement->span);
+
+    const u32 sequence_local =
+        declare_local(interner_.intern("__pp_seq"), type, false, false, statement->span);
+    HirStmt *bind_sequence = make_stmt(HirStmt::Kind::Let, statement->span);
+    bind_sequence->local = sequence_local;
+    bind_sequence->value = sequence;
+    outer->body.push_back(bind_sequence);
+
+    auto read_sequence = [&] {
+        HirExpr *read = make_expr(HirExpr::Kind::Local, statement->iterable->span, type);
+        read->local = sequence_local;
+        return read;
+    };
+
+    HirStmt *loop = make_stmt(HirStmt::Kind::For, statement->span);
+    loop->range_start = make_expr(HirExpr::Kind::ConstInt, statement->span, types_.int_type());
+    loop->range_start->int_value = 0;
+
+    HirExpr *length = make_expr(HirExpr::Kind::CallBuiltin, statement->iterable->span,
+                                types_.int_type());
+    length->builtin = find_builtin(length_builtin);
+    length->operands.push_back(read_sequence());
+    loop->range_end = length;
+
+    push_scope();
+    const u32 index_local =
+        declare_local(interner_.intern("__pp_index"), types_.int_type(), false, false,
+                      statement->span);
+    loop->local = index_local;
+
+    auto read_index = [&] {
+        HirExpr *read = make_expr(HirExpr::Kind::Local, statement->span, types_.int_type());
+        read->local = index_local;
+        return read;
+    };
+
+    // nums and Slice index directly; List reads through its accessor builtin.
+    HirExpr *element = nullptr;
+    if (element_builtin) {
+        element = make_expr(HirExpr::Kind::CallBuiltin, statement->span, element_type);
+        element->builtin = find_builtin(element_builtin);
+        element->operands.push_back(read_sequence());
+        element->operands.push_back(read_index());
+    } else {
+        element = make_expr(HirExpr::Kind::Index, statement->span, element_type);
+        element->left = read_sequence();
+        element->right = read_index();
+    }
+
+    HirStmt *bind_element = make_stmt(HirStmt::Kind::Let, statement->span);
+    bind_element->local =
+        declare_local(statement->name, element_type, false, false, statement->span);
+    bind_element->value = element;
+    loop->body.push_back(bind_element);
+
+    ++loop_depth_;
+    check_block(statement->body, loop->body);
+    --loop_depth_;
+    pop_scope();
+
+    outer->body.push_back(loop);
+    pop_scope();
+    return outer;
 }
 
 HirStmt *Checker::check_return(const Stmt *statement) {

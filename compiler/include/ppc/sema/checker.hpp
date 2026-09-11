@@ -129,6 +129,7 @@ class Checker {
     HirStmt *check_if(const Stmt *statement);
     HirStmt *check_while(const Stmt *statement);
     HirStmt *check_for(const Stmt *statement);
+    HirStmt *check_for_each(const Stmt *statement);
     HirStmt *check_return(const Stmt *statement);
 
     // -- expressions --------------------------------------------------------

@@ -233,11 +233,9 @@ Stmt *Parser::parse_for() {
         statement->range_start = iterable->left;
         statement->range_end = iterable->right;
     } else {
-        error_at(previous(), Code::FeatureUnsupported,
-                 "only range iteration is supported in a 'for' loop",
-                 "write `for i in 0..count`");
-        statement->range_start = iterable;
-        statement->range_end = iterable;
+        // A sequence. The checker resolves the element type and rewrites this
+        // into an indexed loop, so no later stage sees a second loop form.
+        statement->iterable = iterable;
     }
 
     ++loop_depth_;
