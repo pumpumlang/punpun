@@ -92,3 +92,26 @@ fn reverse_ints(items: List<int>) {
         list_put(items, count - 1 - i, swap);
     }
 }
+
+// Sort with a caller-supplied ordering.
+//
+// `before(a, b)` answers whether a comes first. Insertion sort is used rather
+// than the quicksort above because the comparison is an indirect call: its cost
+// dominates, and insertion sort performs fewer comparisons on the partially
+// ordered inputs that a custom ordering is usually applied to. It is also
+// stable, which a caller ordering by one field of several will expect.
+fn sort_by(items: List<int>, before: fn(int, int) -> bool) {
+    let count = list_size(items);
+    let mut index = 1;
+    while index < count {
+        let value = list_at(items, index);
+        let mut scan = index - 1;
+        while scan >= 0 {
+            if !before(value, list_at(items, scan)) { break; }
+            list_put(items, scan + 1, list_at(items, scan));
+            scan = scan - 1;
+        }
+        list_put(items, scan + 1, value);
+        index = index + 1;
+    }
+}

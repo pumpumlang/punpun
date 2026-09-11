@@ -587,6 +587,14 @@
     {
       "documentation": "",
       "kind": "fn",
+      "line": 103,
+      "module": "stdlib/std/collections/sorting.pp",
+      "name": "sort_by",
+      "signature": "fn sort_by(items: List<int>, before: fn(int, int) -> bool)"
+    },
+    {
+      "documentation": "",
+      "kind": "fn",
       "line": 7,
       "module": "stdlib/std/collections/stack.pp",
       "name": "stack_push",

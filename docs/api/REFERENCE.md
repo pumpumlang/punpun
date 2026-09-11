@@ -723,6 +723,12 @@ fn is_sorted_ints(items: List<int>) -> bool
 fn reverse_ints(items: List<int>)
 ```
 
+### `sort_by`
+
+```punpun
+fn sort_by(items: List<int>, before: fn(int, int) -> bool)
+```
+
 ## `stdlib/std/collections/stack.pp`
 
 ### `stack_push`
