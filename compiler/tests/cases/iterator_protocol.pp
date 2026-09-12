@@ -59,8 +59,8 @@ launch {
     for value in counter {
         if value == 3 { continue; }
         print(value);
-        print(" ");
         if value == 5 { break; }
+        print(" ");
     }
     say("");
 
