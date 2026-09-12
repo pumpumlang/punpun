@@ -1,6 +1,94 @@
 {
   "entries": [
     {
+      "documentation": "Interoperable ZIP archives using method 0 (stored/no compression). The format machinery is deliberately implemented in PunPun.  Pair this with std.compress when an application wants to compress payloads before archiving.",
+      "kind": "struct",
+      "line": 8,
+      "module": "stdlib/std/archive/zip.pp",
+      "name": "ZipEntry",
+      "signature": "struct ZipEntry"
+    },
+    {
+      "documentation": "",
+      "kind": "struct",
+      "line": 13,
+      "module": "stdlib/std/archive/zip.pp",
+      "name": "ZipReadResult",
+      "signature": "struct ZipReadResult"
+    },
+    {
+      "documentation": "",
+      "kind": "fn",
+      "line": 16,
+      "module": "stdlib/std/archive/zip.pp",
+      "name": "ok",
+      "signature": "public fn ok() -> bool"
+    },
+    {
+      "documentation": "",
+      "kind": "fn",
+      "line": 17,
+      "module": "stdlib/std/archive/zip.pp",
+      "name": "get",
+      "signature": "public fn get(name: str) -> bytes"
+    },
+    {
+      "documentation": "",
+      "kind": "fn",
+      "line": 21,
+      "module": "stdlib/std/archive/zip.pp",
+      "name": "has",
+      "signature": "public fn has(name: str) -> bool"
+    },
+    {
+      "documentation": "",
+      "kind": "fn",
+      "line": 27,
+      "module": "stdlib/std/archive/zip.pp",
+      "name": "_zip_append",
+      "signature": "fn _zip_append(out: bytes, data: bytes) -> void"
+    },
+    {
+      "documentation": "",
+      "kind": "fn",
+      "line": 31,
+      "module": "stdlib/std/archive/zip.pp",
+      "name": "_zip_need",
+      "signature": "fn _zip_need(data: bytes, offset: int, amount: int) -> bool"
+    },
+    {
+      "documentation": "",
+      "kind": "fn",
+      "line": 35,
+      "module": "stdlib/std/archive/zip.pp",
+      "name": "zip_write",
+      "signature": "fn zip_write(entries: List<ZipEntry>) -> bytes"
+    },
+    {
+      "documentation": "",
+      "kind": "fn",
+      "line": 95,
+      "module": "stdlib/std/archive/zip.pp",
+      "name": "zip_read",
+      "signature": "fn zip_read(data: bytes) -> ZipReadResult"
+    },
+    {
+      "documentation": "",
+      "kind": "fn",
+      "line": 127,
+      "module": "stdlib/std/archive/zip.pp",
+      "name": "zip_write_file",
+      "signature": "fn zip_write_file(path: str, entries: List<ZipEntry>) -> void"
+    },
+    {
+      "documentation": "",
+      "kind": "fn",
+      "line": 128,
+      "module": "stdlib/std/archive/zip.pp",
+      "name": "zip_read_file",
+      "signature": "fn zip_read_file(path: str) -> ZipReadResult"
+    },
+    {
       "documentation": "PunPun structured async helpers. `async fn` / `await` are compiler features. This module provides reusable task helpers while the runtime keeps task creation lazy for ordinary programs.",
       "kind": "fn",
       "line": 6,
@@ -95,6 +183,198 @@
       "module": "stdlib/std/collections/counter.pp",
       "name": "counter_most_common",
       "signature": "fn counter_most_common(counts: Map<int>) -> str"
+    },
+    {
+      "documentation": "Amortized O(1) FIFO deque using a List plus a moving head. Front removals do not shift the whole list; occasional compaction bounds retained dead slots.",
+      "kind": "object",
+      "line": 3,
+      "module": "stdlib/std/collections/deque.pp",
+      "name": "Deque",
+      "signature": "object Deque<T: Copy>"
+    },
+    {
+      "documentation": "",
+      "kind": "fn",
+      "line": 6,
+      "module": "stdlib/std/collections/deque.pp",
+      "name": "size",
+      "signature": "public fn size()->int"
+    },
+    {
+      "documentation": "",
+      "kind": "fn",
+      "line": 7,
+      "module": "stdlib/std/collections/deque.pp",
+      "name": "empty",
+      "signature": "public fn empty()->bool"
+    },
+    {
+      "documentation": "",
+      "kind": "fn",
+      "line": 8,
+      "module": "stdlib/std/collections/deque.pp",
+      "name": "push_back",
+      "signature": "public fn push_back(value:T)->void"
+    },
+    {
+      "documentation": "",
+      "kind": "fn",
+      "line": 9,
+      "module": "stdlib/std/collections/deque.pp",
+      "name": "front",
+      "signature": "public fn front()->T"
+    },
+    {
+      "documentation": "",
+      "kind": "fn",
+      "line": 10,
+      "module": "stdlib/std/collections/deque.pp",
+      "name": "back",
+      "signature": "public fn back()->T"
+    },
+    {
+      "documentation": "",
+      "kind": "fn",
+      "line": 11,
+      "module": "stdlib/std/collections/deque.pp",
+      "name": "pop_front",
+      "signature": "public fn pop_front()->T"
+    },
+    {
+      "documentation": "",
+      "kind": "fn",
+      "line": 12,
+      "module": "stdlib/std/collections/deque.pp",
+      "name": "pop_back",
+      "signature": "public fn pop_back()->T"
+    },
+    {
+      "documentation": "",
+      "kind": "fn",
+      "line": 13,
+      "module": "stdlib/std/collections/deque.pp",
+      "name": "clear",
+      "signature": "public fn clear()->void"
+    },
+    {
+      "documentation": "",
+      "kind": "fn",
+      "line": 14,
+      "module": "stdlib/std/collections/deque.pp",
+      "name": "compact",
+      "signature": "public fn compact()->void"
+    },
+    {
+      "documentation": "Higher-order collection operations unlocked by capturing function values. These are deliberately library code: map/filter/fold do not need compiler magic.",
+      "kind": "fn",
+      "line": 4,
+      "module": "stdlib/std/collections/functional.pp",
+      "name": "list_map",
+      "signature": "fn list_map<T: Copy, U: Copy>(items: List<T>, transform: fn(T) -> U) -> List<U>"
+    },
+    {
+      "documentation": "",
+      "kind": "fn",
+      "line": 7,
+      "module": "stdlib/std/collections/functional.pp",
+      "name": "list_filter",
+      "signature": "fn list_filter<T: Copy>(items: List<T>, predicate: fn(T) -> bool) -> List<T>"
+    },
+    {
+      "documentation": "",
+      "kind": "fn",
+      "line": 10,
+      "module": "stdlib/std/collections/functional.pp",
+      "name": "list_fold",
+      "signature": "fn list_fold<T: Copy, U: Copy>(items: List<T>, initial: U, combine: fn(U,T) -> U) -> U"
+    },
+    {
+      "documentation": "",
+      "kind": "fn",
+      "line": 13,
+      "module": "stdlib/std/collections/functional.pp",
+      "name": "list_any",
+      "signature": "fn list_any<T: Copy>(items: List<T>, predicate: fn(T) -> bool) -> bool"
+    },
+    {
+      "documentation": "",
+      "kind": "fn",
+      "line": 14,
+      "module": "stdlib/std/collections/functional.pp",
+      "name": "list_all",
+      "signature": "fn list_all<T: Copy>(items: List<T>, predicate: fn(T) -> bool) -> bool"
+    },
+    {
+      "documentation": "",
+      "kind": "fn",
+      "line": 15,
+      "module": "stdlib/std/collections/functional.pp",
+      "name": "list_count_if",
+      "signature": "fn list_count_if<T: Copy>(items: List<T>, predicate: fn(T) -> bool) -> int"
+    },
+    {
+      "documentation": "",
+      "kind": "fn",
+      "line": 16,
+      "module": "stdlib/std/collections/functional.pp",
+      "name": "list_find_index",
+      "signature": "fn list_find_index<T: Copy>(items: List<T>, predicate: fn(T) -> bool) -> int"
+    },
+    {
+      "documentation": "",
+      "kind": "fn",
+      "line": 17,
+      "module": "stdlib/std/collections/functional.pp",
+      "name": "list_for_each",
+      "signature": "fn list_for_each<T: Copy>(items: List<T>, action: fn(T) -> void) -> void"
+    },
+    {
+      "documentation": "",
+      "kind": "fn",
+      "line": 18,
+      "module": "stdlib/std/collections/functional.pp",
+      "name": "list_take",
+      "signature": "fn list_take<T: Copy>(items: List<T>, count: int) -> List<T>"
+    },
+    {
+      "documentation": "",
+      "kind": "fn",
+      "line": 19,
+      "module": "stdlib/std/collections/functional.pp",
+      "name": "list_drop",
+      "signature": "fn list_drop<T: Copy>(items: List<T>, count: int) -> List<T>"
+    },
+    {
+      "documentation": "",
+      "kind": "struct",
+      "line": 21,
+      "module": "stdlib/std/collections/functional.pp",
+      "name": "Indexed",
+      "signature": "struct Indexed<T>"
+    },
+    {
+      "documentation": "",
+      "kind": "fn",
+      "line": 22,
+      "module": "stdlib/std/collections/functional.pp",
+      "name": "list_enumerate",
+      "signature": "fn list_enumerate<T: Copy>(items: List<T>) -> List<Indexed<T>>"
+    },
+    {
+      "documentation": "",
+      "kind": "struct",
+      "line": 24,
+      "module": "stdlib/std/collections/functional.pp",
+      "name": "Pair",
+      "signature": "struct Pair<T,U>"
+    },
+    {
+      "documentation": "",
+      "kind": "fn",
+      "line": 25,
+      "module": "stdlib/std/collections/functional.pp",
+      "name": "list_zip",
+      "signature": "fn list_zip<T: Copy,U: Copy>(left:List<T>,right:List<U>)->List<Pair<T,U>>"
     },
     {
       "documentation": "",
@@ -243,7 +523,7 @@
     {
       "documentation": "",
       "kind": "fn",
-      "line": 8,
+      "line": 6,
       "module": "stdlib/std/collections/list_ops.pp",
       "name": "list_copy",
       "signature": "fn list_copy<T: Copy>(items: List<T>) -> List<T>"
@@ -251,7 +531,7 @@
     {
       "documentation": "",
       "kind": "fn",
-      "line": 14,
+      "line": 12,
       "module": "stdlib/std/collections/list_ops.pp",
       "name": "list_concat",
       "signature": "fn list_concat<T: Copy>(left: List<T>, right: List<T>) -> List<T>"
@@ -259,7 +539,7 @@
     {
       "documentation": "",
       "kind": "fn",
-      "line": 21,
+      "line": 19,
       "module": "stdlib/std/collections/list_ops.pp",
       "name": "list_reverse",
       "signature": "fn list_reverse<T: Copy>(items: List<T>)"
@@ -267,7 +547,7 @@
     {
       "documentation": "",
       "kind": "fn",
-      "line": 30,
+      "line": 28,
       "module": "stdlib/std/collections/list_ops.pp",
       "name": "list_slice",
       "signature": "fn list_slice<T: Copy>(items: List<T>, start: int, end: int) -> List<T>"
@@ -275,7 +555,7 @@
     {
       "documentation": "",
       "kind": "fn",
-      "line": 42,
+      "line": 40,
       "module": "stdlib/std/collections/list_ops.pp",
       "name": "list_swap",
       "signature": "fn list_swap<T: Copy>(items: List<T>, a: int, b: int)"
@@ -283,7 +563,7 @@
     {
       "documentation": "",
       "kind": "fn",
-      "line": 48,
+      "line": 46,
       "module": "stdlib/std/collections/list_ops.pp",
       "name": "list_fill",
       "signature": "fn list_fill<T: Copy>(count: int, value: T) -> List<T>"
@@ -291,7 +571,7 @@
     {
       "documentation": "",
       "kind": "fn",
-      "line": 55,
+      "line": 53,
       "module": "stdlib/std/collections/list_ops.pp",
       "name": "list_remove_at",
       "signature": "fn list_remove_at<T: Copy>(items: List<T>, index: int)"
@@ -299,7 +579,7 @@
     {
       "documentation": "",
       "kind": "fn",
-      "line": 66,
+      "line": 64,
       "module": "stdlib/std/collections/list_ops.pp",
       "name": "list_insert_at",
       "signature": "fn list_insert_at<T: Copy>(items: List<T>, index: int, value: T)"
@@ -307,7 +587,7 @@
     {
       "documentation": "",
       "kind": "fn",
-      "line": 79,
+      "line": 77,
       "module": "stdlib/std/collections/list_ops.pp",
       "name": "chunk_ints",
       "signature": "fn chunk_ints(items: List<int>, size: int) -> List<int>"
@@ -315,7 +595,7 @@
     {
       "documentation": "",
       "kind": "fn",
-      "line": 97,
+      "line": 95,
       "module": "stdlib/std/collections/list_ops.pp",
       "name": "dedupe_ints",
       "signature": "fn dedupe_ints(items: List<int>) -> List<int>"
@@ -323,7 +603,7 @@
     {
       "documentation": "",
       "kind": "fn",
-      "line": 111,
+      "line": 109,
       "module": "stdlib/std/collections/list_ops.pp",
       "name": "dedupe_strings",
       "signature": "fn dedupe_strings(items: List<str>) -> List<str>"
@@ -331,7 +611,7 @@
     {
       "documentation": "",
       "kind": "fn",
-      "line": 124,
+      "line": 122,
       "module": "stdlib/std/collections/list_ops.pp",
       "name": "filter_greater",
       "signature": "fn filter_greater(items: List<int>, threshold: int) -> List<int>"
@@ -339,7 +619,7 @@
     {
       "documentation": "",
       "kind": "fn",
-      "line": 133,
+      "line": 131,
       "module": "stdlib/std/collections/list_ops.pp",
       "name": "map_scale",
       "signature": "fn map_scale(items: List<int>, factor: int) -> List<int>"
@@ -347,7 +627,7 @@
     {
       "documentation": "",
       "kind": "fn",
-      "line": 139,
+      "line": 137,
       "module": "stdlib/std/collections/list_ops.pp",
       "name": "list_index_of_str",
       "signature": "fn list_index_of_str(items: List<str>, value: str) -> int"
@@ -355,7 +635,7 @@
     {
       "documentation": "",
       "kind": "fn",
-      "line": 146,
+      "line": 144,
       "module": "stdlib/std/collections/list_ops.pp",
       "name": "list_contains_str",
       "signature": "fn list_contains_str(items: List<str>, value: str) -> bool"
@@ -623,6 +903,342 @@
       "module": "stdlib/std/collections/stack.pp",
       "name": "stack_is_empty",
       "signature": "fn stack_is_empty<T: Copy>(items: List<T>) -> bool"
+    },
+    {
+      "documentation": "LZSS compression implemented entirely in PunPun. Stream format: \"PPLZ\" + 32-bit original size + groups of one flag byte and up to eight tokens. Flag 1 = literal byte; flag 0 = two-byte (offset,length) backreference. Window 4095 bytes, match length 3..18.",
+      "kind": "fn",
+      "line": 6,
+      "module": "stdlib/std/compress/lzss.pp",
+      "name": "_lz_push_u32",
+      "signature": "fn _lz_push_u32(out: bytes, value: int) -> void"
+    },
+    {
+      "documentation": "",
+      "kind": "fn",
+      "line": 10,
+      "module": "stdlib/std/compress/lzss.pp",
+      "name": "_lz_read_u32",
+      "signature": "fn _lz_read_u32(data: bytes, at: int) -> int"
+    },
+    {
+      "documentation": "",
+      "kind": "struct",
+      "line": 14,
+      "module": "stdlib/std/compress/lzss.pp",
+      "name": "_LzMatch",
+      "signature": "struct _LzMatch"
+    },
+    {
+      "documentation": "",
+      "kind": "fn",
+      "line": 16,
+      "module": "stdlib/std/compress/lzss.pp",
+      "name": "_lz_best",
+      "signature": "fn _lz_best(data: bytes, pos: int) -> _LzMatch"
+    },
+    {
+      "documentation": "",
+      "kind": "fn",
+      "line": 34,
+      "module": "stdlib/std/compress/lzss.pp",
+      "name": "lzss_compress",
+      "signature": "fn lzss_compress(data: bytes) -> bytes"
+    },
+    {
+      "documentation": "",
+      "kind": "fn",
+      "line": 58,
+      "module": "stdlib/std/compress/lzss.pp",
+      "name": "lzss_decompress",
+      "signature": "fn lzss_decompress(data: bytes) -> bytes"
+    },
+    {
+      "documentation": "",
+      "kind": "fn",
+      "line": 85,
+      "module": "stdlib/std/compress/lzss.pp",
+      "name": "lzss_compress_text",
+      "signature": "fn lzss_compress_text(value: str) -> bytes"
+    },
+    {
+      "documentation": "",
+      "kind": "fn",
+      "line": 86,
+      "module": "stdlib/std/compress/lzss.pp",
+      "name": "lzss_decompress_text",
+      "signature": "fn lzss_decompress_text(data: bytes) -> str"
+    },
+    {
+      "documentation": "Byte run-length encoding. Excellent for repetitive masks/images, intentionally simple and deterministic. Pairs are (count,value), count 1..255.",
+      "kind": "fn",
+      "line": 3,
+      "module": "stdlib/std/compress/rle.pp",
+      "name": "rle_compress",
+      "signature": "fn rle_compress(data: bytes) -> bytes"
+    },
+    {
+      "documentation": "",
+      "kind": "fn",
+      "line": 13,
+      "module": "stdlib/std/compress/rle.pp",
+      "name": "rle_decompress",
+      "signature": "fn rle_decompress(data: bytes) -> bytes"
+    },
+    {
+      "documentation": "Layered application configuration. Values are typed JsonValue entries so a config can hold strings, numbers, booleans and arrays without stringly-typed conversions scattered across the application.",
+      "kind": "object",
+      "line": 7,
+      "module": "stdlib/std/config.pp",
+      "name": "Config",
+      "signature": "object Config"
+    },
+    {
+      "documentation": "",
+      "kind": "fn",
+      "line": 10,
+      "module": "stdlib/std/config.pp",
+      "name": "has",
+      "signature": "public fn has(key:str)->bool"
+    },
+    {
+      "documentation": "",
+      "kind": "fn",
+      "line": 11,
+      "module": "stdlib/std/config.pp",
+      "name": "set",
+      "signature": "public fn set(key:str,value:JsonValue)->void"
+    },
+    {
+      "documentation": "",
+      "kind": "fn",
+      "line": 12,
+      "module": "stdlib/std/config.pp",
+      "name": "get",
+      "signature": "public fn get(key:str)->JsonValue"
+    },
+    {
+      "documentation": "",
+      "kind": "fn",
+      "line": 13,
+      "module": "stdlib/std/config.pp",
+      "name": "string",
+      "signature": "public fn string(key:str,fallback:str)->str"
+    },
+    {
+      "documentation": "",
+      "kind": "fn",
+      "line": 14,
+      "module": "stdlib/std/config.pp",
+      "name": "integer",
+      "signature": "public fn integer(key:str,fallback:int)->int"
+    },
+    {
+      "documentation": "",
+      "kind": "fn",
+      "line": 15,
+      "module": "stdlib/std/config.pp",
+      "name": "boolean",
+      "signature": "public fn boolean(key:str,fallback:bool)->bool"
+    },
+    {
+      "documentation": "",
+      "kind": "fn",
+      "line": 16,
+      "module": "stdlib/std/config.pp",
+      "name": "overlay",
+      "signature": "public fn overlay(other:Map<JsonValue>)->void"
+    },
+    {
+      "documentation": "",
+      "kind": "fn",
+      "line": 17,
+      "module": "stdlib/std/config.pp",
+      "name": "env_string",
+      "signature": "public fn env_string(key:str,env_name:str)->void"
+    },
+    {
+      "documentation": "",
+      "kind": "fn",
+      "line": 18,
+      "module": "stdlib/std/config.pp",
+      "name": "env_int",
+      "signature": "public fn env_int(key:str,env_name:str)->void"
+    },
+    {
+      "documentation": "",
+      "kind": "fn",
+      "line": 19,
+      "module": "stdlib/std/config.pp",
+      "name": "env_bool",
+      "signature": "public fn env_bool(key:str,env_name:str)->void"
+    },
+    {
+      "documentation": "",
+      "kind": "fn",
+      "line": 21,
+      "module": "stdlib/std/config.pp",
+      "name": "config_from_toml",
+      "signature": "fn config_from_toml(source:str)->Config"
+    },
+    {
+      "documentation": "",
+      "kind": "fn",
+      "line": 22,
+      "module": "stdlib/std/config.pp",
+      "name": "config_load_toml",
+      "signature": "fn config_load_toml(path_value:str)->Config"
+    },
+    {
+      "documentation": "SHA-256 implemented in PunPun. Arithmetic is explicitly reduced to 32 bits so checked signed-int overflow never becomes part of the algorithm.",
+      "kind": "fn",
+      "line": 6,
+      "module": "stdlib/std/crypto/sha256.pp",
+      "name": "_u32",
+      "signature": "fn _u32(value: int) -> int"
+    },
+    {
+      "documentation": "",
+      "kind": "fn",
+      "line": 7,
+      "module": "stdlib/std/crypto/sha256.pp",
+      "name": "_rotr32",
+      "signature": "fn _rotr32(value: int, amount: int) -> int"
+    },
+    {
+      "documentation": "",
+      "kind": "fn",
+      "line": 12,
+      "module": "stdlib/std/crypto/sha256.pp",
+      "name": "_shr32",
+      "signature": "fn _shr32(value: int, amount: int) -> int"
+    },
+    {
+      "documentation": "",
+      "kind": "fn",
+      "line": 13,
+      "module": "stdlib/std/crypto/sha256.pp",
+      "name": "_sha_ch",
+      "signature": "fn _sha_ch(x: int, y: int, z: int) -> int"
+    },
+    {
+      "documentation": "",
+      "kind": "fn",
+      "line": 14,
+      "module": "stdlib/std/crypto/sha256.pp",
+      "name": "_sha_maj",
+      "signature": "fn _sha_maj(x: int, y: int, z: int) -> int"
+    },
+    {
+      "documentation": "",
+      "kind": "fn",
+      "line": 15,
+      "module": "stdlib/std/crypto/sha256.pp",
+      "name": "_sha_big0",
+      "signature": "fn _sha_big0(x: int) -> int"
+    },
+    {
+      "documentation": "",
+      "kind": "fn",
+      "line": 16,
+      "module": "stdlib/std/crypto/sha256.pp",
+      "name": "_sha_big1",
+      "signature": "fn _sha_big1(x: int) -> int"
+    },
+    {
+      "documentation": "",
+      "kind": "fn",
+      "line": 17,
+      "module": "stdlib/std/crypto/sha256.pp",
+      "name": "_sha_small0",
+      "signature": "fn _sha_small0(x: int) -> int"
+    },
+    {
+      "documentation": "",
+      "kind": "fn",
+      "line": 18,
+      "module": "stdlib/std/crypto/sha256.pp",
+      "name": "_sha_small1",
+      "signature": "fn _sha_small1(x: int) -> int"
+    },
+    {
+      "documentation": "",
+      "kind": "fn",
+      "line": 20,
+      "module": "stdlib/std/crypto/sha256.pp",
+      "name": "_sha_constants",
+      "signature": "fn _sha_constants() -> List<int>"
+    },
+    {
+      "documentation": "",
+      "kind": "fn",
+      "line": 41,
+      "module": "stdlib/std/crypto/sha256.pp",
+      "name": "_sha_push_u32",
+      "signature": "fn _sha_push_u32(out: bytes, value: int) -> void"
+    },
+    {
+      "documentation": "",
+      "kind": "fn",
+      "line": 46,
+      "module": "stdlib/std/crypto/sha256.pp",
+      "name": "sha256",
+      "signature": "fn sha256(data: bytes) -> bytes"
+    },
+    {
+      "documentation": "",
+      "kind": "fn",
+      "line": 83,
+      "module": "stdlib/std/crypto/sha256.pp",
+      "name": "sha256_text",
+      "signature": "fn sha256_text(value: str) -> bytes"
+    },
+    {
+      "documentation": "",
+      "kind": "fn",
+      "line": 84,
+      "module": "stdlib/std/crypto/sha256.pp",
+      "name": "sha256_hex",
+      "signature": "fn sha256_hex(data: bytes) -> str"
+    },
+    {
+      "documentation": "",
+      "kind": "fn",
+      "line": 85,
+      "module": "stdlib/std/crypto/sha256.pp",
+      "name": "sha256_text_hex",
+      "signature": "fn sha256_text_hex(value: str) -> str"
+    },
+    {
+      "documentation": "",
+      "kind": "fn",
+      "line": 87,
+      "module": "stdlib/std/crypto/sha256.pp",
+      "name": "hmac_sha256",
+      "signature": "fn hmac_sha256(key: bytes, message: bytes) -> bytes"
+    },
+    {
+      "documentation": "",
+      "kind": "fn",
+      "line": 97,
+      "module": "stdlib/std/crypto/sha256.pp",
+      "name": "hmac_sha256_hex",
+      "signature": "fn hmac_sha256_hex(key: bytes, message: bytes) -> str"
+    },
+    {
+      "documentation": "",
+      "kind": "fn",
+      "line": 98,
+      "module": "stdlib/std/crypto/sha256.pp",
+      "name": "hmac_sha256_text_hex",
+      "signature": "fn hmac_sha256_text_hex(key: str, message: str) -> str"
+    },
+    {
+      "documentation": "",
+      "kind": "fn",
+      "line": 100,
+      "module": "stdlib/std/crypto/sha256.pp",
+      "name": "constant_time_equal",
+      "signature": "fn constant_time_equal(left: bytes, right: bytes) -> bool"
     },
     {
       "documentation": "",
@@ -929,6 +1545,494 @@
       "signature": "fn ini_get_bool(values: Map<str>, section: str, key: str, fallback: bool) -> bool"
     },
     {
+      "documentation": "Full JSON values, parsing, serialization and pretty-printing in PunPun. The runtime supplies only strings, bytes, List and Map. JSON semantics live here.",
+      "kind": "fn",
+      "line": 4,
+      "module": "stdlib/std/data/json.pp",
+      "name": "json_null_kind",
+      "signature": "fn json_null_kind() -> int"
+    },
+    {
+      "documentation": "",
+      "kind": "fn",
+      "line": 5,
+      "module": "stdlib/std/data/json.pp",
+      "name": "json_bool_kind",
+      "signature": "fn json_bool_kind() -> int"
+    },
+    {
+      "documentation": "",
+      "kind": "fn",
+      "line": 6,
+      "module": "stdlib/std/data/json.pp",
+      "name": "json_number_kind",
+      "signature": "fn json_number_kind() -> int"
+    },
+    {
+      "documentation": "",
+      "kind": "fn",
+      "line": 7,
+      "module": "stdlib/std/data/json.pp",
+      "name": "json_string_kind",
+      "signature": "fn json_string_kind() -> int"
+    },
+    {
+      "documentation": "",
+      "kind": "fn",
+      "line": 8,
+      "module": "stdlib/std/data/json.pp",
+      "name": "json_array_kind",
+      "signature": "fn json_array_kind() -> int"
+    },
+    {
+      "documentation": "",
+      "kind": "fn",
+      "line": 9,
+      "module": "stdlib/std/data/json.pp",
+      "name": "json_object_kind",
+      "signature": "fn json_object_kind() -> int"
+    },
+    {
+      "documentation": "",
+      "kind": "struct",
+      "line": 11,
+      "module": "stdlib/std/data/json.pp",
+      "name": "JsonValue",
+      "signature": "struct JsonValue"
+    },
+    {
+      "documentation": "",
+      "kind": "fn",
+      "line": 19,
+      "module": "stdlib/std/data/json.pp",
+      "name": "is_null",
+      "signature": "public fn is_null() -> bool"
+    },
+    {
+      "documentation": "",
+      "kind": "fn",
+      "line": 20,
+      "module": "stdlib/std/data/json.pp",
+      "name": "is_bool",
+      "signature": "public fn is_bool() -> bool"
+    },
+    {
+      "documentation": "",
+      "kind": "fn",
+      "line": 21,
+      "module": "stdlib/std/data/json.pp",
+      "name": "is_number",
+      "signature": "public fn is_number() -> bool"
+    },
+    {
+      "documentation": "",
+      "kind": "fn",
+      "line": 22,
+      "module": "stdlib/std/data/json.pp",
+      "name": "is_string",
+      "signature": "public fn is_string() -> bool"
+    },
+    {
+      "documentation": "",
+      "kind": "fn",
+      "line": 23,
+      "module": "stdlib/std/data/json.pp",
+      "name": "is_array",
+      "signature": "public fn is_array() -> bool"
+    },
+    {
+      "documentation": "",
+      "kind": "fn",
+      "line": 24,
+      "module": "stdlib/std/data/json.pp",
+      "name": "is_object",
+      "signature": "public fn is_object() -> bool"
+    },
+    {
+      "documentation": "",
+      "kind": "fn",
+      "line": 25,
+      "module": "stdlib/std/data/json.pp",
+      "name": "bool_or",
+      "signature": "public fn bool_or(fallback: bool) -> bool"
+    },
+    {
+      "documentation": "",
+      "kind": "fn",
+      "line": 26,
+      "module": "stdlib/std/data/json.pp",
+      "name": "number_or",
+      "signature": "public fn number_or(fallback: float) -> float"
+    },
+    {
+      "documentation": "",
+      "kind": "fn",
+      "line": 27,
+      "module": "stdlib/std/data/json.pp",
+      "name": "int_or",
+      "signature": "public fn int_or(fallback: int) -> int"
+    },
+    {
+      "documentation": "",
+      "kind": "fn",
+      "line": 28,
+      "module": "stdlib/std/data/json.pp",
+      "name": "string_or",
+      "signature": "public fn string_or(fallback: str) -> str"
+    },
+    {
+      "documentation": "",
+      "kind": "fn",
+      "line": 29,
+      "module": "stdlib/std/data/json.pp",
+      "name": "size",
+      "signature": "public fn size() -> int"
+    },
+    {
+      "documentation": "",
+      "kind": "fn",
+      "line": 34,
+      "module": "stdlib/std/data/json.pp",
+      "name": "at",
+      "signature": "public fn at(index: int) -> JsonValue"
+    },
+    {
+      "documentation": "",
+      "kind": "fn",
+      "line": 38,
+      "module": "stdlib/std/data/json.pp",
+      "name": "has",
+      "signature": "public fn has(key: str) -> bool"
+    },
+    {
+      "documentation": "",
+      "kind": "fn",
+      "line": 39,
+      "module": "stdlib/std/data/json.pp",
+      "name": "get",
+      "signature": "public fn get(key: str) -> JsonValue"
+    },
+    {
+      "documentation": "",
+      "kind": "fn",
+      "line": 43,
+      "module": "stdlib/std/data/json.pp",
+      "name": "get_string",
+      "signature": "public fn get_string(key: str, fallback: str) -> str"
+    },
+    {
+      "documentation": "",
+      "kind": "fn",
+      "line": 44,
+      "module": "stdlib/std/data/json.pp",
+      "name": "get_int",
+      "signature": "public fn get_int(key: str, fallback: int) -> int"
+    },
+    {
+      "documentation": "",
+      "kind": "fn",
+      "line": 45,
+      "module": "stdlib/std/data/json.pp",
+      "name": "get_bool",
+      "signature": "public fn get_bool(key: str, fallback: bool) -> bool"
+    },
+    {
+      "documentation": "",
+      "kind": "fn",
+      "line": 46,
+      "module": "stdlib/std/data/json.pp",
+      "name": "push",
+      "signature": "public fn push(value: JsonValue) -> JsonValue"
+    },
+    {
+      "documentation": "",
+      "kind": "fn",
+      "line": 47,
+      "module": "stdlib/std/data/json.pp",
+      "name": "put",
+      "signature": "public fn put(key: str, value: JsonValue) -> JsonValue"
+    },
+    {
+      "documentation": "",
+      "kind": "fn",
+      "line": 48,
+      "module": "stdlib/std/data/json.pp",
+      "name": "encode",
+      "signature": "public fn encode() -> str"
+    },
+    {
+      "documentation": "",
+      "kind": "fn",
+      "line": 49,
+      "module": "stdlib/std/data/json.pp",
+      "name": "pretty",
+      "signature": "public fn pretty(indent: int) -> str"
+    },
+    {
+      "documentation": "",
+      "kind": "fn",
+      "line": 51,
+      "module": "stdlib/std/data/json.pp",
+      "name": "json_null",
+      "signature": "fn json_null() -> JsonValue"
+    },
+    {
+      "documentation": "",
+      "kind": "fn",
+      "line": 52,
+      "module": "stdlib/std/data/json.pp",
+      "name": "json_bool",
+      "signature": "fn json_bool(value: bool) -> JsonValue"
+    },
+    {
+      "documentation": "",
+      "kind": "fn",
+      "line": 53,
+      "module": "stdlib/std/data/json.pp",
+      "name": "json_number",
+      "signature": "fn json_number(value: float) -> JsonValue"
+    },
+    {
+      "documentation": "",
+      "kind": "fn",
+      "line": 54,
+      "module": "stdlib/std/data/json.pp",
+      "name": "json_int",
+      "signature": "fn json_int(value: int) -> JsonValue"
+    },
+    {
+      "documentation": "",
+      "kind": "fn",
+      "line": 55,
+      "module": "stdlib/std/data/json.pp",
+      "name": "json_string",
+      "signature": "fn json_string(value: str) -> JsonValue"
+    },
+    {
+      "documentation": "",
+      "kind": "fn",
+      "line": 56,
+      "module": "stdlib/std/data/json.pp",
+      "name": "json_array",
+      "signature": "fn json_array() -> JsonValue"
+    },
+    {
+      "documentation": "",
+      "kind": "fn",
+      "line": 57,
+      "module": "stdlib/std/data/json.pp",
+      "name": "json_object",
+      "signature": "fn json_object() -> JsonValue"
+    },
+    {
+      "documentation": "",
+      "kind": "struct",
+      "line": 59,
+      "module": "stdlib/std/data/json.pp",
+      "name": "JsonParseResult",
+      "signature": "struct JsonParseResult"
+    },
+    {
+      "documentation": "",
+      "kind": "fn",
+      "line": 63,
+      "module": "stdlib/std/data/json.pp",
+      "name": "ok",
+      "signature": "public fn ok() -> bool"
+    },
+    {
+      "documentation": "",
+      "kind": "object",
+      "line": 66,
+      "module": "stdlib/std/data/json.pp",
+      "name": "_JsonParser",
+      "signature": "object _JsonParser"
+    },
+    {
+      "documentation": "",
+      "kind": "fn",
+      "line": 72,
+      "module": "stdlib/std/data/json.pp",
+      "name": "fail",
+      "signature": "public fn fail(message: str) -> void"
+    },
+    {
+      "documentation": "",
+      "kind": "fn",
+      "line": 75,
+      "module": "stdlib/std/data/json.pp",
+      "name": "skip_space",
+      "signature": "public fn skip_space() -> void"
+    },
+    {
+      "documentation": "",
+      "kind": "fn",
+      "line": 82,
+      "module": "stdlib/std/data/json.pp",
+      "name": "take",
+      "signature": "public fn take(expected: int) -> bool"
+    },
+    {
+      "documentation": "",
+      "kind": "fn",
+      "line": 88,
+      "module": "stdlib/std/data/json.pp",
+      "name": "parse_value",
+      "signature": "public fn parse_value(depth: int) -> JsonValue"
+    },
+    {
+      "documentation": "",
+      "kind": "fn",
+      "line": 103,
+      "module": "stdlib/std/data/json.pp",
+      "name": "parse_literal",
+      "signature": "public fn parse_literal(word: str, value: JsonValue) -> JsonValue"
+    },
+    {
+      "documentation": "",
+      "kind": "fn",
+      "line": 110,
+      "module": "stdlib/std/data/json.pp",
+      "name": "parse_number",
+      "signature": "public fn parse_number() -> JsonValue"
+    },
+    {
+      "documentation": "",
+      "kind": "fn",
+      "line": 157,
+      "module": "stdlib/std/data/json.pp",
+      "name": "hex_digit",
+      "signature": "public fn hex_digit(c: int) -> int"
+    },
+    {
+      "documentation": "",
+      "kind": "fn",
+      "line": 163,
+      "module": "stdlib/std/data/json.pp",
+      "name": "unicode4",
+      "signature": "public fn unicode4() -> int"
+    },
+    {
+      "documentation": "",
+      "kind": "fn",
+      "line": 174,
+      "module": "stdlib/std/data/json.pp",
+      "name": "utf8",
+      "signature": "public fn utf8(codepoint: int) -> str"
+    },
+    {
+      "documentation": "",
+      "kind": "fn",
+      "line": 184,
+      "module": "stdlib/std/data/json.pp",
+      "name": "parse_string",
+      "signature": "public fn parse_string() -> str"
+    },
+    {
+      "documentation": "",
+      "kind": "fn",
+      "line": 222,
+      "module": "stdlib/std/data/json.pp",
+      "name": "parse_array",
+      "signature": "public fn parse_array(depth: int) -> JsonValue"
+    },
+    {
+      "documentation": "",
+      "kind": "fn",
+      "line": 235,
+      "module": "stdlib/std/data/json.pp",
+      "name": "parse_object",
+      "signature": "public fn parse_object(depth: int) -> JsonValue"
+    },
+    {
+      "documentation": "",
+      "kind": "fn",
+      "line": 256,
+      "module": "stdlib/std/data/json.pp",
+      "name": "json_parse",
+      "signature": "fn json_parse(source: str) -> JsonParseResult"
+    },
+    {
+      "documentation": "",
+      "kind": "fn",
+      "line": 264,
+      "module": "stdlib/std/data/json.pp",
+      "name": "json_parse_or_panic",
+      "signature": "fn json_parse_or_panic(source: str) -> JsonValue"
+    },
+    {
+      "documentation": "",
+      "kind": "fn",
+      "line": 270,
+      "module": "stdlib/std/data/json.pp",
+      "name": "_json_escape",
+      "signature": "fn _json_escape(value: str) -> str"
+    },
+    {
+      "documentation": "",
+      "kind": "fn",
+      "line": 289,
+      "module": "stdlib/std/data/json.pp",
+      "name": "_json_number",
+      "signature": "fn _json_number(value: float) -> str"
+    },
+    {
+      "documentation": "",
+      "kind": "fn",
+      "line": 296,
+      "module": "stdlib/std/data/json.pp",
+      "name": "json_stringify",
+      "signature": "fn json_stringify(value: JsonValue) -> str"
+    },
+    {
+      "documentation": "",
+      "kind": "fn",
+      "line": 319,
+      "module": "stdlib/std/data/json.pp",
+      "name": "_json_indent",
+      "signature": "fn _json_indent(depth: int, width: int) -> str"
+    },
+    {
+      "documentation": "",
+      "kind": "fn",
+      "line": 321,
+      "module": "stdlib/std/data/json.pp",
+      "name": "_json_pretty",
+      "signature": "fn _json_pretty(value: JsonValue, width: int, depth: int) -> str"
+    },
+    {
+      "documentation": "",
+      "kind": "fn",
+      "line": 342,
+      "module": "stdlib/std/data/json.pp",
+      "name": "json_pretty",
+      "signature": "fn json_pretty(value: JsonValue, indent: int) -> str"
+    },
+    {
+      "documentation": "",
+      "kind": "fn",
+      "line": 347,
+      "module": "stdlib/std/data/json.pp",
+      "name": "json_equal",
+      "signature": "fn json_equal(left: JsonValue, right: JsonValue) -> bool"
+    },
+    {
+      "documentation": "Common MIME inference by file extension. Unknown files intentionally use the safe generic binary type instead of guessing text.",
+      "kind": "fn",
+      "line": 3,
+      "module": "stdlib/std/data/mime.pp",
+      "name": "mime_type",
+      "signature": "fn mime_type(path_value:str)->str"
+    },
+    {
+      "documentation": "",
+      "kind": "fn",
+      "line": 11,
+      "module": "stdlib/std/data/mime.pp",
+      "name": "mime_is_text",
+      "signature": "fn mime_is_text(value:str)->bool"
+    },
+    {
       "documentation": "",
       "kind": "fn",
       "line": 3,
@@ -977,6 +2081,110 @@
       "signature": "fn query_decode(query: str) -> Map<str>"
     },
     {
+      "documentation": "Practical TOML configuration parser written in PunPun. Values reuse JsonValue because TOML's scalar/array/table data model overlaps JSON well. Keys are stored as dotted paths; this keeps lookup cheap and avoids hiding a second tree representation behind native code.",
+      "kind": "struct",
+      "line": 8,
+      "module": "stdlib/std/data/toml.pp",
+      "name": "TomlParseResult",
+      "signature": "struct TomlParseResult"
+    },
+    {
+      "documentation": "",
+      "kind": "fn",
+      "line": 12,
+      "module": "stdlib/std/data/toml.pp",
+      "name": "ok",
+      "signature": "public fn ok() -> bool"
+    },
+    {
+      "documentation": "",
+      "kind": "fn",
+      "line": 13,
+      "module": "stdlib/std/data/toml.pp",
+      "name": "has",
+      "signature": "public fn has(path: str) -> bool"
+    },
+    {
+      "documentation": "",
+      "kind": "fn",
+      "line": 14,
+      "module": "stdlib/std/data/toml.pp",
+      "name": "get",
+      "signature": "public fn get(path: str) -> JsonValue"
+    },
+    {
+      "documentation": "",
+      "kind": "fn",
+      "line": 18,
+      "module": "stdlib/std/data/toml.pp",
+      "name": "get_string",
+      "signature": "public fn get_string(path: str, fallback: str) -> str"
+    },
+    {
+      "documentation": "",
+      "kind": "fn",
+      "line": 19,
+      "module": "stdlib/std/data/toml.pp",
+      "name": "get_int",
+      "signature": "public fn get_int(path: str, fallback: int) -> int"
+    },
+    {
+      "documentation": "",
+      "kind": "fn",
+      "line": 20,
+      "module": "stdlib/std/data/toml.pp",
+      "name": "get_bool",
+      "signature": "public fn get_bool(path: str, fallback: bool) -> bool"
+    },
+    {
+      "documentation": "",
+      "kind": "fn",
+      "line": 23,
+      "module": "stdlib/std/data/toml.pp",
+      "name": "_toml_strip_comment",
+      "signature": "fn _toml_strip_comment(line: str) -> str"
+    },
+    {
+      "documentation": "",
+      "kind": "fn",
+      "line": 40,
+      "module": "stdlib/std/data/toml.pp",
+      "name": "_toml_unescape_string",
+      "signature": "fn _toml_unescape_string(source: str) -> str"
+    },
+    {
+      "documentation": "",
+      "kind": "fn",
+      "line": 48,
+      "module": "stdlib/std/data/toml.pp",
+      "name": "_toml_split_array",
+      "signature": "fn _toml_split_array(source: str) -> List<str>"
+    },
+    {
+      "documentation": "",
+      "kind": "fn",
+      "line": 75,
+      "module": "stdlib/std/data/toml.pp",
+      "name": "_toml_parse_value",
+      "signature": "fn _toml_parse_value(source: str) -> JsonValue"
+    },
+    {
+      "documentation": "",
+      "kind": "fn",
+      "line": 99,
+      "module": "stdlib/std/data/toml.pp",
+      "name": "toml_parse",
+      "signature": "fn toml_parse(source: str) -> TomlParseResult"
+    },
+    {
+      "documentation": "",
+      "kind": "fn",
+      "line": 123,
+      "module": "stdlib/std/data/toml.pp",
+      "name": "toml_stringify",
+      "signature": "fn toml_stringify(values: Map<JsonValue>) -> str"
+    },
+    {
       "documentation": "",
       "kind": "fn",
       "line": 8,
@@ -999,6 +2207,398 @@
       "module": "stdlib/std/data/uuid.pp",
       "name": "uuid_nil",
       "signature": "fn uuid_nil() -> str"
+    },
+    {
+      "documentation": "Date/time value types and ISO-8601 formatting/parsing in PunPun. Host primitives only provide wall/monotonic clocks and local decomposition.",
+      "kind": "struct",
+      "line": 4,
+      "module": "stdlib/std/datetime.pp",
+      "name": "Duration",
+      "signature": "struct Duration"
+    },
+    {
+      "documentation": "",
+      "kind": "fn",
+      "line": 6,
+      "module": "stdlib/std/datetime.pp",
+      "name": "seconds",
+      "signature": "public fn seconds() -> float"
+    },
+    {
+      "documentation": "",
+      "kind": "fn",
+      "line": 7,
+      "module": "stdlib/std/datetime.pp",
+      "name": "minutes",
+      "signature": "public fn minutes() -> float"
+    },
+    {
+      "documentation": "",
+      "kind": "fn",
+      "line": 8,
+      "module": "stdlib/std/datetime.pp",
+      "name": "hours",
+      "signature": "public fn hours() -> float"
+    },
+    {
+      "documentation": "",
+      "kind": "fn",
+      "line": 10,
+      "module": "stdlib/std/datetime.pp",
+      "name": "milliseconds",
+      "signature": "fn milliseconds(value:int)->Duration"
+    },
+    {
+      "documentation": "",
+      "kind": "fn",
+      "line": 11,
+      "module": "stdlib/std/datetime.pp",
+      "name": "seconds",
+      "signature": "fn seconds(value:int)->Duration"
+    },
+    {
+      "documentation": "",
+      "kind": "fn",
+      "line": 12,
+      "module": "stdlib/std/datetime.pp",
+      "name": "minutes",
+      "signature": "fn minutes(value:int)->Duration"
+    },
+    {
+      "documentation": "",
+      "kind": "fn",
+      "line": 13,
+      "module": "stdlib/std/datetime.pp",
+      "name": "hours",
+      "signature": "fn hours(value:int)->Duration"
+    },
+    {
+      "documentation": "",
+      "kind": "struct",
+      "line": 15,
+      "module": "stdlib/std/datetime.pp",
+      "name": "DateTime",
+      "signature": "struct DateTime"
+    },
+    {
+      "documentation": "",
+      "kind": "fn",
+      "line": 17,
+      "module": "stdlib/std/datetime.pp",
+      "name": "iso",
+      "signature": "public fn iso() -> str"
+    },
+    {
+      "documentation": "",
+      "kind": "fn",
+      "line": 20,
+      "module": "stdlib/std/datetime.pp",
+      "name": "datetime_now_local",
+      "signature": "fn datetime_now_local() -> DateTime"
+    },
+    {
+      "documentation": "",
+      "kind": "fn",
+      "line": 24,
+      "module": "stdlib/std/datetime.pp",
+      "name": "datetime_is_leap_year",
+      "signature": "fn datetime_is_leap_year(year:int)->bool"
+    },
+    {
+      "documentation": "",
+      "kind": "fn",
+      "line": 25,
+      "module": "stdlib/std/datetime.pp",
+      "name": "datetime_days_in_month",
+      "signature": "fn datetime_days_in_month(year:int,month:int)->int"
+    },
+    {
+      "documentation": "",
+      "kind": "fn",
+      "line": 29,
+      "module": "stdlib/std/datetime.pp",
+      "name": "datetime_valid",
+      "signature": "fn datetime_valid(value:DateTime)->bool"
+    },
+    {
+      "documentation": "",
+      "kind": "fn",
+      "line": 33,
+      "module": "stdlib/std/datetime.pp",
+      "name": "_days_from_civil",
+      "signature": "fn _days_from_civil(year:int,month:int,day:int)->int"
+    },
+    {
+      "documentation": "",
+      "kind": "fn",
+      "line": 40,
+      "module": "stdlib/std/datetime.pp",
+      "name": "datetime_to_epoch_ms_utc",
+      "signature": "fn datetime_to_epoch_ms_utc(value:DateTime)->int"
+    },
+    {
+      "documentation": "",
+      "kind": "fn",
+      "line": 44,
+      "module": "stdlib/std/datetime.pp",
+      "name": "_dt_two",
+      "signature": "fn _dt_two(v:int)->str"
+    },
+    {
+      "documentation": "",
+      "kind": "fn",
+      "line": 45,
+      "module": "stdlib/std/datetime.pp",
+      "name": "_dt_three",
+      "signature": "fn _dt_three(v:int)->str"
+    },
+    {
+      "documentation": "",
+      "kind": "fn",
+      "line": 46,
+      "module": "stdlib/std/datetime.pp",
+      "name": "datetime_format_iso",
+      "signature": "fn datetime_format_iso(value:DateTime)->str"
+    },
+    {
+      "documentation": "",
+      "kind": "fn",
+      "line": 49,
+      "module": "stdlib/std/datetime.pp",
+      "name": "_dt_digits",
+      "signature": "fn _dt_digits(source:str,start:int,count:int)->int"
+    },
+    {
+      "documentation": "",
+      "kind": "fn",
+      "line": 53,
+      "module": "stdlib/std/datetime.pp",
+      "name": "datetime_parse_iso",
+      "signature": "fn datetime_parse_iso(source:str)->DateTime"
+    },
+    {
+      "documentation": "",
+      "kind": "fn",
+      "line": 61,
+      "module": "stdlib/std/datetime.pp",
+      "name": "duration_between_ms",
+      "signature": "fn duration_between_ms(start:int,finish:int)->Duration"
+    },
+    {
+      "documentation": "Small durable document/key-value database implemented in PunPun. It intentionally favors correctness and inspectability over pretending to be a relational engine: one JSON object is atomically replaced on commit.",
+      "kind": "object",
+      "line": 8,
+      "module": "stdlib/std/db/kv.pp",
+      "name": "KeyValueDb",
+      "signature": "object KeyValueDb"
+    },
+    {
+      "documentation": "",
+      "kind": "fn",
+      "line": 22,
+      "module": "stdlib/std/db/kv.pp",
+      "name": "reload",
+      "signature": "public fn reload() -> bool"
+    },
+    {
+      "documentation": "",
+      "kind": "fn",
+      "line": 36,
+      "module": "stdlib/std/db/kv.pp",
+      "name": "has",
+      "signature": "public fn has(key: str) -> bool"
+    },
+    {
+      "documentation": "",
+      "kind": "fn",
+      "line": 37,
+      "module": "stdlib/std/db/kv.pp",
+      "name": "get",
+      "signature": "public fn get(key: str) -> JsonValue"
+    },
+    {
+      "documentation": "",
+      "kind": "fn",
+      "line": 41,
+      "module": "stdlib/std/db/kv.pp",
+      "name": "get_string",
+      "signature": "public fn get_string(key: str, fallback: str) -> str"
+    },
+    {
+      "documentation": "",
+      "kind": "fn",
+      "line": 42,
+      "module": "stdlib/std/db/kv.pp",
+      "name": "get_int",
+      "signature": "public fn get_int(key: str, fallback: int) -> int"
+    },
+    {
+      "documentation": "",
+      "kind": "fn",
+      "line": 43,
+      "module": "stdlib/std/db/kv.pp",
+      "name": "get_bool",
+      "signature": "public fn get_bool(key: str, fallback: bool) -> bool"
+    },
+    {
+      "documentation": "",
+      "kind": "fn",
+      "line": 45,
+      "module": "stdlib/std/db/kv.pp",
+      "name": "set",
+      "signature": "public fn set(key: str, value: JsonValue) -> void"
+    },
+    {
+      "documentation": "",
+      "kind": "fn",
+      "line": 46,
+      "module": "stdlib/std/db/kv.pp",
+      "name": "set_string",
+      "signature": "public fn set_string(key: str, value: str) -> void"
+    },
+    {
+      "documentation": "",
+      "kind": "fn",
+      "line": 47,
+      "module": "stdlib/std/db/kv.pp",
+      "name": "set_int",
+      "signature": "public fn set_int(key: str, value: int) -> void"
+    },
+    {
+      "documentation": "",
+      "kind": "fn",
+      "line": 48,
+      "module": "stdlib/std/db/kv.pp",
+      "name": "set_bool",
+      "signature": "public fn set_bool(key: str, value: bool) -> void"
+    },
+    {
+      "documentation": "",
+      "kind": "fn",
+      "line": 49,
+      "module": "stdlib/std/db/kv.pp",
+      "name": "remove",
+      "signature": "public fn remove(key: str) -> bool"
+    },
+    {
+      "documentation": "",
+      "kind": "fn",
+      "line": 54,
+      "module": "stdlib/std/db/kv.pp",
+      "name": "size",
+      "signature": "public fn size() -> int"
+    },
+    {
+      "documentation": "",
+      "kind": "fn",
+      "line": 55,
+      "module": "stdlib/std/db/kv.pp",
+      "name": "keys",
+      "signature": "public fn keys() -> List<str>"
+    },
+    {
+      "documentation": "",
+      "kind": "fn",
+      "line": 57,
+      "module": "stdlib/std/db/kv.pp",
+      "name": "commit",
+      "signature": "public fn commit() -> bool"
+    },
+    {
+      "documentation": "",
+      "kind": "fn",
+      "line": 66,
+      "module": "stdlib/std/db/kv.pp",
+      "name": "open_kv",
+      "signature": "fn open_kv(path: str) -> KeyValueDb"
+    },
+    {
+      "documentation": "",
+      "kind": "struct",
+      "line": 4,
+      "module": "stdlib/std/filesystem.pp",
+      "name": "FileInfo",
+      "signature": "struct FileInfo"
+    },
+    {
+      "documentation": "",
+      "kind": "fn",
+      "line": 5,
+      "module": "stdlib/std/filesystem.pp",
+      "name": "file_info",
+      "signature": "fn file_info(value:str)->FileInfo"
+    },
+    {
+      "documentation": "",
+      "kind": "fn",
+      "line": 6,
+      "module": "stdlib/std/filesystem.pp",
+      "name": "fs_copy_file",
+      "signature": "fn fs_copy_file(source:str,destination:str)->void"
+    },
+    {
+      "documentation": "",
+      "kind": "fn",
+      "line": 7,
+      "module": "stdlib/std/filesystem.pp",
+      "name": "fs_copy_tree",
+      "signature": "fn fs_copy_tree(source:str,destination:str,max_depth:int)->void"
+    },
+    {
+      "documentation": "",
+      "kind": "fn",
+      "line": 12,
+      "module": "stdlib/std/filesystem.pp",
+      "name": "fs_remove_tree",
+      "signature": "fn fs_remove_tree(target:str,max_depth:int)->bool"
+    },
+    {
+      "documentation": "",
+      "kind": "fn",
+      "line": 17,
+      "module": "stdlib/std/filesystem.pp",
+      "name": "fs_walk",
+      "signature": "fn fs_walk(root:str,max_depth:int)->List<FileInfo>"
+    },
+    {
+      "documentation": "",
+      "kind": "fn",
+      "line": 18,
+      "module": "stdlib/std/filesystem.pp",
+      "name": "_fs_walk_into",
+      "signature": "fn _fs_walk_into(root:str,depth:int,out:List<FileInfo>)->void"
+    },
+    {
+      "documentation": "",
+      "kind": "fn",
+      "line": 19,
+      "module": "stdlib/std/filesystem.pp",
+      "name": "fs_read_lines",
+      "signature": "fn fs_read_lines(path_value:str)->List<str>"
+    },
+    {
+      "documentation": "",
+      "kind": "fn",
+      "line": 20,
+      "module": "stdlib/std/filesystem.pp",
+      "name": "fs_write_lines",
+      "signature": "fn fs_write_lines(path_value:str,lines:List<str>)->void"
+    },
+    {
+      "documentation": "",
+      "kind": "fn",
+      "line": 21,
+      "module": "stdlib/std/filesystem.pp",
+      "name": "fs_temp_name",
+      "signature": "fn fs_temp_name(prefix:str,suffix:str)->str"
+    },
+    {
+      "documentation": "",
+      "kind": "fn",
+      "line": 22,
+      "module": "stdlib/std/filesystem.pp",
+      "name": "fs_write_text_atomic",
+      "signature": "fn fs_write_text_atomic(path_value:str,content:str)->void"
     },
     {
       "documentation": "",
@@ -1057,9 +2657,9 @@
       "signature": "fn fs_join(left: String, right: String) -> String"
     },
     {
-      "documentation": "Cross-platform native GUI helpers. gui_available() and gui_message(title, message) are compiler builtins. On Windows they use Win32. Linux and other POSIX hosts use X11/XWayland when it is installed and a display is available; headless programs receive false.",
+      "documentation": "Retained cross-platform GUI toolkit. Native windows use Win32 on Windows and X11/XWayland on POSIX. Set PUNPUN_GUI_HEADLESS=1 for deterministic CI/model tests without a display. Every control is represented by a small runtime handle; layout and event-loop helpers live here in PunPun so all compiler backends observe identical rules.",
       "kind": "fn",
-      "line": 7,
+      "line": 8,
       "module": "stdlib/std/gui.pp",
       "name": "gui_supported",
       "signature": "fn gui_supported() -> bool"
@@ -1067,10 +2667,594 @@
     {
       "documentation": "",
       "kind": "fn",
-      "line": 11,
+      "line": 9,
+      "module": "stdlib/std/gui.pp",
+      "name": "gui_is_headless",
+      "signature": "fn gui_is_headless() -> bool"
+    },
+    {
+      "documentation": "",
+      "kind": "fn",
+      "line": 10,
       "module": "stdlib/std/gui.pp",
       "name": "gui_alert",
-      "signature": "fn gui_alert(message: String) -> bool"
+      "signature": "fn gui_alert(message: str) -> bool"
+    },
+    {
+      "documentation": "Widget kinds.",
+      "kind": "fn",
+      "line": 13,
+      "module": "stdlib/std/gui.pp",
+      "name": "gui_label_kind",
+      "signature": "fn gui_label_kind() -> int"
+    },
+    {
+      "documentation": "",
+      "kind": "fn",
+      "line": 14,
+      "module": "stdlib/std/gui.pp",
+      "name": "gui_button_kind",
+      "signature": "fn gui_button_kind() -> int"
+    },
+    {
+      "documentation": "",
+      "kind": "fn",
+      "line": 15,
+      "module": "stdlib/std/gui.pp",
+      "name": "gui_input_kind",
+      "signature": "fn gui_input_kind() -> int"
+    },
+    {
+      "documentation": "",
+      "kind": "fn",
+      "line": 16,
+      "module": "stdlib/std/gui.pp",
+      "name": "gui_checkbox_kind",
+      "signature": "fn gui_checkbox_kind() -> int"
+    },
+    {
+      "documentation": "",
+      "kind": "fn",
+      "line": 17,
+      "module": "stdlib/std/gui.pp",
+      "name": "gui_slider_kind",
+      "signature": "fn gui_slider_kind() -> int"
+    },
+    {
+      "documentation": "",
+      "kind": "fn",
+      "line": 18,
+      "module": "stdlib/std/gui.pp",
+      "name": "gui_progress_kind",
+      "signature": "fn gui_progress_kind() -> int"
+    },
+    {
+      "documentation": "",
+      "kind": "fn",
+      "line": 19,
+      "module": "stdlib/std/gui.pp",
+      "name": "gui_panel_kind",
+      "signature": "fn gui_panel_kind() -> int"
+    },
+    {
+      "documentation": "",
+      "kind": "fn",
+      "line": 20,
+      "module": "stdlib/std/gui.pp",
+      "name": "gui_canvas_kind",
+      "signature": "fn gui_canvas_kind() -> int"
+    },
+    {
+      "documentation": "Event kinds.",
+      "kind": "fn",
+      "line": 23,
+      "module": "stdlib/std/gui.pp",
+      "name": "gui_event_none",
+      "signature": "fn gui_event_none() -> int"
+    },
+    {
+      "documentation": "",
+      "kind": "fn",
+      "line": 24,
+      "module": "stdlib/std/gui.pp",
+      "name": "gui_event_close",
+      "signature": "fn gui_event_close() -> int"
+    },
+    {
+      "documentation": "",
+      "kind": "fn",
+      "line": 25,
+      "module": "stdlib/std/gui.pp",
+      "name": "gui_event_click",
+      "signature": "fn gui_event_click() -> int"
+    },
+    {
+      "documentation": "",
+      "kind": "fn",
+      "line": 26,
+      "module": "stdlib/std/gui.pp",
+      "name": "gui_event_change",
+      "signature": "fn gui_event_change() -> int"
+    },
+    {
+      "documentation": "",
+      "kind": "fn",
+      "line": 27,
+      "module": "stdlib/std/gui.pp",
+      "name": "gui_event_key",
+      "signature": "fn gui_event_key() -> int"
+    },
+    {
+      "documentation": "",
+      "kind": "fn",
+      "line": 28,
+      "module": "stdlib/std/gui.pp",
+      "name": "gui_event_text_changed",
+      "signature": "fn gui_event_text_changed() -> int"
+    },
+    {
+      "documentation": "",
+      "kind": "fn",
+      "line": 29,
+      "module": "stdlib/std/gui.pp",
+      "name": "gui_event_mouse_move",
+      "signature": "fn gui_event_mouse_move() -> int"
+    },
+    {
+      "documentation": "",
+      "kind": "fn",
+      "line": 30,
+      "module": "stdlib/std/gui.pp",
+      "name": "gui_event_mouse_down",
+      "signature": "fn gui_event_mouse_down() -> int"
+    },
+    {
+      "documentation": "",
+      "kind": "fn",
+      "line": 31,
+      "module": "stdlib/std/gui.pp",
+      "name": "gui_event_mouse_up",
+      "signature": "fn gui_event_mouse_up() -> int"
+    },
+    {
+      "documentation": "",
+      "kind": "fn",
+      "line": 32,
+      "module": "stdlib/std/gui.pp",
+      "name": "gui_event_resize",
+      "signature": "fn gui_event_resize() -> int"
+    },
+    {
+      "documentation": "",
+      "kind": "fn",
+      "line": 33,
+      "module": "stdlib/std/gui.pp",
+      "name": "gui_event_paint",
+      "signature": "fn gui_event_paint() -> int"
+    },
+    {
+      "documentation": "",
+      "kind": "object",
+      "line": 35,
+      "module": "stdlib/std/gui.pp",
+      "name": "GuiEvent",
+      "signature": "object GuiEvent"
+    },
+    {
+      "documentation": "",
+      "kind": "fn",
+      "line": 54,
+      "module": "stdlib/std/gui.pp",
+      "name": "is_close",
+      "signature": "public fn is_close() -> bool"
+    },
+    {
+      "documentation": "",
+      "kind": "fn",
+      "line": 55,
+      "module": "stdlib/std/gui.pp",
+      "name": "is_click",
+      "signature": "public fn is_click() -> bool"
+    },
+    {
+      "documentation": "",
+      "kind": "fn",
+      "line": 56,
+      "module": "stdlib/std/gui.pp",
+      "name": "is_change",
+      "signature": "public fn is_change() -> bool"
+    },
+    {
+      "documentation": "",
+      "kind": "fn",
+      "line": 57,
+      "module": "stdlib/std/gui.pp",
+      "name": "is_text",
+      "signature": "public fn is_text() -> bool"
+    },
+    {
+      "documentation": "",
+      "kind": "object",
+      "line": 60,
+      "module": "stdlib/std/gui.pp",
+      "name": "GuiWidget",
+      "signature": "object GuiWidget"
+    },
+    {
+      "documentation": "",
+      "kind": "fn",
+      "line": 69,
+      "module": "stdlib/std/gui.pp",
+      "name": "valid",
+      "signature": "public fn valid() -> bool"
+    },
+    {
+      "documentation": "",
+      "kind": "fn",
+      "line": 70,
+      "module": "stdlib/std/gui.pp",
+      "name": "bounds",
+      "signature": "public fn bounds(x: int, y: int, width: int, height: int) -> bool"
+    },
+    {
+      "documentation": "",
+      "kind": "fn",
+      "line": 73,
+      "module": "stdlib/std/gui.pp",
+      "name": "x",
+      "signature": "public fn x() -> int"
+    },
+    {
+      "documentation": "",
+      "kind": "fn",
+      "line": 74,
+      "module": "stdlib/std/gui.pp",
+      "name": "y",
+      "signature": "public fn y() -> int"
+    },
+    {
+      "documentation": "",
+      "kind": "fn",
+      "line": 75,
+      "module": "stdlib/std/gui.pp",
+      "name": "width",
+      "signature": "public fn width() -> int"
+    },
+    {
+      "documentation": "",
+      "kind": "fn",
+      "line": 76,
+      "module": "stdlib/std/gui.pp",
+      "name": "height",
+      "signature": "public fn height() -> int"
+    },
+    {
+      "documentation": "",
+      "kind": "fn",
+      "line": 77,
+      "module": "stdlib/std/gui.pp",
+      "name": "set_text",
+      "signature": "public fn set_text(value: str) -> bool"
+    },
+    {
+      "documentation": "",
+      "kind": "fn",
+      "line": 78,
+      "module": "stdlib/std/gui.pp",
+      "name": "text",
+      "signature": "public fn text() -> str"
+    },
+    {
+      "documentation": "",
+      "kind": "fn",
+      "line": 79,
+      "module": "stdlib/std/gui.pp",
+      "name": "set_value",
+      "signature": "public fn set_value(value: int) -> bool"
+    },
+    {
+      "documentation": "",
+      "kind": "fn",
+      "line": 80,
+      "module": "stdlib/std/gui.pp",
+      "name": "value",
+      "signature": "public fn value() -> int"
+    },
+    {
+      "documentation": "",
+      "kind": "fn",
+      "line": 81,
+      "module": "stdlib/std/gui.pp",
+      "name": "set_range",
+      "signature": "public fn set_range(minimum: int, maximum: int) -> bool"
+    },
+    {
+      "documentation": "",
+      "kind": "fn",
+      "line": 84,
+      "module": "stdlib/std/gui.pp",
+      "name": "visible",
+      "signature": "public fn visible(value: bool) -> bool"
+    },
+    {
+      "documentation": "",
+      "kind": "fn",
+      "line": 85,
+      "module": "stdlib/std/gui.pp",
+      "name": "enabled",
+      "signature": "public fn enabled(value: bool) -> bool"
+    },
+    {
+      "documentation": "",
+      "kind": "fn",
+      "line": 86,
+      "module": "stdlib/std/gui.pp",
+      "name": "checked",
+      "signature": "public fn checked() -> bool"
+    },
+    {
+      "documentation": "",
+      "kind": "fn",
+      "line": 87,
+      "module": "stdlib/std/gui.pp",
+      "name": "set_checked",
+      "signature": "public fn set_checked(value: bool) -> bool"
+    },
+    {
+      "documentation": "",
+      "kind": "fn",
+      "line": 91,
+      "module": "stdlib/std/gui.pp",
+      "name": "destroy",
+      "signature": "public fn destroy() -> bool"
+    },
+    {
+      "documentation": "Canvas drawing. These return false on non-canvas controls.",
+      "kind": "fn",
+      "line": 94,
+      "module": "stdlib/std/gui.pp",
+      "name": "clear",
+      "signature": "public fn clear(rgb: int) -> bool"
+    },
+    {
+      "documentation": "",
+      "kind": "fn",
+      "line": 95,
+      "module": "stdlib/std/gui.pp",
+      "name": "rect",
+      "signature": "public fn rect(x: int, y: int, width: int, height: int, rgb: int, filled: bool) -> bool"
+    },
+    {
+      "documentation": "",
+      "kind": "fn",
+      "line": 98,
+      "module": "stdlib/std/gui.pp",
+      "name": "line",
+      "signature": "public fn line(x1: int, y1: int, x2: int, y2: int, rgb: int) -> bool"
+    },
+    {
+      "documentation": "",
+      "kind": "fn",
+      "line": 101,
+      "module": "stdlib/std/gui.pp",
+      "name": "draw_text",
+      "signature": "public fn draw_text(x: int, y: int, value: str, rgb: int) -> bool"
+    },
+    {
+      "documentation": "",
+      "kind": "object",
+      "line": 106,
+      "module": "stdlib/std/gui.pp",
+      "name": "GuiWindow",
+      "signature": "object GuiWindow"
+    },
+    {
+      "documentation": "",
+      "kind": "fn",
+      "line": 115,
+      "module": "stdlib/std/gui.pp",
+      "name": "valid",
+      "signature": "public fn valid() -> bool"
+    },
+    {
+      "documentation": "",
+      "kind": "fn",
+      "line": 116,
+      "module": "stdlib/std/gui.pp",
+      "name": "open",
+      "signature": "public fn open() -> bool"
+    },
+    {
+      "documentation": "",
+      "kind": "fn",
+      "line": 117,
+      "module": "stdlib/std/gui.pp",
+      "name": "width",
+      "signature": "public fn width() -> int"
+    },
+    {
+      "documentation": "",
+      "kind": "fn",
+      "line": 118,
+      "module": "stdlib/std/gui.pp",
+      "name": "height",
+      "signature": "public fn height() -> int"
+    },
+    {
+      "documentation": "",
+      "kind": "fn",
+      "line": 119,
+      "module": "stdlib/std/gui.pp",
+      "name": "title",
+      "signature": "public fn title(value: str) -> bool"
+    },
+    {
+      "documentation": "",
+      "kind": "fn",
+      "line": 120,
+      "module": "stdlib/std/gui.pp",
+      "name": "show",
+      "signature": "public fn show() -> bool"
+    },
+    {
+      "documentation": "",
+      "kind": "fn",
+      "line": 121,
+      "module": "stdlib/std/gui.pp",
+      "name": "hide",
+      "signature": "public fn hide() -> bool"
+    },
+    {
+      "documentation": "",
+      "kind": "fn",
+      "line": 122,
+      "module": "stdlib/std/gui.pp",
+      "name": "close",
+      "signature": "public fn close() -> bool"
+    },
+    {
+      "documentation": "",
+      "kind": "fn",
+      "line": 123,
+      "module": "stdlib/std/gui.pp",
+      "name": "redraw",
+      "signature": "public fn redraw() -> bool"
+    },
+    {
+      "documentation": "",
+      "kind": "fn",
+      "line": 125,
+      "module": "stdlib/std/gui.pp",
+      "name": "add",
+      "signature": "public fn add(kind: int, text: str) -> GuiWidget"
+    },
+    {
+      "documentation": "",
+      "kind": "fn",
+      "line": 130,
+      "module": "stdlib/std/gui.pp",
+      "name": "label",
+      "signature": "public fn label(text: str) -> GuiWidget"
+    },
+    {
+      "documentation": "",
+      "kind": "fn",
+      "line": 131,
+      "module": "stdlib/std/gui.pp",
+      "name": "button",
+      "signature": "public fn button(text: str) -> GuiWidget"
+    },
+    {
+      "documentation": "",
+      "kind": "fn",
+      "line": 132,
+      "module": "stdlib/std/gui.pp",
+      "name": "input",
+      "signature": "public fn input(text: str) -> GuiWidget"
+    },
+    {
+      "documentation": "",
+      "kind": "fn",
+      "line": 133,
+      "module": "stdlib/std/gui.pp",
+      "name": "checkbox",
+      "signature": "public fn checkbox(text: str) -> GuiWidget"
+    },
+    {
+      "documentation": "",
+      "kind": "fn",
+      "line": 134,
+      "module": "stdlib/std/gui.pp",
+      "name": "slider",
+      "signature": "public fn slider(minimum: int, maximum: int, value: int) -> GuiWidget"
+    },
+    {
+      "documentation": "",
+      "kind": "fn",
+      "line": 140,
+      "module": "stdlib/std/gui.pp",
+      "name": "progress",
+      "signature": "public fn progress(minimum: int, maximum: int, value: int) -> GuiWidget"
+    },
+    {
+      "documentation": "",
+      "kind": "fn",
+      "line": 146,
+      "module": "stdlib/std/gui.pp",
+      "name": "panel",
+      "signature": "public fn panel() -> GuiWidget"
+    },
+    {
+      "documentation": "",
+      "kind": "fn",
+      "line": 147,
+      "module": "stdlib/std/gui.pp",
+      "name": "canvas",
+      "signature": "public fn canvas() -> GuiWidget"
+    },
+    {
+      "documentation": "",
+      "kind": "fn",
+      "line": 149,
+      "module": "stdlib/std/gui.pp",
+      "name": "poll",
+      "signature": "public fn poll(timeout_ms: int) -> GuiEvent"
+    },
+    {
+      "documentation": "",
+      "kind": "fn",
+      "line": 155,
+      "module": "stdlib/std/gui.pp",
+      "name": "post",
+      "signature": "public fn post(kind: int, widget: int, key: int, text: str, x: int, y: int) -> bool"
+    },
+    {
+      "documentation": "Simple backend-independent layouts. `padding` is the outer inset and `gap` separates adjacent controls. Widgets are laid out in list order.",
+      "kind": "fn",
+      "line": 162,
+      "module": "stdlib/std/gui.pp",
+      "name": "gui_vbox",
+      "signature": "fn gui_vbox(widgets: List<GuiWidget>, x: int, y: int, width: int,"
+    },
+    {
+      "documentation": "",
+      "kind": "fn",
+      "line": 171,
+      "module": "stdlib/std/gui.pp",
+      "name": "gui_hbox",
+      "signature": "fn gui_hbox(widgets: List<GuiWidget>, x: int, y: int, width: int,"
+    },
+    {
+      "documentation": "",
+      "kind": "fn",
+      "line": 183,
+      "module": "stdlib/std/gui.pp",
+      "name": "gui_grid",
+      "signature": "fn gui_grid(widgets: List<GuiWidget>, columns: int, x: int, y: int,"
+    },
+    {
+      "documentation": "Run a conventional GUI event loop. The handler may be a capturing closure. Returning from the handler does not close the app; call window.close() when the application is finished.",
+      "kind": "fn",
+      "line": 200,
+      "module": "stdlib/std/gui.pp",
+      "name": "gui_run",
+      "signature": "fn gui_run(window: GuiWindow, handler: fn(GuiEvent) -> void) -> void"
+    },
+    {
+      "documentation": "",
+      "kind": "fn",
+      "line": 209,
+      "module": "stdlib/std/gui.pp",
+      "name": "gui_rgb",
+      "signature": "fn gui_rgb(red: int, green: int, blue: int) -> int"
+    },
+    {
+      "documentation": "",
+      "kind": "fn",
+      "line": 217,
+      "module": "stdlib/std/gui.pp",
+      "name": "gui_confirm",
+      "signature": "fn gui_confirm(title: str, message: str) -> bool"
     },
     {
       "documentation": "",
@@ -1079,6 +3263,86 @@
       "module": "stdlib/std/io.pp",
       "name": "io_read_line",
       "signature": "fn io_read_line() -> String"
+    },
+    {
+      "documentation": "",
+      "kind": "fn",
+      "line": 3,
+      "module": "stdlib/std/logging.pp",
+      "name": "log_trace_level",
+      "signature": "fn log_trace_level()->int"
+    },
+    {
+      "documentation": "",
+      "kind": "fn",
+      "line": 4,
+      "module": "stdlib/std/logging.pp",
+      "name": "log_level_name",
+      "signature": "fn log_level_name(level:int)->str"
+    },
+    {
+      "documentation": "",
+      "kind": "struct",
+      "line": 5,
+      "module": "stdlib/std/logging.pp",
+      "name": "LogRecord",
+      "signature": "struct LogRecord"
+    },
+    {
+      "documentation": "",
+      "kind": "fn",
+      "line": 6,
+      "module": "stdlib/std/logging.pp",
+      "name": "log_record_format",
+      "signature": "fn log_record_format(record:LogRecord,timestamps:bool)->str"
+    },
+    {
+      "documentation": "",
+      "kind": "object",
+      "line": 10,
+      "module": "stdlib/std/logging.pp",
+      "name": "Logger",
+      "signature": "object Logger"
+    },
+    {
+      "documentation": "",
+      "kind": "fn",
+      "line": 13,
+      "module": "stdlib/std/logging.pp",
+      "name": "enabled",
+      "signature": "public fn enabled(level:int)->bool"
+    },
+    {
+      "documentation": "",
+      "kind": "fn",
+      "line": 14,
+      "module": "stdlib/std/logging.pp",
+      "name": "log",
+      "signature": "public fn log(level:int,message:str)->void"
+    },
+    {
+      "documentation": "",
+      "kind": "fn",
+      "line": 15,
+      "module": "stdlib/std/logging.pp",
+      "name": "trace",
+      "signature": "public fn trace(message:str)->void"
+    },
+    {
+      "documentation": "",
+      "kind": "fn",
+      "line": 17,
+      "module": "stdlib/std/logging.pp",
+      "name": "logger",
+      "signature": "fn logger(name:str,threshold:int)->Logger"
+    },
+    {
+      "documentation": "",
+      "kind": "fn",
+      "line": 18,
+      "module": "stdlib/std/logging.pp",
+      "name": "file_logger",
+      "signature": "fn file_logger(name:str,threshold:int,path_value:str)->Logger"
     },
     {
       "documentation": "",
@@ -1945,6 +4209,390 @@
       "signature": "fn vec3_to_text(a: Vec3) -> str"
     },
     {
+      "documentation": "DNS resolution helpers. family is 0 (any), 4 (IPv4), or 6 (IPv6).",
+      "kind": "fn",
+      "line": 3,
+      "module": "stdlib/std/net/dns.pp",
+      "name": "dns_resolve",
+      "signature": "fn dns_resolve(host: str) -> List<str>"
+    },
+    {
+      "documentation": "",
+      "kind": "fn",
+      "line": 7,
+      "module": "stdlib/std/net/dns.pp",
+      "name": "dns_resolve_v4",
+      "signature": "fn dns_resolve_v4(host: str) -> List<str>"
+    },
+    {
+      "documentation": "",
+      "kind": "fn",
+      "line": 11,
+      "module": "stdlib/std/net/dns.pp",
+      "name": "dns_resolve_v6",
+      "signature": "fn dns_resolve_v6(host: str) -> List<str>"
+    },
+    {
+      "documentation": "",
+      "kind": "fn",
+      "line": 15,
+      "module": "stdlib/std/net/dns.pp",
+      "name": "dns_resolve_async",
+      "signature": "async fn dns_resolve_async(host: str) -> List<str>"
+    },
+    {
+      "documentation": "Structured HTTP/1.1 on top of std.net.tcp. Plain HTTP uses PunPun sockets; HTTPS uses the verified libcurl runtime but returns the same response shape. Request/response bodies are bytes so binary payloads survive unchanged.",
+      "kind": "object",
+      "line": 8,
+      "module": "stdlib/std/net/http.pp",
+      "name": "HttpResponse",
+      "signature": "object HttpResponse"
+    },
+    {
+      "documentation": "",
+      "kind": "fn",
+      "line": 23,
+      "module": "stdlib/std/net/http.pp",
+      "name": "ok",
+      "signature": "public fn ok() -> bool"
+    },
+    {
+      "documentation": "",
+      "kind": "fn",
+      "line": 26,
+      "module": "stdlib/std/net/http.pp",
+      "name": "text",
+      "signature": "public fn text() -> str"
+    },
+    {
+      "documentation": "",
+      "kind": "fn",
+      "line": 27,
+      "module": "stdlib/std/net/http.pp",
+      "name": "header",
+      "signature": "public fn header(name: str) -> str"
+    },
+    {
+      "documentation": "",
+      "kind": "object",
+      "line": 32,
+      "module": "stdlib/std/net/http.pp",
+      "name": "HttpRequest",
+      "signature": "object HttpRequest"
+    },
+    {
+      "documentation": "",
+      "kind": "fn",
+      "line": 54,
+      "module": "stdlib/std/net/http.pp",
+      "name": "valid",
+      "signature": "public fn valid() -> bool"
+    },
+    {
+      "documentation": "",
+      "kind": "fn",
+      "line": 55,
+      "module": "stdlib/std/net/http.pp",
+      "name": "text",
+      "signature": "public fn text() -> str"
+    },
+    {
+      "documentation": "",
+      "kind": "fn",
+      "line": 56,
+      "module": "stdlib/std/net/http.pp",
+      "name": "header",
+      "signature": "public fn header(name: str) -> str"
+    },
+    {
+      "documentation": "",
+      "kind": "object",
+      "line": 61,
+      "module": "stdlib/std/net/http.pp",
+      "name": "HttpUrl",
+      "signature": "object HttpUrl"
+    },
+    {
+      "documentation": "",
+      "kind": "fn",
+      "line": 76,
+      "module": "stdlib/std/net/http.pp",
+      "name": "valid",
+      "signature": "public fn valid() -> bool"
+    },
+    {
+      "documentation": "",
+      "kind": "object",
+      "line": 79,
+      "module": "stdlib/std/net/http.pp",
+      "name": "HttpClient",
+      "signature": "object HttpClient"
+    },
+    {
+      "documentation": "",
+      "kind": "fn",
+      "line": 90,
+      "module": "stdlib/std/net/http.pp",
+      "name": "set_header",
+      "signature": "public fn set_header(name: str, value: str) -> void"
+    },
+    {
+      "documentation": "",
+      "kind": "fn",
+      "line": 94,
+      "module": "stdlib/std/net/http.pp",
+      "name": "request",
+      "signature": "public fn request(method: str, url: str, body: bytes) -> HttpResponse"
+    },
+    {
+      "documentation": "",
+      "kind": "fn",
+      "line": 99,
+      "module": "stdlib/std/net/http.pp",
+      "name": "get",
+      "signature": "public fn get(url: str) -> HttpResponse"
+    },
+    {
+      "documentation": "",
+      "kind": "fn",
+      "line": 100,
+      "module": "stdlib/std/net/http.pp",
+      "name": "delete",
+      "signature": "public fn delete(url: str) -> HttpResponse"
+    },
+    {
+      "documentation": "",
+      "kind": "fn",
+      "line": 101,
+      "module": "stdlib/std/net/http.pp",
+      "name": "post",
+      "signature": "public fn post(url: str, body: bytes) -> HttpResponse"
+    },
+    {
+      "documentation": "",
+      "kind": "fn",
+      "line": 102,
+      "module": "stdlib/std/net/http.pp",
+      "name": "put",
+      "signature": "public fn put(url: str, body: bytes) -> HttpResponse"
+    },
+    {
+      "documentation": "",
+      "kind": "fn",
+      "line": 103,
+      "module": "stdlib/std/net/http.pp",
+      "name": "patch",
+      "signature": "public fn patch(url: str, body: bytes) -> HttpResponse"
+    },
+    {
+      "documentation": "",
+      "kind": "struct",
+      "line": 106,
+      "module": "stdlib/std/net/http.pp",
+      "name": "HttpChunkHead",
+      "signature": "struct HttpChunkHead"
+    },
+    {
+      "documentation": "",
+      "kind": "fn",
+      "line": 108,
+      "module": "stdlib/std/net/http.pp",
+      "name": "http_headers",
+      "signature": "fn http_headers() -> Map<str>"
+    },
+    {
+      "documentation": "",
+      "kind": "fn",
+      "line": 110,
+      "module": "stdlib/std/net/http.pp",
+      "name": "http_header_set",
+      "signature": "fn http_header_set(headers: Map<str>, name: str, value: str) -> void"
+    },
+    {
+      "documentation": "",
+      "kind": "fn",
+      "line": 118,
+      "module": "stdlib/std/net/http.pp",
+      "name": "http_header_get",
+      "signature": "fn http_header_get(headers: Map<str>, name: str) -> str"
+    },
+    {
+      "documentation": "",
+      "kind": "fn",
+      "line": 122,
+      "module": "stdlib/std/net/http.pp",
+      "name": "_http_parse_decimal",
+      "signature": "fn _http_parse_decimal(value: str) -> int"
+    },
+    {
+      "documentation": "",
+      "kind": "fn",
+      "line": 134,
+      "module": "stdlib/std/net/http.pp",
+      "name": "_http_parse_url",
+      "signature": "fn _http_parse_url(url: str) -> HttpUrl"
+    },
+    {
+      "documentation": "",
+      "kind": "fn",
+      "line": 189,
+      "module": "stdlib/std/net/http.pp",
+      "name": "_http_header_lines",
+      "signature": "fn _http_header_lines(headers: Map<str>, skip_transport: bool) -> str"
+    },
+    {
+      "documentation": "",
+      "kind": "fn",
+      "line": 206,
+      "module": "stdlib/std/net/http.pp",
+      "name": "_https_header_lines",
+      "signature": "fn _https_header_lines(headers: Map<str>) -> str"
+    },
+    {
+      "documentation": "",
+      "kind": "fn",
+      "line": 219,
+      "module": "stdlib/std/net/http.pp",
+      "name": "_http_parse_headers_text",
+      "signature": "fn _http_parse_headers_text(source: str) -> Map<str>"
+    },
+    {
+      "documentation": "",
+      "kind": "fn",
+      "line": 234,
+      "module": "stdlib/std/net/http.pp",
+      "name": "_http_find_header_end",
+      "signature": "fn _http_find_header_end(data: bytes) -> int"
+    },
+    {
+      "documentation": "",
+      "kind": "fn",
+      "line": 245,
+      "module": "stdlib/std/net/http.pp",
+      "name": "_http_hex_digit",
+      "signature": "fn _http_hex_digit(value: int) -> int"
+    },
+    {
+      "documentation": "",
+      "kind": "fn",
+      "line": 252,
+      "module": "stdlib/std/net/http.pp",
+      "name": "_http_chunk_head",
+      "signature": "fn _http_chunk_head(data: bytes, start: int) -> HttpChunkHead"
+    },
+    {
+      "documentation": "",
+      "kind": "fn",
+      "line": 276,
+      "module": "stdlib/std/net/http.pp",
+      "name": "_http_decode_chunked",
+      "signature": "fn _http_decode_chunked(data: bytes) -> bytes"
+    },
+    {
+      "documentation": "",
+      "kind": "fn",
+      "line": 294,
+      "module": "stdlib/std/net/http.pp",
+      "name": "_http_reason",
+      "signature": "fn _http_reason(status: int) -> str"
+    },
+    {
+      "documentation": "",
+      "kind": "fn",
+      "line": 315,
+      "module": "stdlib/std/net/http.pp",
+      "name": "_http_response_from_wire",
+      "signature": "fn _http_response_from_wire(wire: bytes, transport_error: str) -> HttpResponse"
+    },
+    {
+      "documentation": "",
+      "kind": "fn",
+      "line": 355,
+      "module": "stdlib/std/net/http.pp",
+      "name": "http_request",
+      "signature": "fn http_request(method: str, url: str, headers: Map<str>, body: bytes,"
+    },
+    {
+      "documentation": "",
+      "kind": "fn",
+      "line": 439,
+      "module": "stdlib/std/net/http.pp",
+      "name": "http_get",
+      "signature": "fn http_get(url: str) -> HttpResponse"
+    },
+    {
+      "documentation": "",
+      "kind": "fn",
+      "line": 443,
+      "module": "stdlib/std/net/http.pp",
+      "name": "http_delete",
+      "signature": "fn http_delete(url: str) -> HttpResponse"
+    },
+    {
+      "documentation": "",
+      "kind": "fn",
+      "line": 447,
+      "module": "stdlib/std/net/http.pp",
+      "name": "http_post_text",
+      "signature": "fn http_post_text(url: str, body: str, content_type: str) -> HttpResponse"
+    },
+    {
+      "documentation": "",
+      "kind": "fn",
+      "line": 453,
+      "module": "stdlib/std/net/http.pp",
+      "name": "http_response_text",
+      "signature": "fn http_response_text(status: int, body: str, content_type: str) -> HttpResponse"
+    },
+    {
+      "documentation": "",
+      "kind": "fn",
+      "line": 459,
+      "module": "stdlib/std/net/http.pp",
+      "name": "http_read_request",
+      "signature": "fn http_read_request(stream_handle: int, max_body_bytes: int, timeout_ms: int) -> HttpRequest"
+    },
+    {
+      "documentation": "",
+      "kind": "fn",
+      "line": 549,
+      "module": "stdlib/std/net/http.pp",
+      "name": "http_write_response",
+      "signature": "fn http_write_response(stream_handle: int, response: HttpResponse, timeout_ms: int) -> bool"
+    },
+    {
+      "documentation": "",
+      "kind": "fn",
+      "line": 572,
+      "module": "stdlib/std/net/http.pp",
+      "name": "http_serve_once",
+      "signature": "fn http_serve_once(listener_handle: int, handler: fn(HttpRequest) -> HttpResponse,"
+    },
+    {
+      "documentation": "",
+      "kind": "fn",
+      "line": 583,
+      "module": "stdlib/std/net/http.pp",
+      "name": "http_request_async",
+      "signature": "async fn http_request_async(method: str, url: str, headers: Map<str>, body: bytes,"
+    },
+    {
+      "documentation": "",
+      "kind": "fn",
+      "line": 588,
+      "module": "stdlib/std/net/http.pp",
+      "name": "http_get_async",
+      "signature": "async fn http_get_async(url: str) -> HttpResponse"
+    },
+    {
+      "documentation": "",
+      "kind": "fn",
+      "line": 592,
+      "module": "stdlib/std/net/http.pp",
+      "name": "http_post_text_async",
+      "signature": "async fn http_post_text_async(url: str, body: str, content_type: str) -> HttpResponse"
+    },
+    {
       "documentation": "Verified HTTPS helpers. The primitive operations are compiler builtins backed by the system libcurl runtime. Certificate and hostname verification are always enabled, redirects remain HTTPS-only, and plain HTTP URLs are rejected.",
       "kind": "fn",
       "line": 7,
@@ -2017,6 +4665,486 @@
       "signature": "async fn https_post_async(url: String, body: String, content_type: String) -> String"
     },
     {
+      "documentation": "Portable TCP sockets. Runtime handles are nonblocking internally; every operation takes a timeout and observes task cancellation while waiting.",
+      "kind": "object",
+      "line": 4,
+      "module": "stdlib/std/net/tcp.pp",
+      "name": "TcpStream",
+      "signature": "object TcpStream"
+    },
+    {
+      "documentation": "",
+      "kind": "fn",
+      "line": 9,
+      "module": "stdlib/std/net/tcp.pp",
+      "name": "valid",
+      "signature": "public fn valid() -> bool"
+    },
+    {
+      "documentation": "",
+      "kind": "fn",
+      "line": 10,
+      "module": "stdlib/std/net/tcp.pp",
+      "name": "peer_host",
+      "signature": "public fn peer_host() -> str"
+    },
+    {
+      "documentation": "",
+      "kind": "fn",
+      "line": 11,
+      "module": "stdlib/std/net/tcp.pp",
+      "name": "peer_port",
+      "signature": "public fn peer_port() -> int"
+    },
+    {
+      "documentation": "",
+      "kind": "fn",
+      "line": 12,
+      "module": "stdlib/std/net/tcp.pp",
+      "name": "local_port",
+      "signature": "public fn local_port() -> int"
+    },
+    {
+      "documentation": "",
+      "kind": "fn",
+      "line": 13,
+      "module": "stdlib/std/net/tcp.pp",
+      "name": "set_nodelay",
+      "signature": "public fn set_nodelay(enabled: bool) -> bool"
+    },
+    {
+      "documentation": "",
+      "kind": "fn",
+      "line": 16,
+      "module": "stdlib/std/net/tcp.pp",
+      "name": "wait_readable",
+      "signature": "public fn wait_readable(timeout_ms: int) -> bool"
+    },
+    {
+      "documentation": "",
+      "kind": "fn",
+      "line": 19,
+      "module": "stdlib/std/net/tcp.pp",
+      "name": "wait_writable",
+      "signature": "public fn wait_writable(timeout_ms: int) -> bool"
+    },
+    {
+      "documentation": "",
+      "kind": "fn",
+      "line": 22,
+      "module": "stdlib/std/net/tcp.pp",
+      "name": "send",
+      "signature": "public fn send(data: bytes, timeout_ms: int) -> int"
+    },
+    {
+      "documentation": "",
+      "kind": "fn",
+      "line": 25,
+      "module": "stdlib/std/net/tcp.pp",
+      "name": "send_text",
+      "signature": "public fn send_text(data: str, timeout_ms: int) -> int"
+    },
+    {
+      "documentation": "",
+      "kind": "fn",
+      "line": 28,
+      "module": "stdlib/std/net/tcp.pp",
+      "name": "recv",
+      "signature": "public fn recv(max_bytes: int, timeout_ms: int) -> bytes"
+    },
+    {
+      "documentation": "",
+      "kind": "fn",
+      "line": 31,
+      "module": "stdlib/std/net/tcp.pp",
+      "name": "recv_text",
+      "signature": "public fn recv_text(max_bytes: int, timeout_ms: int) -> str"
+    },
+    {
+      "documentation": "",
+      "kind": "fn",
+      "line": 34,
+      "module": "stdlib/std/net/tcp.pp",
+      "name": "shutdown_read",
+      "signature": "public fn shutdown_read() -> bool"
+    },
+    {
+      "documentation": "",
+      "kind": "fn",
+      "line": 35,
+      "module": "stdlib/std/net/tcp.pp",
+      "name": "shutdown_write",
+      "signature": "public fn shutdown_write() -> bool"
+    },
+    {
+      "documentation": "",
+      "kind": "fn",
+      "line": 36,
+      "module": "stdlib/std/net/tcp.pp",
+      "name": "shutdown",
+      "signature": "public fn shutdown() -> bool"
+    },
+    {
+      "documentation": "",
+      "kind": "fn",
+      "line": 37,
+      "module": "stdlib/std/net/tcp.pp",
+      "name": "close",
+      "signature": "public fn close() -> bool"
+    },
+    {
+      "documentation": "",
+      "kind": "object",
+      "line": 40,
+      "module": "stdlib/std/net/tcp.pp",
+      "name": "TcpListener",
+      "signature": "object TcpListener"
+    },
+    {
+      "documentation": "",
+      "kind": "fn",
+      "line": 45,
+      "module": "stdlib/std/net/tcp.pp",
+      "name": "valid",
+      "signature": "public fn valid() -> bool"
+    },
+    {
+      "documentation": "",
+      "kind": "fn",
+      "line": 46,
+      "module": "stdlib/std/net/tcp.pp",
+      "name": "port",
+      "signature": "public fn port() -> int"
+    },
+    {
+      "documentation": "",
+      "kind": "fn",
+      "line": 47,
+      "module": "stdlib/std/net/tcp.pp",
+      "name": "accept",
+      "signature": "public fn accept(timeout_ms: int) -> TcpStream"
+    },
+    {
+      "documentation": "",
+      "kind": "fn",
+      "line": 50,
+      "module": "stdlib/std/net/tcp.pp",
+      "name": "close",
+      "signature": "public fn close() -> bool"
+    },
+    {
+      "documentation": "",
+      "kind": "fn",
+      "line": 53,
+      "module": "stdlib/std/net/tcp.pp",
+      "name": "tcp_connect",
+      "signature": "fn tcp_connect(host: str, port: int, timeout_ms: int) -> TcpStream"
+    },
+    {
+      "documentation": "",
+      "kind": "fn",
+      "line": 57,
+      "module": "stdlib/std/net/tcp.pp",
+      "name": "tcp_listen",
+      "signature": "fn tcp_listen(host: str, port: int, backlog: int) -> TcpListener"
+    },
+    {
+      "documentation": "",
+      "kind": "fn",
+      "line": 61,
+      "module": "stdlib/std/net/tcp.pp",
+      "name": "tcp_connect_async",
+      "signature": "async fn tcp_connect_async(host: str, port: int, timeout_ms: int) -> TcpStream"
+    },
+    {
+      "documentation": "",
+      "kind": "fn",
+      "line": 65,
+      "module": "stdlib/std/net/tcp.pp",
+      "name": "tcp_accept_async",
+      "signature": "async fn tcp_accept_async(listener_handle: int, timeout_ms: int) -> TcpStream"
+    },
+    {
+      "documentation": "Datagram sockets. recv_from records source address and port atomically with the packet and exposes them as one UdpPacket object.",
+      "kind": "object",
+      "line": 4,
+      "module": "stdlib/std/net/udp.pp",
+      "name": "UdpPacket",
+      "signature": "object UdpPacket"
+    },
+    {
+      "documentation": "",
+      "kind": "fn",
+      "line": 15,
+      "module": "stdlib/std/net/udp.pp",
+      "name": "text",
+      "signature": "public fn text() -> str"
+    },
+    {
+      "documentation": "",
+      "kind": "object",
+      "line": 18,
+      "module": "stdlib/std/net/udp.pp",
+      "name": "UdpSocket",
+      "signature": "object UdpSocket"
+    },
+    {
+      "documentation": "",
+      "kind": "fn",
+      "line": 23,
+      "module": "stdlib/std/net/udp.pp",
+      "name": "valid",
+      "signature": "public fn valid() -> bool"
+    },
+    {
+      "documentation": "",
+      "kind": "fn",
+      "line": 24,
+      "module": "stdlib/std/net/udp.pp",
+      "name": "port",
+      "signature": "public fn port() -> int"
+    },
+    {
+      "documentation": "",
+      "kind": "fn",
+      "line": 25,
+      "module": "stdlib/std/net/udp.pp",
+      "name": "send_to",
+      "signature": "public fn send_to(host: str, port: int, data: bytes, timeout_ms: int) -> int"
+    },
+    {
+      "documentation": "",
+      "kind": "fn",
+      "line": 28,
+      "module": "stdlib/std/net/udp.pp",
+      "name": "send_text_to",
+      "signature": "public fn send_text_to(host: str, port: int, data: str, timeout_ms: int) -> int"
+    },
+    {
+      "documentation": "",
+      "kind": "fn",
+      "line": 31,
+      "module": "stdlib/std/net/udp.pp",
+      "name": "recv_from",
+      "signature": "public fn recv_from(max_bytes: int, timeout_ms: int) -> UdpPacket"
+    },
+    {
+      "documentation": "",
+      "kind": "fn",
+      "line": 35,
+      "module": "stdlib/std/net/udp.pp",
+      "name": "wait_readable",
+      "signature": "public fn wait_readable(timeout_ms: int) -> bool"
+    },
+    {
+      "documentation": "",
+      "kind": "fn",
+      "line": 38,
+      "module": "stdlib/std/net/udp.pp",
+      "name": "close",
+      "signature": "public fn close() -> bool"
+    },
+    {
+      "documentation": "",
+      "kind": "fn",
+      "line": 41,
+      "module": "stdlib/std/net/udp.pp",
+      "name": "udp_bind",
+      "signature": "fn udp_bind(host: str, port: int) -> UdpSocket"
+    },
+    {
+      "documentation": "",
+      "kind": "fn",
+      "line": 45,
+      "module": "stdlib/std/net/udp.pp",
+      "name": "udp_recv_from_async",
+      "signature": "async fn udp_recv_from_async(socket_handle: int, max_bytes: int, timeout_ms: int) -> UdpPacket"
+    },
+    {
+      "documentation": "RFC 6455 WebSocket support over ws://. The frame layer handles masking, fragmentation, ping/pong, close frames, binary payloads, and timeout-aware reads. wss:// deliberately waits for a reviewed raw TLS stream binding rather than implementing TLS in PunPun.",
+      "kind": "object",
+      "line": 10,
+      "module": "stdlib/std/net/websocket.pp",
+      "name": "WebSocketMessage",
+      "signature": "object WebSocketMessage"
+    },
+    {
+      "documentation": "",
+      "kind": "fn",
+      "line": 21,
+      "module": "stdlib/std/net/websocket.pp",
+      "name": "valid",
+      "signature": "public fn valid() -> bool"
+    },
+    {
+      "documentation": "",
+      "kind": "fn",
+      "line": 22,
+      "module": "stdlib/std/net/websocket.pp",
+      "name": "is_text",
+      "signature": "public fn is_text() -> bool"
+    },
+    {
+      "documentation": "",
+      "kind": "fn",
+      "line": 23,
+      "module": "stdlib/std/net/websocket.pp",
+      "name": "is_binary",
+      "signature": "public fn is_binary() -> bool"
+    },
+    {
+      "documentation": "",
+      "kind": "fn",
+      "line": 24,
+      "module": "stdlib/std/net/websocket.pp",
+      "name": "text",
+      "signature": "public fn text() -> str"
+    },
+    {
+      "documentation": "",
+      "kind": "object",
+      "line": 27,
+      "module": "stdlib/std/net/websocket.pp",
+      "name": "WebSocket",
+      "signature": "object WebSocket"
+    },
+    {
+      "documentation": "",
+      "kind": "fn",
+      "line": 38,
+      "module": "stdlib/std/net/websocket.pp",
+      "name": "valid",
+      "signature": "public fn valid() -> bool"
+    },
+    {
+      "documentation": "",
+      "kind": "fn",
+      "line": 39,
+      "module": "stdlib/std/net/websocket.pp",
+      "name": "send_text",
+      "signature": "public fn send_text(value: str, timeout_ms: int) -> bool"
+    },
+    {
+      "documentation": "",
+      "kind": "fn",
+      "line": 42,
+      "module": "stdlib/std/net/websocket.pp",
+      "name": "send_binary",
+      "signature": "public fn send_binary(value: bytes, timeout_ms: int) -> bool"
+    },
+    {
+      "documentation": "",
+      "kind": "fn",
+      "line": 45,
+      "module": "stdlib/std/net/websocket.pp",
+      "name": "ping",
+      "signature": "public fn ping(value: bytes, timeout_ms: int) -> bool"
+    },
+    {
+      "documentation": "",
+      "kind": "fn",
+      "line": 48,
+      "module": "stdlib/std/net/websocket.pp",
+      "name": "recv",
+      "signature": "public fn recv(timeout_ms: int) -> WebSocketMessage"
+    },
+    {
+      "documentation": "",
+      "kind": "fn",
+      "line": 51,
+      "module": "stdlib/std/net/websocket.pp",
+      "name": "close",
+      "signature": "public fn close(timeout_ms: int) -> bool"
+    },
+    {
+      "documentation": "",
+      "kind": "object",
+      "line": 59,
+      "module": "stdlib/std/net/websocket.pp",
+      "name": "WsFrame",
+      "signature": "object WsFrame"
+    },
+    {
+      "documentation": "",
+      "kind": "fn",
+      "line": 73,
+      "module": "stdlib/std/net/websocket.pp",
+      "name": "_ws_rotl32",
+      "signature": "fn _ws_rotl32(value: int, amount: int) -> int"
+    },
+    {
+      "documentation": "",
+      "kind": "fn",
+      "line": 78,
+      "module": "stdlib/std/net/websocket.pp",
+      "name": "_ws_sha1",
+      "signature": "fn _ws_sha1(input: bytes) -> bytes"
+    },
+    {
+      "documentation": "",
+      "kind": "fn",
+      "line": 154,
+      "module": "stdlib/std/net/websocket.pp",
+      "name": "_ws_accept_value",
+      "signature": "fn _ws_accept_value(key: str) -> str"
+    },
+    {
+      "documentation": "",
+      "kind": "fn",
+      "line": 158,
+      "module": "stdlib/std/net/websocket.pp",
+      "name": "_ws_recv_exact",
+      "signature": "fn _ws_recv_exact(handle: int, count: int, timeout_ms: int) -> bytes"
+    },
+    {
+      "documentation": "",
+      "kind": "fn",
+      "line": 171,
+      "module": "stdlib/std/net/websocket.pp",
+      "name": "_ws_send_frame",
+      "signature": "fn _ws_send_frame(handle: int, client_side: bool, opcode: int, payload: bytes,"
+    },
+    {
+      "documentation": "",
+      "kind": "fn",
+      "line": 208,
+      "module": "stdlib/std/net/websocket.pp",
+      "name": "_ws_read_frame",
+      "signature": "fn _ws_read_frame(handle: int, client_side: bool, timeout_ms: int) -> WsFrame"
+    },
+    {
+      "documentation": "",
+      "kind": "fn",
+      "line": 253,
+      "module": "stdlib/std/net/websocket.pp",
+      "name": "_ws_recv_message",
+      "signature": "fn _ws_recv_message(handle: int, client_side: bool, timeout_ms: int) -> WebSocketMessage"
+    },
+    {
+      "documentation": "",
+      "kind": "fn",
+      "line": 296,
+      "module": "stdlib/std/net/websocket.pp",
+      "name": "websocket_accept",
+      "signature": "fn websocket_accept(stream_handle: int, request: HttpRequest, timeout_ms: int) -> WebSocket"
+    },
+    {
+      "documentation": "",
+      "kind": "fn",
+      "line": 317,
+      "module": "stdlib/std/net/websocket.pp",
+      "name": "websocket_connect",
+      "signature": "fn websocket_connect(url: str, timeout_ms: int) -> WebSocket"
+    },
+    {
+      "documentation": "",
+      "kind": "fn",
+      "line": 372,
+      "module": "stdlib/std/net/websocket.pp",
+      "name": "websocket_connect_async",
+      "signature": "async fn websocket_connect_async(url: str, timeout_ms: int) -> WebSocket"
+    },
+    {
       "documentation": "",
       "kind": "fn",
       "line": 3,
@@ -2087,6 +5215,390 @@
       "module": "stdlib/std/option.pp",
       "name": "option_unwrap_or",
       "signature": "fn option_unwrap_or<T: Copy>(value: Option<T>, fallback: T) -> T"
+    },
+    {
+      "documentation": "Platform-neutral lexical path manipulation in PunPun. No filesystem access is required for normalization/relative calculations.",
+      "kind": "struct",
+      "line": 3,
+      "module": "stdlib/std/path.pp",
+      "name": "Path",
+      "signature": "struct Path"
+    },
+    {
+      "documentation": "",
+      "kind": "fn",
+      "line": 5,
+      "module": "stdlib/std/path.pp",
+      "name": "name",
+      "signature": "public fn name()->str"
+    },
+    {
+      "documentation": "",
+      "kind": "fn",
+      "line": 6,
+      "module": "stdlib/std/path.pp",
+      "name": "parent",
+      "signature": "public fn parent()->Path"
+    },
+    {
+      "documentation": "",
+      "kind": "fn",
+      "line": 7,
+      "module": "stdlib/std/path.pp",
+      "name": "extension",
+      "signature": "public fn extension()->str"
+    },
+    {
+      "documentation": "",
+      "kind": "fn",
+      "line": 8,
+      "module": "stdlib/std/path.pp",
+      "name": "join",
+      "signature": "public fn join(child:str)->Path"
+    },
+    {
+      "documentation": "",
+      "kind": "fn",
+      "line": 9,
+      "module": "stdlib/std/path.pp",
+      "name": "normalized",
+      "signature": "public fn normalized()->Path"
+    },
+    {
+      "documentation": "",
+      "kind": "fn",
+      "line": 10,
+      "module": "stdlib/std/path.pp",
+      "name": "absolute",
+      "signature": "public fn absolute()->bool"
+    },
+    {
+      "documentation": "",
+      "kind": "fn",
+      "line": 12,
+      "module": "stdlib/std/path.pp",
+      "name": "path",
+      "signature": "fn path(value:str)->Path"
+    },
+    {
+      "documentation": "",
+      "kind": "fn",
+      "line": 13,
+      "module": "stdlib/std/path.pp",
+      "name": "path_is_separator",
+      "signature": "fn path_is_separator(c:int)->bool"
+    },
+    {
+      "documentation": "",
+      "kind": "fn",
+      "line": 14,
+      "module": "stdlib/std/path.pp",
+      "name": "path_is_absolute",
+      "signature": "fn path_is_absolute(value:str)->bool"
+    },
+    {
+      "documentation": "",
+      "kind": "fn",
+      "line": 18,
+      "module": "stdlib/std/path.pp",
+      "name": "path_normalize",
+      "signature": "fn path_normalize(value:str)->str"
+    },
+    {
+      "documentation": "",
+      "kind": "fn",
+      "line": 35,
+      "module": "stdlib/std/path.pp",
+      "name": "path_parts",
+      "signature": "fn path_parts(value:str)->List<str>"
+    },
+    {
+      "documentation": "",
+      "kind": "fn",
+      "line": 36,
+      "module": "stdlib/std/path.pp",
+      "name": "path_relative",
+      "signature": "fn path_relative(from_path:str,to_path:str)->str"
+    },
+    {
+      "documentation": "",
+      "kind": "fn",
+      "line": 42,
+      "module": "stdlib/std/path.pp",
+      "name": "path_change_extension",
+      "signature": "fn path_change_extension(value:str,extension:str)->str"
+    },
+    {
+      "documentation": "Process helpers. Runtime primitive only executes/captures a shell command; quoting, result modelling, argument assembly and async wrappers live here.",
+      "kind": "struct",
+      "line": 3,
+      "module": "stdlib/std/process.pp",
+      "name": "ProcessResult",
+      "signature": "struct ProcessResult"
+    },
+    {
+      "documentation": "",
+      "kind": "fn",
+      "line": 7,
+      "module": "stdlib/std/process.pp",
+      "name": "ok",
+      "signature": "public fn ok()->bool"
+    },
+    {
+      "documentation": "",
+      "kind": "fn",
+      "line": 8,
+      "module": "stdlib/std/process.pp",
+      "name": "lines",
+      "signature": "public fn lines()->List<str>"
+    },
+    {
+      "documentation": "",
+      "kind": "fn",
+      "line": 10,
+      "module": "stdlib/std/process.pp",
+      "name": "shell_quote_posix",
+      "signature": "fn shell_quote_posix(value:str)->str"
+    },
+    {
+      "documentation": "",
+      "kind": "fn",
+      "line": 16,
+      "module": "stdlib/std/process.pp",
+      "name": "shell_quote_windows",
+      "signature": "fn shell_quote_windows(value:str)->str"
+    },
+    {
+      "documentation": "",
+      "kind": "fn",
+      "line": 22,
+      "module": "stdlib/std/process.pp",
+      "name": "shell_quote",
+      "signature": "fn shell_quote(value:str)->str"
+    },
+    {
+      "documentation": "",
+      "kind": "fn",
+      "line": 23,
+      "module": "stdlib/std/process.pp",
+      "name": "process_command",
+      "signature": "fn process_command(program:str,args:List<str>)->str"
+    },
+    {
+      "documentation": "",
+      "kind": "fn",
+      "line": 24,
+      "module": "stdlib/std/process.pp",
+      "name": "process_run",
+      "signature": "fn process_run(command:str)->ProcessResult"
+    },
+    {
+      "documentation": "",
+      "kind": "fn",
+      "line": 25,
+      "module": "stdlib/std/process.pp",
+      "name": "process_run_args",
+      "signature": "fn process_run_args(program:str,args:List<str>)->ProcessResult"
+    },
+    {
+      "documentation": "",
+      "kind": "fn",
+      "line": 26,
+      "module": "stdlib/std/process.pp",
+      "name": "process_capture_async",
+      "signature": "async fn process_capture_async(command:str)->str"
+    },
+    {
+      "documentation": "",
+      "kind": "fn",
+      "line": 27,
+      "module": "stdlib/std/process.pp",
+      "name": "process_status_async",
+      "signature": "async fn process_status_async(command:str)->int"
+    },
+    {
+      "documentation": "Deterministic Park-Miller RNG written in PunPun. The Schrage step avoids overflow under PunPun's checked integer arithmetic.",
+      "kind": "object",
+      "line": 6,
+      "module": "stdlib/std/random.pp",
+      "name": "Random",
+      "signature": "object Random"
+    },
+    {
+      "documentation": "",
+      "kind": "fn",
+      "line": 13,
+      "module": "stdlib/std/random.pp",
+      "name": "next_raw",
+      "signature": "public fn next_raw() -> int"
+    },
+    {
+      "documentation": "",
+      "kind": "fn",
+      "line": 21,
+      "module": "stdlib/std/random.pp",
+      "name": "int_between",
+      "signature": "public fn int_between(low: int, high: int) -> int"
+    },
+    {
+      "documentation": "",
+      "kind": "fn",
+      "line": 26,
+      "module": "stdlib/std/random.pp",
+      "name": "unit",
+      "signature": "public fn unit() -> float"
+    },
+    {
+      "documentation": "",
+      "kind": "fn",
+      "line": 27,
+      "module": "stdlib/std/random.pp",
+      "name": "chance",
+      "signature": "public fn chance(probability: float) -> bool"
+    },
+    {
+      "documentation": "",
+      "kind": "fn",
+      "line": 30,
+      "module": "stdlib/std/random.pp",
+      "name": "random_generator",
+      "signature": "fn random_generator(seed: int) -> Random"
+    },
+    {
+      "documentation": "",
+      "kind": "fn",
+      "line": 32,
+      "module": "stdlib/std/random.pp",
+      "name": "secure_token_hex",
+      "signature": "fn secure_token_hex(byte_count: int) -> str"
+    },
+    {
+      "documentation": "",
+      "kind": "fn",
+      "line": 37,
+      "module": "stdlib/std/random.pp",
+      "name": "secure_token_urlsafe",
+      "signature": "fn secure_token_urlsafe(byte_count: int) -> str"
+    },
+    {
+      "documentation": "Small backtracking regular-expression engine implemented in PunPun. Supported: literals, ., ^, $, escapes (\\d \\w \\s), character classes/ranges, negated classes, and greedy *, +, ?. Search/replace/split are built on it.",
+      "kind": "struct",
+      "line": 5,
+      "module": "stdlib/std/regex.pp",
+      "name": "RegexMatch",
+      "signature": "struct RegexMatch"
+    },
+    {
+      "documentation": "",
+      "kind": "fn",
+      "line": 12,
+      "module": "stdlib/std/regex.pp",
+      "name": "regex_no_match",
+      "signature": "fn regex_no_match() -> RegexMatch"
+    },
+    {
+      "documentation": "",
+      "kind": "fn",
+      "line": 14,
+      "module": "stdlib/std/regex.pp",
+      "name": "_regex_class_end",
+      "signature": "fn _regex_class_end(pattern: str, start: int) -> int"
+    },
+    {
+      "documentation": "",
+      "kind": "fn",
+      "line": 25,
+      "module": "stdlib/std/regex.pp",
+      "name": "_regex_named_class",
+      "signature": "fn _regex_named_class(kind: int, c: int) -> bool"
+    },
+    {
+      "documentation": "",
+      "kind": "fn",
+      "line": 32,
+      "module": "stdlib/std/regex.pp",
+      "name": "_regex_class_matches",
+      "signature": "fn _regex_class_matches(pattern: str, start: int, finish: int, c: int) -> bool"
+    },
+    {
+      "documentation": "",
+      "kind": "fn",
+      "line": 56,
+      "module": "stdlib/std/regex.pp",
+      "name": "_regex_atom_end",
+      "signature": "fn _regex_atom_end(pattern: str, at: int) -> int"
+    },
+    {
+      "documentation": "",
+      "kind": "fn",
+      "line": 67,
+      "module": "stdlib/std/regex.pp",
+      "name": "_regex_atom_matches",
+      "signature": "fn _regex_atom_matches(pattern: str, at: int, atom_end: int, text_value: str, pos: int) -> bool"
+    },
+    {
+      "documentation": "",
+      "kind": "fn",
+      "line": 77,
+      "module": "stdlib/std/regex.pp",
+      "name": "_regex_match_from",
+      "signature": "fn _regex_match_from(pattern: str, p: int, text_value: str, t: int, depth: int) -> int"
+    },
+    {
+      "documentation": "",
+      "kind": "fn",
+      "line": 117,
+      "module": "stdlib/std/regex.pp",
+      "name": "regex_search_from",
+      "signature": "fn regex_search_from(pattern: str, text_value: str, offset: int) -> RegexMatch"
+    },
+    {
+      "documentation": "",
+      "kind": "fn",
+      "line": 134,
+      "module": "stdlib/std/regex.pp",
+      "name": "regex_search",
+      "signature": "fn regex_search(pattern: str, text_value: str) -> RegexMatch"
+    },
+    {
+      "documentation": "",
+      "kind": "fn",
+      "line": 135,
+      "module": "stdlib/std/regex.pp",
+      "name": "regex_is_match",
+      "signature": "fn regex_is_match(pattern: str, text_value: str) -> bool"
+    },
+    {
+      "documentation": "",
+      "kind": "fn",
+      "line": 136,
+      "module": "stdlib/std/regex.pp",
+      "name": "regex_full_match",
+      "signature": "fn regex_full_match(pattern: str, text_value: str) -> bool"
+    },
+    {
+      "documentation": "",
+      "kind": "fn",
+      "line": 141,
+      "module": "stdlib/std/regex.pp",
+      "name": "regex_find_all",
+      "signature": "fn regex_find_all(pattern: str, text_value: str) -> List<str>"
+    },
+    {
+      "documentation": "",
+      "kind": "fn",
+      "line": 153,
+      "module": "stdlib/std/regex.pp",
+      "name": "regex_replace",
+      "signature": "fn regex_replace(pattern: str, text_value: str, replacement: str) -> str"
+    },
+    {
+      "documentation": "",
+      "kind": "fn",
+      "line": 168,
+      "module": "stdlib/std/regex.pp",
+      "name": "regex_split",
+      "signature": "fn regex_split(pattern: str, text_value: str) -> List<str>"
     },
     {
       "documentation": "Generic Result helpers. Result<T,E> itself is a prelude algebraic enum.",
@@ -2737,9 +6249,49 @@
       "signature": "fn format_elapsed(milliseconds: int) -> str"
     },
     {
+      "documentation": "Small host-information layer over unavoidable OS queries.",
+      "kind": "struct",
+      "line": 2,
+      "module": "stdlib/std/system_info.pp",
+      "name": "SystemInfo",
+      "signature": "struct SystemInfo"
+    },
+    {
       "documentation": "",
       "kind": "fn",
       "line": 3,
+      "module": "stdlib/std/system_info.pp",
+      "name": "system_info",
+      "signature": "fn system_info()->SystemInfo"
+    },
+    {
+      "documentation": "",
+      "kind": "fn",
+      "line": 4,
+      "module": "stdlib/std/system_info.pp",
+      "name": "environment",
+      "signature": "fn environment(name:str,fallback:str)->str"
+    },
+    {
+      "documentation": "",
+      "kind": "fn",
+      "line": 5,
+      "module": "stdlib/std/system_info.pp",
+      "name": "environment_set",
+      "signature": "fn environment_set(name:str,value:str)->bool"
+    },
+    {
+      "documentation": "",
+      "kind": "fn",
+      "line": 6,
+      "module": "stdlib/std/system_info.pp",
+      "name": "arguments",
+      "signature": "fn arguments()->List<str>"
+    },
+    {
+      "documentation": "Assertion, aggregation and benchmark helpers written in PunPun.",
+      "kind": "fn",
+      "line": 2,
       "module": "stdlib/std/testing.pp",
       "name": "expect_int",
       "signature": "fn expect_int(actual: i64, expected: i64) -> void"
@@ -2747,7 +6299,7 @@
     {
       "documentation": "",
       "kind": "fn",
-      "line": 7,
+      "line": 3,
       "module": "stdlib/std/testing.pp",
       "name": "expect_bool",
       "signature": "fn expect_bool(actual: bool, expected: bool) -> void"
@@ -2755,10 +6307,98 @@
     {
       "documentation": "",
       "kind": "fn",
-      "line": 11,
+      "line": 4,
       "module": "stdlib/std/testing.pp",
       "name": "expect_str",
       "signature": "fn expect_str(actual: String, expected: String) -> void"
+    },
+    {
+      "documentation": "",
+      "kind": "fn",
+      "line": 5,
+      "module": "stdlib/std/testing.pp",
+      "name": "expect_close",
+      "signature": "fn expect_close(actual:float,expected:float,tolerance:float)->void"
+    },
+    {
+      "documentation": "",
+      "kind": "object",
+      "line": 7,
+      "module": "stdlib/std/testing.pp",
+      "name": "TestSuite",
+      "signature": "object TestSuite"
+    },
+    {
+      "documentation": "",
+      "kind": "fn",
+      "line": 10,
+      "module": "stdlib/std/testing.pp",
+      "name": "check",
+      "signature": "public fn check(condition:bool,message:str)->void"
+    },
+    {
+      "documentation": "",
+      "kind": "fn",
+      "line": 11,
+      "module": "stdlib/std/testing.pp",
+      "name": "equal_int",
+      "signature": "public fn equal_int(actual:int,expected:int,message:str)->void"
+    },
+    {
+      "documentation": "",
+      "kind": "fn",
+      "line": 12,
+      "module": "stdlib/std/testing.pp",
+      "name": "equal_str",
+      "signature": "public fn equal_str(actual:str,expected:str,message:str)->void"
+    },
+    {
+      "documentation": "",
+      "kind": "fn",
+      "line": 13,
+      "module": "stdlib/std/testing.pp",
+      "name": "equal_bool",
+      "signature": "public fn equal_bool(actual:bool,expected:bool,message:str)->void"
+    },
+    {
+      "documentation": "",
+      "kind": "fn",
+      "line": 14,
+      "module": "stdlib/std/testing.pp",
+      "name": "ok",
+      "signature": "public fn ok()->bool"
+    },
+    {
+      "documentation": "",
+      "kind": "fn",
+      "line": 15,
+      "module": "stdlib/std/testing.pp",
+      "name": "summary",
+      "signature": "public fn summary()->str"
+    },
+    {
+      "documentation": "",
+      "kind": "fn",
+      "line": 16,
+      "module": "stdlib/std/testing.pp",
+      "name": "assert_ok",
+      "signature": "public fn assert_ok()->void"
+    },
+    {
+      "documentation": "",
+      "kind": "struct",
+      "line": 18,
+      "module": "stdlib/std/testing.pp",
+      "name": "Benchmark",
+      "signature": "struct Benchmark"
+    },
+    {
+      "documentation": "",
+      "kind": "fn",
+      "line": 19,
+      "module": "stdlib/std/testing.pp",
+      "name": "benchmark",
+      "signature": "fn benchmark(rounds:int,work:fn()->void)->Benchmark"
     },
     {
       "documentation": "",
@@ -3113,6 +6753,62 @@
       "signature": "fn equals_ignore_case(left_value: str, right_value: str) -> bool"
     },
     {
+      "documentation": "UTF-8 encode/decode utilities implemented in PunPun over byte strings.",
+      "kind": "fn",
+      "line": 2,
+      "module": "stdlib/std/text/utf8.pp",
+      "name": "utf8_encode_codepoint",
+      "signature": "fn utf8_encode_codepoint(codepoint:int)->str"
+    },
+    {
+      "documentation": "",
+      "kind": "fn",
+      "line": 9,
+      "module": "stdlib/std/text/utf8.pp",
+      "name": "_utf8_cont",
+      "signature": "fn _utf8_cont(c:int)->bool"
+    },
+    {
+      "documentation": "",
+      "kind": "fn",
+      "line": 10,
+      "module": "stdlib/std/text/utf8.pp",
+      "name": "utf8_decode",
+      "signature": "fn utf8_decode(value:str)->List<int>"
+    },
+    {
+      "documentation": "",
+      "kind": "fn",
+      "line": 33,
+      "module": "stdlib/std/text/utf8.pp",
+      "name": "utf8_encode",
+      "signature": "fn utf8_encode(codepoints:List<int>)->str"
+    },
+    {
+      "documentation": "",
+      "kind": "fn",
+      "line": 34,
+      "module": "stdlib/std/text/utf8.pp",
+      "name": "utf8_reverse",
+      "signature": "fn utf8_reverse(value:str)->str"
+    },
+    {
+      "documentation": "",
+      "kind": "fn",
+      "line": 35,
+      "module": "stdlib/std/text/utf8.pp",
+      "name": "utf8_at",
+      "signature": "fn utf8_at(value:str,index:int)->int"
+    },
+    {
+      "documentation": "",
+      "kind": "fn",
+      "line": 36,
+      "module": "stdlib/std/text/utf8.pp",
+      "name": "utf8_slice",
+      "signature": "fn utf8_slice(value:str,start:int,end:int)->str"
+    },
+    {
       "documentation": "",
       "kind": "fn",
       "line": 6,
@@ -3259,31 +6955,31 @@
     {
       "documentation": "",
       "kind": "fn",
-      "line": 1,
+      "line": 4,
       "module": "packages/filesystem/src/main.pp",
       "name": "file_read",
-      "signature": "fn file_read(path: String) -> String"
+      "signature": "fn file_read(path_value: String) -> String"
     },
     {
       "documentation": "",
       "kind": "fn",
-      "line": 2,
+      "line": 5,
       "module": "packages/filesystem/src/main.pp",
       "name": "file_write",
-      "signature": "fn file_write(path: String, contents: String)"
+      "signature": "fn file_write(path_value: String, contents: String)"
     },
     {
       "documentation": "",
       "kind": "fn",
-      "line": 3,
+      "line": 6,
       "module": "packages/filesystem/src/main.pp",
       "name": "file_present",
-      "signature": "fn file_present(path: String) -> bool"
+      "signature": "fn file_present(path_value: String) -> bool"
     },
     {
       "documentation": "",
       "kind": "fn",
-      "line": 4,
+      "line": 7,
       "module": "packages/filesystem/src/main.pp",
       "name": "working_directory",
       "signature": "fn working_directory() -> String"
@@ -3291,39 +6987,39 @@
     {
       "documentation": "",
       "kind": "fn",
-      "line": 21,
-      "module": "packages/json/src/main.pp",
-      "name": "pp_json_valid",
-      "signature": "extern native fn pp_json_valid(text: String) -> i64;"
+      "line": 8,
+      "module": "packages/filesystem/src/main.pp",
+      "name": "file_copy",
+      "signature": "fn file_copy(source:String,destination:String)->void"
     },
     {
       "documentation": "",
       "kind": "fn",
-      "line": 22,
-      "module": "packages/json/src/main.pp",
-      "name": "pp_json_get_string",
-      "signature": "extern native fn pp_json_get_string(text: String, key: String, fallback: String) -> String;"
+      "line": 9,
+      "module": "packages/filesystem/src/main.pp",
+      "name": "tree_copy",
+      "signature": "fn tree_copy(source:String,destination:String)->void"
     },
     {
       "documentation": "",
       "kind": "fn",
-      "line": 23,
-      "module": "packages/json/src/main.pp",
-      "name": "pp_json_get_i64",
-      "signature": "extern native fn pp_json_get_i64(text: String, key: String, fallback: i64) -> i64;"
+      "line": 10,
+      "module": "packages/filesystem/src/main.pp",
+      "name": "tree_remove",
+      "signature": "fn tree_remove(target:String)->bool"
     },
     {
       "documentation": "",
       "kind": "fn",
-      "line": 24,
-      "module": "packages/json/src/main.pp",
-      "name": "pp_json_quote",
-      "signature": "extern native fn pp_json_quote(text: String) -> String;"
+      "line": 11,
+      "module": "packages/filesystem/src/main.pp",
+      "name": "normalize_path",
+      "signature": "fn normalize_path(value:String)->String"
     },
     {
-      "documentation": "",
+      "documentation": "PPX json now delegates to the full PunPun standard-library implementation. The old 0.1 convenience functions remain source-compatible.",
       "kind": "fn",
-      "line": 26,
+      "line": 5,
       "module": "packages/json/src/main.pp",
       "name": "json_valid",
       "signature": "fn json_valid(text: String) -> bool"
@@ -3331,7 +7027,7 @@
     {
       "documentation": "",
       "kind": "fn",
-      "line": 27,
+      "line": 6,
       "module": "packages/json/src/main.pp",
       "name": "json_get_string",
       "signature": "fn json_get_string(text: String, key: String, fallback: String) -> String"
@@ -3339,7 +7035,7 @@
     {
       "documentation": "",
       "kind": "fn",
-      "line": 28,
+      "line": 9,
       "module": "packages/json/src/main.pp",
       "name": "json_get_i64",
       "signature": "fn json_get_i64(text: String, key: String, fallback: i64) -> i64"
@@ -3347,7 +7043,7 @@
     {
       "documentation": "",
       "kind": "fn",
-      "line": 29,
+      "line": 12,
       "module": "packages/json/src/main.pp",
       "name": "json_quote",
       "signature": "fn json_quote(text: String) -> String"
@@ -3355,7 +7051,31 @@
     {
       "documentation": "",
       "kind": "fn",
-      "line": 1,
+      "line": 13,
+      "module": "packages/json/src/main.pp",
+      "name": "json_decode",
+      "signature": "fn json_decode(text:String)->JsonParseResult"
+    },
+    {
+      "documentation": "",
+      "kind": "fn",
+      "line": 14,
+      "module": "packages/json/src/main.pp",
+      "name": "json_encode",
+      "signature": "fn json_encode(value:JsonValue)->String"
+    },
+    {
+      "documentation": "",
+      "kind": "fn",
+      "line": 15,
+      "module": "packages/json/src/main.pp",
+      "name": "json_encode_pretty",
+      "signature": "fn json_encode_pretty(value:JsonValue,indent:int)->String"
+    },
+    {
+      "documentation": "Compatibility helpers plus access to the real Logger type in std.logging.",
+      "kind": "fn",
+      "line": 4,
       "module": "packages/logging/src/main.pp",
       "name": "log_trace",
       "signature": "fn log_trace(message: String)"
@@ -3363,7 +7083,7 @@
     {
       "documentation": "",
       "kind": "fn",
-      "line": 2,
+      "line": 5,
       "module": "packages/logging/src/main.pp",
       "name": "log_debug",
       "signature": "fn log_debug(message: String)"
@@ -3371,7 +7091,7 @@
     {
       "documentation": "",
       "kind": "fn",
-      "line": 3,
+      "line": 6,
       "module": "packages/logging/src/main.pp",
       "name": "log_info",
       "signature": "fn log_info(message: String)"
@@ -3379,7 +7099,7 @@
     {
       "documentation": "",
       "kind": "fn",
-      "line": 4,
+      "line": 7,
       "module": "packages/logging/src/main.pp",
       "name": "log_warn",
       "signature": "fn log_warn(message: String)"
@@ -3387,10 +7107,26 @@
     {
       "documentation": "",
       "kind": "fn",
-      "line": 5,
+      "line": 8,
       "module": "packages/logging/src/main.pp",
       "name": "log_error",
       "signature": "fn log_error(message: String)"
+    },
+    {
+      "documentation": "",
+      "kind": "fn",
+      "line": 9,
+      "module": "packages/logging/src/main.pp",
+      "name": "log_named",
+      "signature": "fn log_named(name:String,threshold:int)->Logger"
+    },
+    {
+      "documentation": "",
+      "kind": "fn",
+      "line": 10,
+      "module": "packages/logging/src/main.pp",
+      "name": "log_file",
+      "signature": "fn log_file(name:String,threshold:int,path_value:String)->Logger"
     },
     {
       "documentation": "The 1.0 requests surface is preserved, but its implementation is now the compiler/runtime HTTPS service rather than package-local injected C.",
@@ -3539,7 +7275,7 @@
     {
       "documentation": "",
       "kind": "fn",
-      "line": 1,
+      "line": 2,
       "module": "packages/testing/src/main.pp",
       "name": "expect",
       "signature": "fn expect(condition: bool, message: String)"
@@ -3547,7 +7283,7 @@
     {
       "documentation": "",
       "kind": "fn",
-      "line": 2,
+      "line": 3,
       "module": "packages/testing/src/main.pp",
       "name": "expect_equal_i64",
       "signature": "fn expect_equal_i64(left: i64, right: i64, message: String)"
@@ -3555,12 +7291,12 @@
     {
       "documentation": "",
       "kind": "fn",
-      "line": 3,
+      "line": 4,
       "module": "packages/testing/src/main.pp",
       "name": "expect_equal_string",
       "signature": "fn expect_equal_string(left: String, right: String, message: String)"
     }
   ],
   "format": 1,
-  "version": "1.4.5"
+  "version": "1.5.0"
 }

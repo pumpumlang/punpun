@@ -40,10 +40,10 @@ enum class TypeKind {
     /// text with no NUL, and binary data is neither.
     Bytes,
     Task,        // @task:T
-    /// fn(T...) -> R. A value of this type is the callee's index in the
-    /// module function table, so it is one word wide and copies freely. That
-    /// representation is what lets the C, native and bytecode backends share
-    /// one calling sequence instead of three notions of a code address.
+    /// fn(T...) -> R. A value is a one-word closure handle containing a target
+    /// specialization plus an owned capture environment. Zero-capture named
+    /// functions use the same representation, so indirect calls have one
+    /// calling model across C, native, and bytecode backends.
     Function,
     /// A contract used as a type: a value that meets it, whichever concrete
     /// type that is. The value is the object's handle, exactly as the object

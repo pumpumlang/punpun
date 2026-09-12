@@ -1,7 +1,7 @@
 [package]
 name = "gui"
-version = "1.4.5"
-description = "PunPun native GUI foundation backed by compiler/runtime builtins"
+version = "1.5.0"
+description = "PunPun retained native GUI toolkit with widgets, layouts, events and canvas drawing"
 entry = "src/main.pp"
 
 [dependencies]

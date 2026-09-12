@@ -11,6 +11,10 @@ namespace {
 
 /// System V AMD64 integer argument registers, in order.
 const char *const kIntegerArguments[6] = {"%rdi", "%rsi", "%rdx", "%rcx", "%r8", "%r9"};
+/// Callee-saved registers available to PunPun's linear-scan allocator.
+/// Keeping allocated values here means runtime/helper calls cannot invalidate
+/// them, which lets the allocator stay simple and deterministic.
+const char *const kAllocatedRegisters[5] = {"%rbx", "%r12", "%r13", "%r14", "%r15"};
 
 }  // namespace
 
@@ -49,12 +53,183 @@ u32 NativeBackend::intern_string(const std::string &text) {
 // stays trivial and %rbp-relative addressing always works.
 // ---------------------------------------------------------------------------
 
+
+void NativeBackend::allocate_registers(const MirFunction &fn) {
+    const std::size_t count = fn.reg_types.size();
+    register_assignment_.assign(count, -1);
+    used_register_slots_.clear();
+    if (count == 0) return;
+
+    struct Interval { Reg reg; int start; int end; int slot = -1; };
+    std::vector<int> starts(count, -1);
+    std::vector<int> ends(count, -1);
+    std::vector<int> block_start(fn.blocks.size(), 0);
+    std::vector<int> block_end(fn.blocks.size(), 0);
+    std::vector<std::vector<bool>> uses(fn.blocks.size(), std::vector<bool>(count, false));
+    std::vector<std::vector<bool>> defs(fn.blocks.size(), std::vector<bool>(count, false));
+    int position = 0;
+
+    for (const MirBlock &block : fn.blocks) {
+        if (!block.reachable) continue;
+        block_start[block.id] = position;
+        auto note_use = [&](Reg reg) {
+            if (reg == kNoReg || reg >= count) return;
+            ends[reg] = std::max(ends[reg], position);
+            if (!defs[block.id][reg]) uses[block.id][reg] = true;
+        };
+        for (const MirInst &in : block.instructions) {
+            if (in.dest != kNoReg && in.dest < count) {
+                if (starts[in.dest] < 0) starts[in.dest] = position;
+                ends[in.dest] = std::max(ends[in.dest], position);
+                defs[block.id][in.dest] = true;
+            }
+            note_use(in.a);
+            note_use(in.b);
+            note_use(in.c);
+            for (Reg arg : in.args) note_use(arg);
+            ++position;
+        }
+        block_end[block.id] = std::max(block_start[block.id], position - 1);
+    }
+
+    // Standard backwards data-flow liveness.  This matters especially for
+    // loops: a value defined before the loop and used near the top of its body
+    // is still live after later body instructions because the backedge will use
+    // it again on the next iteration.
+    std::vector<std::vector<bool>> live_in(fn.blocks.size(), std::vector<bool>(count, false));
+    std::vector<std::vector<bool>> live_out(fn.blocks.size(), std::vector<bool>(count, false));
+    bool changed = true;
+    while (changed) {
+        changed = false;
+        for (std::size_t bi = fn.blocks.size(); bi-- > 0;) {
+            const MirBlock &block = fn.blocks[bi];
+            if (!block.reachable) continue;
+            std::vector<bool> next_out(count, false);
+            for (BlockId successor : block.successors) {
+                if (successor >= live_in.size()) continue;
+                for (Reg reg = 0; reg < count; ++reg) {
+                    next_out[reg] = next_out[reg] || live_in[successor][reg];
+                }
+            }
+            std::vector<bool> next_in(count, false);
+            for (Reg reg = 0; reg < count; ++reg) {
+                next_in[reg] = uses[block.id][reg] || (next_out[reg] && !defs[block.id][reg]);
+            }
+            if (next_out != live_out[block.id] || next_in != live_in[block.id]) {
+                live_out[block.id] = std::move(next_out);
+                live_in[block.id] = std::move(next_in);
+                changed = true;
+            }
+        }
+    }
+
+    for (const MirBlock &block : fn.blocks) {
+        if (!block.reachable) continue;
+        for (Reg reg = 0; reg < count; ++reg) {
+            if (live_out[block.id][reg]) ends[reg] = std::max(ends[reg], block_end[block.id]);
+            // Unusual block orderings are legal.  Widening to the block start is
+            // conservative and keeps linear intervals safe even when a live-in
+            // value's defining block is printed later in the file.
+            if (live_in[block.id][reg] && starts[reg] >= 0) {
+                starts[reg] = std::min(starts[reg], block_start[block.id]);
+            }
+        }
+    }
+
+    std::vector<Interval> intervals;
+    intervals.reserve(count);
+    for (Reg reg = 0; reg < count; ++reg) {
+        const Type *type = fn.reg_types[reg];
+        // SysV has no callee-saved XMM registers. Aggregates stay materialized
+        // because copy/escape machinery deliberately addresses their homes.
+        if (starts[reg] < 0 || !type || !type->is_scalar() || type->kind == TypeKind::Float) {
+            continue;
+        }
+        intervals.push_back(Interval{reg, starts[reg], std::max(starts[reg], ends[reg]), -1});
+    }
+    std::sort(intervals.begin(), intervals.end(), [](const Interval &a, const Interval &b) {
+        if (a.start != b.start) return a.start < b.start;
+        return a.reg < b.reg;
+    });
+
+    std::vector<Interval *> active;
+    std::vector<int> free_slots = {4, 3, 2, 1, 0};
+    auto expire = [&](int interval_start) {
+        std::sort(active.begin(), active.end(), [](const Interval *a, const Interval *b) {
+            return a->end < b->end;
+        });
+        std::size_t keep = 0;
+        for (Interval *item : active) {
+            if (item->end < interval_start) {
+                free_slots.push_back(item->slot);
+            } else {
+                active[keep++] = item;
+            }
+        }
+        active.resize(keep);
+    };
+
+    for (Interval &current : intervals) {
+        expire(current.start);
+        if (!free_slots.empty()) {
+            current.slot = free_slots.back();
+            free_slots.pop_back();
+            active.push_back(&current);
+            register_assignment_[current.reg] = current.slot;
+            continue;
+        }
+
+        // Spill whichever live interval ends farthest in the future.  This is
+        // the classic linear-scan choice and is deterministic on ties.
+        auto farthest = std::max_element(active.begin(), active.end(),
+            [](const Interval *a, const Interval *b) {
+                if (a->end != b->end) return a->end < b->end;
+                return a->reg < b->reg;
+            });
+        if (farthest != active.end() && (*farthest)->end > current.end) {
+            Interval *victim = *farthest;
+            current.slot = victim->slot;
+            register_assignment_[victim->reg] = -1;
+            register_assignment_[current.reg] = current.slot;
+            *farthest = &current;
+        }
+    }
+
+    bool seen[5] = {false, false, false, false, false};
+    for (int slot : register_assignment_) {
+        if (slot >= 0 && slot < 5) seen[slot] = true;
+    }
+    for (int slot = 0; slot < 5; ++slot) if (seen[slot]) used_register_slots_.push_back(slot);
+}
+
+const char *NativeBackend::allocated_register(Reg id) const {
+    if (id == kNoReg || id >= register_assignment_.size()) return nullptr;
+    const int slot = register_assignment_[id];
+    return slot >= 0 && slot < 5 ? kAllocatedRegisters[slot] : nullptr;
+}
+
+void NativeBackend::load_value(const std::string &target, Reg id) {
+    if (const char *allocated = allocated_register(id)) {
+        if (target != allocated) out_ << "\tmovq\t" << allocated << ", " << target << "\n";
+        return;
+    }
+    load(target, register_offset(id));
+}
+
+void NativeBackend::store_value(const std::string &source, Reg id) {
+    store(source, register_offset(id));
+}
+
 int NativeBackend::local_offset(u32 index) const {
     return -8 * static_cast<int>(index + 1);
 }
 
+int NativeBackend::closure_offset() const {
+    return -8 * static_cast<int>(function_->locals.size() + 1);
+}
+
 int NativeBackend::register_offset(Reg id) const {
-    const int base = static_cast<int>(function_->locals.size());
+    const int base = static_cast<int>(function_->locals.size() + 1);
     return -8 * (base + static_cast<int>(id) + 1);
 }
 
@@ -64,12 +239,12 @@ int NativeBackend::aggregate_offset(u32 slot) const {
     // known from the escape analysis before the body is emitted, whereas the
     // scratch high-water mark is only known afterwards.
     const int base =
-        static_cast<int>(function_->locals.size() + function_->reg_types.size());
+        static_cast<int>(function_->locals.size() + 1 + function_->reg_types.size());
     return -8 * (base + static_cast<int>(slot) + 1);
 }
 
 int NativeBackend::scratch_offset(u32 index) const {
-    const int base = static_cast<int>(function_->locals.size() +
+    const int base = static_cast<int>(function_->locals.size() + 1 +
                                       function_->reg_types.size() +
                                       escapes_.frame_slots_needed);
     return -8 * (base + static_cast<int>(index) + 1);
@@ -80,6 +255,19 @@ void NativeBackend::load(const std::string &reg, int offset) {
 }
 void NativeBackend::store(const std::string &reg, int offset) {
     out_ << "\tmovq\t" << reg << ", " << offset << "(%rbp)\n";
+
+    // Every virtual register keeps a spill home.  Mirroring writes here makes
+    // the allocator correct even for uncommon instructions that still emit via
+    // the generic memory path: any later load_value may trust its assigned
+    // callee-saved register.
+    if (!function_ || function_->reg_types.empty()) return;
+    const int first = register_offset(0);
+    const int last = register_offset(static_cast<Reg>(function_->reg_types.size() - 1));
+    if (offset > first || offset < last || ((first - offset) % 8) != 0) return;
+    const Reg id = static_cast<Reg>((first - offset) / 8);
+    if (const char *allocated = allocated_register(id)) {
+        if (reg != allocated) out_ << "\tmovq\t" << reg << ", " << allocated << "\n";
+    }
 }
 void NativeBackend::load_sse(const std::string &reg, int offset) {
     out_ << "\tmovsd\t" << offset << "(%rbp), " << reg << "\n";
@@ -223,8 +411,8 @@ void NativeBackend::emit_binary(const MirFunction &fn, const MirInst &in) {
             default: helper = "pp_concat"; break;
         }
 
-        load("%rdi", lhs);
-        load("%rsi", rhs);
+        load_value("%rdi", in.a);
+        load_value("%rsi", in.b);
         out_ << "\tcall\t" << helper << "\n";
         if (setcc) {
             // pp_str_cmp returns -1, 0, or 1; the comparison turns that into a
@@ -232,10 +420,14 @@ void NativeBackend::emit_binary(const MirFunction &fn, const MirInst &in) {
             out_ << "\tcmpq\t$0, %rax\n";
             out_ << "\t" << setcc << "\t%al\n";
             out_ << "\tmovzbq\t%al, %rax\n";
-        } else if (negate) {
-            out_ << "\txorq\t$1, %rax\n";
+        } else if (helper == std::string("pp_str_eq")) {
+            // C `bool` results are only defined in %al by the SysV ABI.  The
+            // upper bytes of %rax may still contain call scratch, so widen the
+            // result before using it as PunPun's word-sized bool.
+            out_ << "\tmovzbq\t%al, %rax\n";
+            if (negate) out_ << "\txorq\t$1, %rax\n";
         }
-        store("%rax", dest);
+        store_value("%rax", in.dest);
         return;
     }
 
@@ -281,8 +473,8 @@ void NativeBackend::emit_binary(const MirFunction &fn, const MirInst &in) {
     }
 
     // --- integer and boolean ----------------------------------------------
-    load("%rax", lhs);
-    load("%rcx", rhs);
+    load_value("%rax", in.a);
+    load_value("%rcx", in.b);
 
     switch (in.binary_op) {
         case BinaryOp::Add:
@@ -342,7 +534,7 @@ void NativeBackend::emit_binary(const MirFunction &fn, const MirInst &in) {
         case BinaryOp::And: out_ << "\tandq\t%rcx, %rax\n"; break;
         case BinaryOp::Or: out_ << "\torq\t%rcx, %rax\n"; break;
     }
-    store("%rax", dest);
+    store_value("%rax", in.dest);
 }
 
 }  // namespace ppc

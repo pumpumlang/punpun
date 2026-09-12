@@ -35,10 +35,16 @@ enum class MirOp : u8 {
     Binary,
     Unary,
 
-    // Calls
+    // Calls / closures
     Call,
-    /// Call through a register holding a function value. `a` is the callee
-    /// index; `target` names the signature the backends dispatch on.
+    /// Allocates a closure object. `target` is the function specialization and
+    /// `args` are captured values in environment order.
+    MakeClosure,
+    /// Reads/writes a captured slot of the current closure. `index` is the
+    /// environment slot.
+    LoadCapture,
+    StoreCapture,
+    /// Call through a register holding a closure object.
     CallIndirect,
     CallBuiltin,
 
@@ -118,7 +124,9 @@ struct MirInst {
             case MirOp::SetField:
             case MirOp::SetIndex:
             case MirOp::StoreDeref:
+            case MirOp::StoreCapture:
             case MirOp::Call:
+            case MirOp::MakeClosure:
             case MirOp::CallIndirect:
             case MirOp::CallBuiltin:
             case MirOp::Await:
@@ -150,6 +158,12 @@ struct MirLocal {
     bool address_taken = false;
 };
 
+struct MirCapture {
+    u32 local = 0;
+    const Type *type = nullptr;
+    bool is_mutable = false;
+};
+
 struct MirFunction {
     std::string name;
     Span span;
@@ -159,6 +173,7 @@ struct MirFunction {
     std::vector<MirBlock> blocks;
     /// Type of each virtual register, indexed by Reg.
     std::vector<const Type *> reg_types;
+    std::vector<MirCapture> captures;
 
     bool is_entry = false;
     bool is_async = false;

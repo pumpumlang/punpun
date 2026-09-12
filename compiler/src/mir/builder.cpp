@@ -113,9 +113,30 @@ void MirBuilder::lower_function(const HirFunction &source, MirFunction &out) {
         out.locals.push_back(lowered);
     }
     out.param_count = source.param_count;
+    for (const HirCapture &capture : source.captures) {
+        MirCapture lowered;
+        lowered.local = capture.local;
+        lowered.type = capture.type;
+        lowered.is_mutable = capture.is_mutable;
+        out.captures.push_back(lowered);
+    }
 
     out.entry_block = out.add_block();
     current_ = out.entry_block;
+
+    // Materialize the closure environment into normal locals once on entry.
+    // The body then needs no special name-resolution path for captures.
+    for (std::size_t i = 0; i < out.captures.size(); ++i) {
+        const MirCapture &capture = out.captures[i];
+        MirInst &load = emit(MirOp::LoadCapture, source.span);
+        const Reg captured = out.add_reg(capture.type);
+        load.dest = captured;
+        load.index = static_cast<u32>(i);
+        load.type = capture.type;
+        MirInst &store = emit(MirOp::StoreLocal, source.span);
+        store.index = capture.local;
+        store.a = captured;
+    }
 
     lower_block(source.body);
 
@@ -123,6 +144,7 @@ void MirBuilder::lower_function(const HirFunction &source, MirFunction &out) {
     // function the checker already reported a missing return, so this only has
     // to keep the CFG well formed.
     if (!terminated()) {
+        flush_captures(source.span);
         MirInst &instruction = emit(MirOp::Return, source.span);
         instruction.a = kNoReg;
         current_ = kNoBlock;
@@ -166,6 +188,7 @@ void MirBuilder::lower_stmt(const HirStmt *statement) {
         }
         case HirStmt::Kind::Return: {
             const Reg value = statement->value ? lower_expr(statement->value) : kNoReg;
+            flush_captures(statement->span);
             MirInst &instruction = emit(MirOp::Return, statement->span);
             instruction.a = value;
             current_ = kNoBlock;
@@ -330,6 +353,23 @@ void MirBuilder::lower_for(const HirStmt *statement) {
     start_block(exit);
 }
 
+void MirBuilder::flush_captures(Span span) {
+    if (!function_) return;
+    for (std::size_t i = 0; i < function_->captures.size(); ++i) {
+        const MirCapture &capture = function_->captures[i];
+        if (!capture.is_mutable) continue;
+        MirInst &load = emit(MirOp::LoadLocal, span);
+        const Reg value = function_->add_reg(capture.type);
+        load.dest = value;
+        load.index = capture.local;
+        load.type = capture.type;
+        MirInst &store = emit(MirOp::StoreCapture, span);
+        store.index = static_cast<u32>(i);
+        store.a = value;
+        store.type = capture.type;
+    }
+}
+
 // ---------------------------------------------------------------------------
 // Assignment places
 // ---------------------------------------------------------------------------
@@ -453,10 +493,13 @@ Reg MirBuilder::lower_expr(const HirExpr *expr) {
         case HirExpr::Kind::Call:
         case HirExpr::Kind::CallBuiltin: return lower_call(expr);
         case HirExpr::Kind::FuncRef: {
-            // The value of a function is its specialization index.
-            MirInst &instruction = emit(MirOp::ConstInt, expr->span);
+            std::vector<Reg> captures;
+            captures.reserve(expr->operands.size());
+            for (const HirExpr *capture : expr->operands) captures.push_back(lower_expr(capture));
+            MirInst &instruction = emit(MirOp::MakeClosure, expr->span);
             instruction.dest = function_->add_reg(expr->type);
-            instruction.imm = static_cast<i64>(expr->target);
+            instruction.target = expr->target;
+            instruction.args = std::move(captures);
             instruction.type = expr->type;
             return instruction.dest;
         }

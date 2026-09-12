@@ -678,7 +678,7 @@ bool Driver::ensure_runtime_objects(std::vector<std::string> &objects) {
     // the host is guarded down to an empty translation unit, which costs a
     // near-instant compile and keeps this list free of platform conditionals.
     static const char *const kRuntimeSources[] = {
-        "ppcrt.c", "ppc_https.c", "ppc_gui.c",
+        "ppcrt.c", "ppc_https.c", "ppc_gui.c", "ppc_net.c",
         "ppc_platform_posix.c", "ppc_platform_windows.c"};
 
     objects.clear();
@@ -825,6 +825,8 @@ bool Driver::link_executable(const std::string &artifact, const std::string &out
     command.push_back("-ldl");
 #elif defined(_WIN32)
     command.push_back("-luser32");
+    command.push_back("-lgdi32");
+    command.push_back("-lws2_32");
 #endif
 
     if (run_command(command) != 0) {

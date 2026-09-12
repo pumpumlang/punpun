@@ -78,6 +78,9 @@ const char *op_mnemonic(Op op) {
         case Op::StoreDeref: return "deref.set";
         case Op::Spawn: return "spawn";
         case Op::Await: return "await";
+        case Op::MakeClosure: return "closure.new";
+        case Op::LoadCapture: return "capture.get";
+        case Op::StoreCapture: return "capture.set";
     }
     return "?";
 }
@@ -188,7 +191,8 @@ std::string BytecodeProgram::disassemble() const {
                     break;
                 case Op::ConstFloat: out << " " << instruction.fimm; break;
                 case Op::Call:
-                case Op::Spawn: out << " #" << instruction.imm; break;
+                case Op::Spawn:
+                case Op::MakeClosure: out << " #" << instruction.imm; break;
                 case Op::CallBuiltin: out << " builtin:" << instruction.imm; break;
                 default:
                     if (is_jump(instruction.op)) out << " -> " << instruction.imm;

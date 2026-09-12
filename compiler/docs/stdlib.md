@@ -81,6 +81,30 @@ security bug:
 - `random_bytes` — reads the operating system's entropy pool. For keys, nonces,
   tokens, and salts.
 
+## Networking
+
+Networking is split by layer instead of hiding every operation behind the HTTP
+client:
+
+- `std.net.dns` resolves hosts to IPv4/IPv6 address lists.
+- `std.net.tcp` provides connect/listen/accept, binary send/receive, half/full
+  shutdown, peer/local addressing, `TCP_NODELAY`, readiness waits, timeouts and
+  async wrappers.
+- `std.net.udp` provides bind, binary/text datagrams, source addresses and
+  timeout-aware receive.
+- `std.net.http` provides structured HTTP/1.1 client and server values, header
+  maps, binary request/response bodies, chunked decoding and closure handlers.
+  Plain HTTP uses PunPun sockets; HTTPS uses the verified libcurl runtime and
+  returns the same `HttpResponse` shape.
+- `std.net.websocket` provides RFC 6455 `ws://` client/server framing, masking,
+  fragmentation, ping/pong, close frames and text/binary messages.
+
+Runtime socket handles are PunPun-owned integers, not exposed OS descriptors.
+The underlying sockets are nonblocking and wait in cancellation-aware slices,
+so a cancelled task is not trapped indefinitely in `accept`, `connect`, `send`
+or `recv`. The high-level HTTP client currently closes after each request; a
+keep-alive connection pool is intentionally future work.
+
 ## What is deliberately absent
 
 ### Encryption
@@ -96,14 +120,13 @@ library (libsodium or OpenSSL) through `extern native fn` for anything
 requiring actual secrecy. Hashing (SHA-256, HMAC) is safe to implement natively
 and is planned; encryption is not.
 
-### HTTP and networking
+### Raw TLS streams
 
-Blocked on socket primitives, which do not exist in the runtime yet. The
-ordering is sockets, then HTTP/1.1, then TLS — and TLS has the same
-"do not write it yourself" constraint as encryption, so HTTPS means binding a
-reviewed library.
-
-Writing an HTTP module today would produce something that cannot connect.
+HTTPS is available through the reviewed libcurl binding, but PunPun does not yet
+expose a raw TLS stream abstraction. `wss://` therefore remains unavailable even
+though `ws://` WebSockets and verified `https://` requests work. The eventual
+implementation must bind a reviewed TLS library rather than implement TLS in the
+language.
 
 ### GUI
 
@@ -113,8 +136,10 @@ here would be verifiable, so nothing here was written.
 
 ## Next, in order
 
-1. **Sockets** in the runtime, then HTTP/1.1 on top.
-2. **SHA-256 and HMAC** as native builtins.
-3. **JSON**, which needs recursive types — currently rejected with E0901.
-4. **Recursive types via boxing**, which unblocks JSON, trees, and self-hosting.
-5. Bindings to libsodium and a TLS library for real cryptography and HTTPS.
+1. **Raw TLS streams** backed by a reviewed TLS library, which unlock `wss://`
+   without duplicating cryptography in PunPun.
+2. **HTTP keep-alive pooling** and streaming request/response bodies for clients
+   that need long-lived high-throughput connections.
+3. **SHA-256 and HMAC** as native builtins.
+4. **JSON** and richer serialization APIs.
+5. Bindings to libsodium for application cryptography.

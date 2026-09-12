@@ -36,9 +36,8 @@ struct HirExpr {
         /// backend.
         MatchSubject,
         Call,         // direct call to a known function index
-        /// A function used as a value. Carries the specialization index in
-        /// `target`; the value itself is that index, which is why a function
-        /// value needs no representation beyond an integer.
+        /// A function used as a value. `target` is the specialization and
+        /// `operands` are the values captured into its closure environment.
         FuncRef,
         /// Call through a value of function type. `left` is the callee.
         CallIndirect,
@@ -173,6 +172,14 @@ struct HirLocal {
     Span span;
 };
 
+struct HirCapture {
+    Symbol name;
+    u32 local = 0;
+    const Type *type = nullptr;
+    bool is_mutable = false;
+    Span span;
+};
+
 struct HirFunction {
     /// Mangled, globally unique name. For a specialization this includes the
     /// concrete type arguments, which is what makes specializations distinct
@@ -184,6 +191,8 @@ struct HirFunction {
     u32 param_count = 0;
     const Type *result = nullptr;
     std::vector<HirStmt *> body;
+    /// Closed-over values materialized into ordinary locals at function entry.
+    std::vector<HirCapture> captures;
 
     bool is_entry = false;
     bool is_async = false;

@@ -28,19 +28,19 @@ fn cli_has_args() -> bool
 ### `file_read`
 
 ```punpun
-fn file_read(path: String) -> String
+fn file_read(path_value: String) -> String
 ```
 
 ### `file_write`
 
 ```punpun
-fn file_write(path: String, contents: String)
+fn file_write(path_value: String, contents: String)
 ```
 
 ### `file_present`
 
 ```punpun
-fn file_present(path: String) -> bool
+fn file_present(path_value: String) -> bool
 ```
 
 ### `working_directory`
@@ -49,37 +49,39 @@ fn file_present(path: String) -> bool
 fn working_directory() -> String
 ```
 
+### `file_copy`
+
+```punpun
+fn file_copy(source:String,destination:String)->void
+```
+
+### `tree_copy`
+
+```punpun
+fn tree_copy(source:String,destination:String)->void
+```
+
+### `tree_remove`
+
+```punpun
+fn tree_remove(target:String)->bool
+```
+
+### `normalize_path`
+
+```punpun
+fn normalize_path(value:String)->String
+```
+
 ## `packages/json/src/main.pp`
-
-### `pp_json_valid`
-
-```punpun
-extern native fn pp_json_valid(text: String) -> i64;
-```
-
-### `pp_json_get_string`
-
-```punpun
-extern native fn pp_json_get_string(text: String, key: String, fallback: String) -> String;
-```
-
-### `pp_json_get_i64`
-
-```punpun
-extern native fn pp_json_get_i64(text: String, key: String, fallback: i64) -> i64;
-```
-
-### `pp_json_quote`
-
-```punpun
-extern native fn pp_json_quote(text: String) -> String;
-```
 
 ### `json_valid`
 
 ```punpun
 fn json_valid(text: String) -> bool
 ```
+
+PPX json now delegates to the full PunPun standard-library implementation. The old 0.1 convenience functions remain source-compatible.
 
 ### `json_get_string`
 
@@ -99,6 +101,24 @@ fn json_get_i64(text: String, key: String, fallback: i64) -> i64
 fn json_quote(text: String) -> String
 ```
 
+### `json_decode`
+
+```punpun
+fn json_decode(text:String)->JsonParseResult
+```
+
+### `json_encode`
+
+```punpun
+fn json_encode(value:JsonValue)->String
+```
+
+### `json_encode_pretty`
+
+```punpun
+fn json_encode_pretty(value:JsonValue,indent:int)->String
+```
+
 ## `packages/logging/src/main.pp`
 
 ### `log_trace`
@@ -106,6 +126,8 @@ fn json_quote(text: String) -> String
 ```punpun
 fn log_trace(message: String)
 ```
+
+Compatibility helpers plus access to the real Logger type in std.logging.
 
 ### `log_debug`
 
@@ -129,6 +151,18 @@ fn log_warn(message: String)
 
 ```punpun
 fn log_error(message: String)
+```
+
+### `log_named`
+
+```punpun
+fn log_named(name:String,threshold:int)->Logger
+```
+
+### `log_file`
+
+```punpun
+fn log_file(name:String,threshold:int,path_value:String)->Logger
 ```
 
 ## `packages/requests/src/main.pp`
@@ -263,6 +297,76 @@ fn expect_equal_i64(left: i64, right: i64, message: String)
 fn expect_equal_string(left: String, right: String, message: String)
 ```
 
+## `stdlib/std/archive/zip.pp`
+
+### `ZipEntry`
+
+```punpun
+struct ZipEntry
+```
+
+Interoperable ZIP archives using method 0 (stored/no compression). The format machinery is deliberately implemented in PunPun.  Pair this with std.compress when an application wants to compress payloads before archiving.
+
+### `ZipReadResult`
+
+```punpun
+struct ZipReadResult
+```
+
+### `ok`
+
+```punpun
+public fn ok() -> bool
+```
+
+### `get`
+
+```punpun
+public fn get(name: str) -> bytes
+```
+
+### `has`
+
+```punpun
+public fn has(name: str) -> bool
+```
+
+### `_zip_append`
+
+```punpun
+fn _zip_append(out: bytes, data: bytes) -> void
+```
+
+### `_zip_need`
+
+```punpun
+fn _zip_need(data: bytes, offset: int, amount: int) -> bool
+```
+
+### `zip_write`
+
+```punpun
+fn zip_write(entries: List<ZipEntry>) -> bytes
+```
+
+### `zip_read`
+
+```punpun
+fn zip_read(data: bytes) -> ZipReadResult
+```
+
+### `zip_write_file`
+
+```punpun
+fn zip_write_file(path: str, entries: List<ZipEntry>) -> void
+```
+
+### `zip_read_file`
+
+```punpun
+fn zip_read_file(path: str) -> ZipReadResult
+```
+
 ## `stdlib/std/async.pp`
 
 ### `delay_ms`
@@ -341,6 +445,158 @@ fn counter_total(counts: Map<int>) -> int
 
 ```punpun
 fn counter_most_common(counts: Map<int>) -> str
+```
+
+## `stdlib/std/collections/deque.pp`
+
+### `Deque`
+
+```punpun
+object Deque<T: Copy>
+```
+
+Amortized O(1) FIFO deque using a List plus a moving head. Front removals do not shift the whole list; occasional compaction bounds retained dead slots.
+
+### `size`
+
+```punpun
+public fn size()->int
+```
+
+### `empty`
+
+```punpun
+public fn empty()->bool
+```
+
+### `push_back`
+
+```punpun
+public fn push_back(value:T)->void
+```
+
+### `front`
+
+```punpun
+public fn front()->T
+```
+
+### `back`
+
+```punpun
+public fn back()->T
+```
+
+### `pop_front`
+
+```punpun
+public fn pop_front()->T
+```
+
+### `pop_back`
+
+```punpun
+public fn pop_back()->T
+```
+
+### `clear`
+
+```punpun
+public fn clear()->void
+```
+
+### `compact`
+
+```punpun
+public fn compact()->void
+```
+
+## `stdlib/std/collections/functional.pp`
+
+### `list_map`
+
+```punpun
+fn list_map<T: Copy, U: Copy>(items: List<T>, transform: fn(T) -> U) -> List<U>
+```
+
+Higher-order collection operations unlocked by capturing function values. These are deliberately library code: map/filter/fold do not need compiler magic.
+
+### `list_filter`
+
+```punpun
+fn list_filter<T: Copy>(items: List<T>, predicate: fn(T) -> bool) -> List<T>
+```
+
+### `list_fold`
+
+```punpun
+fn list_fold<T: Copy, U: Copy>(items: List<T>, initial: U, combine: fn(U,T) -> U) -> U
+```
+
+### `list_any`
+
+```punpun
+fn list_any<T: Copy>(items: List<T>, predicate: fn(T) -> bool) -> bool
+```
+
+### `list_all`
+
+```punpun
+fn list_all<T: Copy>(items: List<T>, predicate: fn(T) -> bool) -> bool
+```
+
+### `list_count_if`
+
+```punpun
+fn list_count_if<T: Copy>(items: List<T>, predicate: fn(T) -> bool) -> int
+```
+
+### `list_find_index`
+
+```punpun
+fn list_find_index<T: Copy>(items: List<T>, predicate: fn(T) -> bool) -> int
+```
+
+### `list_for_each`
+
+```punpun
+fn list_for_each<T: Copy>(items: List<T>, action: fn(T) -> void) -> void
+```
+
+### `list_take`
+
+```punpun
+fn list_take<T: Copy>(items: List<T>, count: int) -> List<T>
+```
+
+### `list_drop`
+
+```punpun
+fn list_drop<T: Copy>(items: List<T>, count: int) -> List<T>
+```
+
+### `Indexed`
+
+```punpun
+struct Indexed<T>
+```
+
+### `list_enumerate`
+
+```punpun
+fn list_enumerate<T: Copy>(items: List<T>) -> List<Indexed<T>>
+```
+
+### `Pair`
+
+```punpun
+struct Pair<T,U>
+```
+
+### `list_zip`
+
+```punpun
+fn list_zip<T: Copy,U: Copy>(left:List<T>,right:List<U>)->List<Pair<T,U>>
 ```
 
 ## `stdlib/std/collections/grid.pp`
@@ -755,6 +1011,274 @@ fn stack_peek<T: Copy>(items: List<T>) -> T
 fn stack_is_empty<T: Copy>(items: List<T>) -> bool
 ```
 
+## `stdlib/std/compress/lzss.pp`
+
+### `_lz_push_u32`
+
+```punpun
+fn _lz_push_u32(out: bytes, value: int) -> void
+```
+
+LZSS compression implemented entirely in PunPun. Stream format: "PPLZ" + 32-bit original size + groups of one flag byte and up to eight tokens. Flag 1 = literal byte; flag 0 = two-byte (offset,length) backreference. Window 4095 bytes, match length 3..18.
+
+### `_lz_read_u32`
+
+```punpun
+fn _lz_read_u32(data: bytes, at: int) -> int
+```
+
+### `_LzMatch`
+
+```punpun
+struct _LzMatch
+```
+
+### `_lz_best`
+
+```punpun
+fn _lz_best(data: bytes, pos: int) -> _LzMatch
+```
+
+### `lzss_compress`
+
+```punpun
+fn lzss_compress(data: bytes) -> bytes
+```
+
+### `lzss_decompress`
+
+```punpun
+fn lzss_decompress(data: bytes) -> bytes
+```
+
+### `lzss_compress_text`
+
+```punpun
+fn lzss_compress_text(value: str) -> bytes
+```
+
+### `lzss_decompress_text`
+
+```punpun
+fn lzss_decompress_text(data: bytes) -> str
+```
+
+## `stdlib/std/compress/rle.pp`
+
+### `rle_compress`
+
+```punpun
+fn rle_compress(data: bytes) -> bytes
+```
+
+Byte run-length encoding. Excellent for repetitive masks/images, intentionally simple and deterministic. Pairs are (count,value), count 1..255.
+
+### `rle_decompress`
+
+```punpun
+fn rle_decompress(data: bytes) -> bytes
+```
+
+## `stdlib/std/config.pp`
+
+### `Config`
+
+```punpun
+object Config
+```
+
+Layered application configuration. Values are typed JsonValue entries so a config can hold strings, numbers, booleans and arrays without stringly-typed conversions scattered across the application.
+
+### `has`
+
+```punpun
+public fn has(key:str)->bool
+```
+
+### `set`
+
+```punpun
+public fn set(key:str,value:JsonValue)->void
+```
+
+### `get`
+
+```punpun
+public fn get(key:str)->JsonValue
+```
+
+### `string`
+
+```punpun
+public fn string(key:str,fallback:str)->str
+```
+
+### `integer`
+
+```punpun
+public fn integer(key:str,fallback:int)->int
+```
+
+### `boolean`
+
+```punpun
+public fn boolean(key:str,fallback:bool)->bool
+```
+
+### `overlay`
+
+```punpun
+public fn overlay(other:Map<JsonValue>)->void
+```
+
+### `env_string`
+
+```punpun
+public fn env_string(key:str,env_name:str)->void
+```
+
+### `env_int`
+
+```punpun
+public fn env_int(key:str,env_name:str)->void
+```
+
+### `env_bool`
+
+```punpun
+public fn env_bool(key:str,env_name:str)->void
+```
+
+### `config_from_toml`
+
+```punpun
+fn config_from_toml(source:str)->Config
+```
+
+### `config_load_toml`
+
+```punpun
+fn config_load_toml(path_value:str)->Config
+```
+
+## `stdlib/std/crypto/sha256.pp`
+
+### `_u32`
+
+```punpun
+fn _u32(value: int) -> int
+```
+
+SHA-256 implemented in PunPun. Arithmetic is explicitly reduced to 32 bits so checked signed-int overflow never becomes part of the algorithm.
+
+### `_rotr32`
+
+```punpun
+fn _rotr32(value: int, amount: int) -> int
+```
+
+### `_shr32`
+
+```punpun
+fn _shr32(value: int, amount: int) -> int
+```
+
+### `_sha_ch`
+
+```punpun
+fn _sha_ch(x: int, y: int, z: int) -> int
+```
+
+### `_sha_maj`
+
+```punpun
+fn _sha_maj(x: int, y: int, z: int) -> int
+```
+
+### `_sha_big0`
+
+```punpun
+fn _sha_big0(x: int) -> int
+```
+
+### `_sha_big1`
+
+```punpun
+fn _sha_big1(x: int) -> int
+```
+
+### `_sha_small0`
+
+```punpun
+fn _sha_small0(x: int) -> int
+```
+
+### `_sha_small1`
+
+```punpun
+fn _sha_small1(x: int) -> int
+```
+
+### `_sha_constants`
+
+```punpun
+fn _sha_constants() -> List<int>
+```
+
+### `_sha_push_u32`
+
+```punpun
+fn _sha_push_u32(out: bytes, value: int) -> void
+```
+
+### `sha256`
+
+```punpun
+fn sha256(data: bytes) -> bytes
+```
+
+### `sha256_text`
+
+```punpun
+fn sha256_text(value: str) -> bytes
+```
+
+### `sha256_hex`
+
+```punpun
+fn sha256_hex(data: bytes) -> str
+```
+
+### `sha256_text_hex`
+
+```punpun
+fn sha256_text_hex(value: str) -> str
+```
+
+### `hmac_sha256`
+
+```punpun
+fn hmac_sha256(key: bytes, message: bytes) -> bytes
+```
+
+### `hmac_sha256_hex`
+
+```punpun
+fn hmac_sha256_hex(key: bytes, message: bytes) -> str
+```
+
+### `hmac_sha256_text_hex`
+
+```punpun
+fn hmac_sha256_text_hex(key: str, message: str) -> str
+```
+
+### `constant_time_equal`
+
+```punpun
+fn constant_time_equal(left: bytes, right: bytes) -> bool
+```
+
 ## `stdlib/std/data/base64.pp`
 
 ### `base64_alphabet`
@@ -995,6 +1519,380 @@ fn ini_get_int(values: Map<str>, section: str, key: str, fallback: int) -> int
 fn ini_get_bool(values: Map<str>, section: str, key: str, fallback: bool) -> bool
 ```
 
+## `stdlib/std/data/json.pp`
+
+### `json_null_kind`
+
+```punpun
+fn json_null_kind() -> int
+```
+
+Full JSON values, parsing, serialization and pretty-printing in PunPun. The runtime supplies only strings, bytes, List and Map. JSON semantics live here.
+
+### `json_bool_kind`
+
+```punpun
+fn json_bool_kind() -> int
+```
+
+### `json_number_kind`
+
+```punpun
+fn json_number_kind() -> int
+```
+
+### `json_string_kind`
+
+```punpun
+fn json_string_kind() -> int
+```
+
+### `json_array_kind`
+
+```punpun
+fn json_array_kind() -> int
+```
+
+### `json_object_kind`
+
+```punpun
+fn json_object_kind() -> int
+```
+
+### `JsonValue`
+
+```punpun
+struct JsonValue
+```
+
+### `is_null`
+
+```punpun
+public fn is_null() -> bool
+```
+
+### `is_bool`
+
+```punpun
+public fn is_bool() -> bool
+```
+
+### `is_number`
+
+```punpun
+public fn is_number() -> bool
+```
+
+### `is_string`
+
+```punpun
+public fn is_string() -> bool
+```
+
+### `is_array`
+
+```punpun
+public fn is_array() -> bool
+```
+
+### `is_object`
+
+```punpun
+public fn is_object() -> bool
+```
+
+### `bool_or`
+
+```punpun
+public fn bool_or(fallback: bool) -> bool
+```
+
+### `number_or`
+
+```punpun
+public fn number_or(fallback: float) -> float
+```
+
+### `int_or`
+
+```punpun
+public fn int_or(fallback: int) -> int
+```
+
+### `string_or`
+
+```punpun
+public fn string_or(fallback: str) -> str
+```
+
+### `size`
+
+```punpun
+public fn size() -> int
+```
+
+### `at`
+
+```punpun
+public fn at(index: int) -> JsonValue
+```
+
+### `has`
+
+```punpun
+public fn has(key: str) -> bool
+```
+
+### `get`
+
+```punpun
+public fn get(key: str) -> JsonValue
+```
+
+### `get_string`
+
+```punpun
+public fn get_string(key: str, fallback: str) -> str
+```
+
+### `get_int`
+
+```punpun
+public fn get_int(key: str, fallback: int) -> int
+```
+
+### `get_bool`
+
+```punpun
+public fn get_bool(key: str, fallback: bool) -> bool
+```
+
+### `push`
+
+```punpun
+public fn push(value: JsonValue) -> JsonValue
+```
+
+### `put`
+
+```punpun
+public fn put(key: str, value: JsonValue) -> JsonValue
+```
+
+### `encode`
+
+```punpun
+public fn encode() -> str
+```
+
+### `pretty`
+
+```punpun
+public fn pretty(indent: int) -> str
+```
+
+### `json_null`
+
+```punpun
+fn json_null() -> JsonValue
+```
+
+### `json_bool`
+
+```punpun
+fn json_bool(value: bool) -> JsonValue
+```
+
+### `json_number`
+
+```punpun
+fn json_number(value: float) -> JsonValue
+```
+
+### `json_int`
+
+```punpun
+fn json_int(value: int) -> JsonValue
+```
+
+### `json_string`
+
+```punpun
+fn json_string(value: str) -> JsonValue
+```
+
+### `json_array`
+
+```punpun
+fn json_array() -> JsonValue
+```
+
+### `json_object`
+
+```punpun
+fn json_object() -> JsonValue
+```
+
+### `JsonParseResult`
+
+```punpun
+struct JsonParseResult
+```
+
+### `ok`
+
+```punpun
+public fn ok() -> bool
+```
+
+### `_JsonParser`
+
+```punpun
+object _JsonParser
+```
+
+### `fail`
+
+```punpun
+public fn fail(message: str) -> void
+```
+
+### `skip_space`
+
+```punpun
+public fn skip_space() -> void
+```
+
+### `take`
+
+```punpun
+public fn take(expected: int) -> bool
+```
+
+### `parse_value`
+
+```punpun
+public fn parse_value(depth: int) -> JsonValue
+```
+
+### `parse_literal`
+
+```punpun
+public fn parse_literal(word: str, value: JsonValue) -> JsonValue
+```
+
+### `parse_number`
+
+```punpun
+public fn parse_number() -> JsonValue
+```
+
+### `hex_digit`
+
+```punpun
+public fn hex_digit(c: int) -> int
+```
+
+### `unicode4`
+
+```punpun
+public fn unicode4() -> int
+```
+
+### `utf8`
+
+```punpun
+public fn utf8(codepoint: int) -> str
+```
+
+### `parse_string`
+
+```punpun
+public fn parse_string() -> str
+```
+
+### `parse_array`
+
+```punpun
+public fn parse_array(depth: int) -> JsonValue
+```
+
+### `parse_object`
+
+```punpun
+public fn parse_object(depth: int) -> JsonValue
+```
+
+### `json_parse`
+
+```punpun
+fn json_parse(source: str) -> JsonParseResult
+```
+
+### `json_parse_or_panic`
+
+```punpun
+fn json_parse_or_panic(source: str) -> JsonValue
+```
+
+### `_json_escape`
+
+```punpun
+fn _json_escape(value: str) -> str
+```
+
+### `_json_number`
+
+```punpun
+fn _json_number(value: float) -> str
+```
+
+### `json_stringify`
+
+```punpun
+fn json_stringify(value: JsonValue) -> str
+```
+
+### `_json_indent`
+
+```punpun
+fn _json_indent(depth: int, width: int) -> str
+```
+
+### `_json_pretty`
+
+```punpun
+fn _json_pretty(value: JsonValue, width: int, depth: int) -> str
+```
+
+### `json_pretty`
+
+```punpun
+fn json_pretty(value: JsonValue, indent: int) -> str
+```
+
+### `json_equal`
+
+```punpun
+fn json_equal(left: JsonValue, right: JsonValue) -> bool
+```
+
+## `stdlib/std/data/mime.pp`
+
+### `mime_type`
+
+```punpun
+fn mime_type(path_value:str)->str
+```
+
+Common MIME inference by file extension. Unknown files intentionally use the safe generic binary type instead of guessing text.
+
+### `mime_is_text`
+
+```punpun
+fn mime_is_text(value:str)->bool
+```
+
 ## `stdlib/std/data/query.pp`
 
 ### `is_unreserved`
@@ -1033,6 +1931,88 @@ fn query_encode(values: Map<str>) -> str
 fn query_decode(query: str) -> Map<str>
 ```
 
+## `stdlib/std/data/toml.pp`
+
+### `TomlParseResult`
+
+```punpun
+struct TomlParseResult
+```
+
+Practical TOML configuration parser written in PunPun. Values reuse JsonValue because TOML's scalar/array/table data model overlaps JSON well. Keys are stored as dotted paths; this keeps lookup cheap and avoids hiding a second tree representation behind native code.
+
+### `ok`
+
+```punpun
+public fn ok() -> bool
+```
+
+### `has`
+
+```punpun
+public fn has(path: str) -> bool
+```
+
+### `get`
+
+```punpun
+public fn get(path: str) -> JsonValue
+```
+
+### `get_string`
+
+```punpun
+public fn get_string(path: str, fallback: str) -> str
+```
+
+### `get_int`
+
+```punpun
+public fn get_int(path: str, fallback: int) -> int
+```
+
+### `get_bool`
+
+```punpun
+public fn get_bool(path: str, fallback: bool) -> bool
+```
+
+### `_toml_strip_comment`
+
+```punpun
+fn _toml_strip_comment(line: str) -> str
+```
+
+### `_toml_unescape_string`
+
+```punpun
+fn _toml_unescape_string(source: str) -> str
+```
+
+### `_toml_split_array`
+
+```punpun
+fn _toml_split_array(source: str) -> List<str>
+```
+
+### `_toml_parse_value`
+
+```punpun
+fn _toml_parse_value(source: str) -> JsonValue
+```
+
+### `toml_parse`
+
+```punpun
+fn toml_parse(source: str) -> TomlParseResult
+```
+
+### `toml_stringify`
+
+```punpun
+fn toml_stringify(values: Map<JsonValue>) -> str
+```
+
 ## `stdlib/std/data/uuid.pp`
 
 ### `uuid4`
@@ -1051,6 +2031,310 @@ fn is_uuid(value: str) -> bool
 
 ```punpun
 fn uuid_nil() -> str
+```
+
+## `stdlib/std/datetime.pp`
+
+### `Duration`
+
+```punpun
+struct Duration
+```
+
+Date/time value types and ISO-8601 formatting/parsing in PunPun. Host primitives only provide wall/monotonic clocks and local decomposition.
+
+### `seconds`
+
+```punpun
+public fn seconds() -> float
+```
+
+### `minutes`
+
+```punpun
+public fn minutes() -> float
+```
+
+### `hours`
+
+```punpun
+public fn hours() -> float
+```
+
+### `milliseconds`
+
+```punpun
+fn milliseconds(value:int)->Duration
+```
+
+### `seconds`
+
+```punpun
+fn seconds(value:int)->Duration
+```
+
+### `minutes`
+
+```punpun
+fn minutes(value:int)->Duration
+```
+
+### `hours`
+
+```punpun
+fn hours(value:int)->Duration
+```
+
+### `DateTime`
+
+```punpun
+struct DateTime
+```
+
+### `iso`
+
+```punpun
+public fn iso() -> str
+```
+
+### `datetime_now_local`
+
+```punpun
+fn datetime_now_local() -> DateTime
+```
+
+### `datetime_is_leap_year`
+
+```punpun
+fn datetime_is_leap_year(year:int)->bool
+```
+
+### `datetime_days_in_month`
+
+```punpun
+fn datetime_days_in_month(year:int,month:int)->int
+```
+
+### `datetime_valid`
+
+```punpun
+fn datetime_valid(value:DateTime)->bool
+```
+
+### `_days_from_civil`
+
+```punpun
+fn _days_from_civil(year:int,month:int,day:int)->int
+```
+
+### `datetime_to_epoch_ms_utc`
+
+```punpun
+fn datetime_to_epoch_ms_utc(value:DateTime)->int
+```
+
+### `_dt_two`
+
+```punpun
+fn _dt_two(v:int)->str
+```
+
+### `_dt_three`
+
+```punpun
+fn _dt_three(v:int)->str
+```
+
+### `datetime_format_iso`
+
+```punpun
+fn datetime_format_iso(value:DateTime)->str
+```
+
+### `_dt_digits`
+
+```punpun
+fn _dt_digits(source:str,start:int,count:int)->int
+```
+
+### `datetime_parse_iso`
+
+```punpun
+fn datetime_parse_iso(source:str)->DateTime
+```
+
+### `duration_between_ms`
+
+```punpun
+fn duration_between_ms(start:int,finish:int)->Duration
+```
+
+## `stdlib/std/db/kv.pp`
+
+### `KeyValueDb`
+
+```punpun
+object KeyValueDb
+```
+
+Small durable document/key-value database implemented in PunPun. It intentionally favors correctness and inspectability over pretending to be a relational engine: one JSON object is atomically replaced on commit.
+
+### `reload`
+
+```punpun
+public fn reload() -> bool
+```
+
+### `has`
+
+```punpun
+public fn has(key: str) -> bool
+```
+
+### `get`
+
+```punpun
+public fn get(key: str) -> JsonValue
+```
+
+### `get_string`
+
+```punpun
+public fn get_string(key: str, fallback: str) -> str
+```
+
+### `get_int`
+
+```punpun
+public fn get_int(key: str, fallback: int) -> int
+```
+
+### `get_bool`
+
+```punpun
+public fn get_bool(key: str, fallback: bool) -> bool
+```
+
+### `set`
+
+```punpun
+public fn set(key: str, value: JsonValue) -> void
+```
+
+### `set_string`
+
+```punpun
+public fn set_string(key: str, value: str) -> void
+```
+
+### `set_int`
+
+```punpun
+public fn set_int(key: str, value: int) -> void
+```
+
+### `set_bool`
+
+```punpun
+public fn set_bool(key: str, value: bool) -> void
+```
+
+### `remove`
+
+```punpun
+public fn remove(key: str) -> bool
+```
+
+### `size`
+
+```punpun
+public fn size() -> int
+```
+
+### `keys`
+
+```punpun
+public fn keys() -> List<str>
+```
+
+### `commit`
+
+```punpun
+public fn commit() -> bool
+```
+
+### `open_kv`
+
+```punpun
+fn open_kv(path: str) -> KeyValueDb
+```
+
+## `stdlib/std/filesystem.pp`
+
+### `FileInfo`
+
+```punpun
+struct FileInfo
+```
+
+### `file_info`
+
+```punpun
+fn file_info(value:str)->FileInfo
+```
+
+### `fs_copy_file`
+
+```punpun
+fn fs_copy_file(source:str,destination:str)->void
+```
+
+### `fs_copy_tree`
+
+```punpun
+fn fs_copy_tree(source:str,destination:str,max_depth:int)->void
+```
+
+### `fs_remove_tree`
+
+```punpun
+fn fs_remove_tree(target:str,max_depth:int)->bool
+```
+
+### `fs_walk`
+
+```punpun
+fn fs_walk(root:str,max_depth:int)->List<FileInfo>
+```
+
+### `_fs_walk_into`
+
+```punpun
+fn _fs_walk_into(root:str,depth:int,out:List<FileInfo>)->void
+```
+
+### `fs_read_lines`
+
+```punpun
+fn fs_read_lines(path_value:str)->List<str>
+```
+
+### `fs_write_lines`
+
+```punpun
+fn fs_write_lines(path_value:str,lines:List<str>)->void
+```
+
+### `fs_temp_name`
+
+```punpun
+fn fs_temp_name(prefix:str,suffix:str)->str
+```
+
+### `fs_write_text_atomic`
+
+```punpun
+fn fs_write_text_atomic(path_value:str,content:str)->void
 ```
 
 ## `stdlib/std/fs.pp`
@@ -1105,12 +2389,460 @@ fn fs_join(left: String, right: String) -> String
 fn gui_supported() -> bool
 ```
 
-Cross-platform native GUI helpers. gui_available() and gui_message(title, message) are compiler builtins. On Windows they use Win32. Linux and other POSIX hosts use X11/XWayland when it is installed and a display is available; headless programs receive false.
+Retained cross-platform GUI toolkit. Native windows use Win32 on Windows and X11/XWayland on POSIX. Set PUNPUN_GUI_HEADLESS=1 for deterministic CI/model tests without a display. Every control is represented by a small runtime handle; layout and event-loop helpers live here in PunPun so all compiler backends observe identical rules.
+
+### `gui_is_headless`
+
+```punpun
+fn gui_is_headless() -> bool
+```
 
 ### `gui_alert`
 
 ```punpun
-fn gui_alert(message: String) -> bool
+fn gui_alert(message: str) -> bool
+```
+
+### `gui_label_kind`
+
+```punpun
+fn gui_label_kind() -> int
+```
+
+Widget kinds.
+
+### `gui_button_kind`
+
+```punpun
+fn gui_button_kind() -> int
+```
+
+### `gui_input_kind`
+
+```punpun
+fn gui_input_kind() -> int
+```
+
+### `gui_checkbox_kind`
+
+```punpun
+fn gui_checkbox_kind() -> int
+```
+
+### `gui_slider_kind`
+
+```punpun
+fn gui_slider_kind() -> int
+```
+
+### `gui_progress_kind`
+
+```punpun
+fn gui_progress_kind() -> int
+```
+
+### `gui_panel_kind`
+
+```punpun
+fn gui_panel_kind() -> int
+```
+
+### `gui_canvas_kind`
+
+```punpun
+fn gui_canvas_kind() -> int
+```
+
+### `gui_event_none`
+
+```punpun
+fn gui_event_none() -> int
+```
+
+Event kinds.
+
+### `gui_event_close`
+
+```punpun
+fn gui_event_close() -> int
+```
+
+### `gui_event_click`
+
+```punpun
+fn gui_event_click() -> int
+```
+
+### `gui_event_change`
+
+```punpun
+fn gui_event_change() -> int
+```
+
+### `gui_event_key`
+
+```punpun
+fn gui_event_key() -> int
+```
+
+### `gui_event_text_changed`
+
+```punpun
+fn gui_event_text_changed() -> int
+```
+
+### `gui_event_mouse_move`
+
+```punpun
+fn gui_event_mouse_move() -> int
+```
+
+### `gui_event_mouse_down`
+
+```punpun
+fn gui_event_mouse_down() -> int
+```
+
+### `gui_event_mouse_up`
+
+```punpun
+fn gui_event_mouse_up() -> int
+```
+
+### `gui_event_resize`
+
+```punpun
+fn gui_event_resize() -> int
+```
+
+### `gui_event_paint`
+
+```punpun
+fn gui_event_paint() -> int
+```
+
+### `GuiEvent`
+
+```punpun
+object GuiEvent
+```
+
+### `is_close`
+
+```punpun
+public fn is_close() -> bool
+```
+
+### `is_click`
+
+```punpun
+public fn is_click() -> bool
+```
+
+### `is_change`
+
+```punpun
+public fn is_change() -> bool
+```
+
+### `is_text`
+
+```punpun
+public fn is_text() -> bool
+```
+
+### `GuiWidget`
+
+```punpun
+object GuiWidget
+```
+
+### `valid`
+
+```punpun
+public fn valid() -> bool
+```
+
+### `bounds`
+
+```punpun
+public fn bounds(x: int, y: int, width: int, height: int) -> bool
+```
+
+### `x`
+
+```punpun
+public fn x() -> int
+```
+
+### `y`
+
+```punpun
+public fn y() -> int
+```
+
+### `width`
+
+```punpun
+public fn width() -> int
+```
+
+### `height`
+
+```punpun
+public fn height() -> int
+```
+
+### `set_text`
+
+```punpun
+public fn set_text(value: str) -> bool
+```
+
+### `text`
+
+```punpun
+public fn text() -> str
+```
+
+### `set_value`
+
+```punpun
+public fn set_value(value: int) -> bool
+```
+
+### `value`
+
+```punpun
+public fn value() -> int
+```
+
+### `set_range`
+
+```punpun
+public fn set_range(minimum: int, maximum: int) -> bool
+```
+
+### `visible`
+
+```punpun
+public fn visible(value: bool) -> bool
+```
+
+### `enabled`
+
+```punpun
+public fn enabled(value: bool) -> bool
+```
+
+### `checked`
+
+```punpun
+public fn checked() -> bool
+```
+
+### `set_checked`
+
+```punpun
+public fn set_checked(value: bool) -> bool
+```
+
+### `destroy`
+
+```punpun
+public fn destroy() -> bool
+```
+
+### `clear`
+
+```punpun
+public fn clear(rgb: int) -> bool
+```
+
+Canvas drawing. These return false on non-canvas controls.
+
+### `rect`
+
+```punpun
+public fn rect(x: int, y: int, width: int, height: int, rgb: int, filled: bool) -> bool
+```
+
+### `line`
+
+```punpun
+public fn line(x1: int, y1: int, x2: int, y2: int, rgb: int) -> bool
+```
+
+### `draw_text`
+
+```punpun
+public fn draw_text(x: int, y: int, value: str, rgb: int) -> bool
+```
+
+### `GuiWindow`
+
+```punpun
+object GuiWindow
+```
+
+### `valid`
+
+```punpun
+public fn valid() -> bool
+```
+
+### `open`
+
+```punpun
+public fn open() -> bool
+```
+
+### `width`
+
+```punpun
+public fn width() -> int
+```
+
+### `height`
+
+```punpun
+public fn height() -> int
+```
+
+### `title`
+
+```punpun
+public fn title(value: str) -> bool
+```
+
+### `show`
+
+```punpun
+public fn show() -> bool
+```
+
+### `hide`
+
+```punpun
+public fn hide() -> bool
+```
+
+### `close`
+
+```punpun
+public fn close() -> bool
+```
+
+### `redraw`
+
+```punpun
+public fn redraw() -> bool
+```
+
+### `add`
+
+```punpun
+public fn add(kind: int, text: str) -> GuiWidget
+```
+
+### `label`
+
+```punpun
+public fn label(text: str) -> GuiWidget
+```
+
+### `button`
+
+```punpun
+public fn button(text: str) -> GuiWidget
+```
+
+### `input`
+
+```punpun
+public fn input(text: str) -> GuiWidget
+```
+
+### `checkbox`
+
+```punpun
+public fn checkbox(text: str) -> GuiWidget
+```
+
+### `slider`
+
+```punpun
+public fn slider(minimum: int, maximum: int, value: int) -> GuiWidget
+```
+
+### `progress`
+
+```punpun
+public fn progress(minimum: int, maximum: int, value: int) -> GuiWidget
+```
+
+### `panel`
+
+```punpun
+public fn panel() -> GuiWidget
+```
+
+### `canvas`
+
+```punpun
+public fn canvas() -> GuiWidget
+```
+
+### `poll`
+
+```punpun
+public fn poll(timeout_ms: int) -> GuiEvent
+```
+
+### `post`
+
+```punpun
+public fn post(kind: int, widget: int, key: int, text: str, x: int, y: int) -> bool
+```
+
+### `gui_vbox`
+
+```punpun
+fn gui_vbox(widgets: List<GuiWidget>, x: int, y: int, width: int,
+```
+
+Simple backend-independent layouts. `padding` is the outer inset and `gap` separates adjacent controls. Widgets are laid out in list order.
+
+### `gui_hbox`
+
+```punpun
+fn gui_hbox(widgets: List<GuiWidget>, x: int, y: int, width: int,
+```
+
+### `gui_grid`
+
+```punpun
+fn gui_grid(widgets: List<GuiWidget>, columns: int, x: int, y: int,
+```
+
+### `gui_run`
+
+```punpun
+fn gui_run(window: GuiWindow, handler: fn(GuiEvent) -> void) -> void
+```
+
+Run a conventional GUI event loop. The handler may be a capturing closure. Returning from the handler does not close the app; call window.close() when the application is finished.
+
+### `gui_rgb`
+
+```punpun
+fn gui_rgb(red: int, green: int, blue: int) -> int
+```
+
+### `gui_confirm`
+
+```punpun
+fn gui_confirm(title: str, message: str) -> bool
 ```
 
 ## `stdlib/std/io.pp`
@@ -1119,6 +2851,68 @@ fn gui_alert(message: String) -> bool
 
 ```punpun
 fn io_read_line() -> String
+```
+
+## `stdlib/std/logging.pp`
+
+### `log_trace_level`
+
+```punpun
+fn log_trace_level()->int
+```
+
+### `log_level_name`
+
+```punpun
+fn log_level_name(level:int)->str
+```
+
+### `LogRecord`
+
+```punpun
+struct LogRecord
+```
+
+### `log_record_format`
+
+```punpun
+fn log_record_format(record:LogRecord,timestamps:bool)->str
+```
+
+### `Logger`
+
+```punpun
+object Logger
+```
+
+### `enabled`
+
+```punpun
+public fn enabled(level:int)->bool
+```
+
+### `log`
+
+```punpun
+public fn log(level:int,message:str)->void
+```
+
+### `trace`
+
+```punpun
+public fn trace(message:str)->void
+```
+
+### `logger`
+
+```punpun
+fn logger(name:str,threshold:int)->Logger
+```
+
+### `file_logger`
+
+```punpun
+fn file_logger(name:str,threshold:int,path_value:str)->Logger
 ```
 
 ## `stdlib/std/math.pp`
@@ -1785,6 +3579,302 @@ fn vec3_distance(a: Vec3, b: Vec3) -> float
 fn vec3_to_text(a: Vec3) -> str
 ```
 
+## `stdlib/std/net/dns.pp`
+
+### `dns_resolve`
+
+```punpun
+fn dns_resolve(host: str) -> List<str>
+```
+
+DNS resolution helpers. family is 0 (any), 4 (IPv4), or 6 (IPv6).
+
+### `dns_resolve_v4`
+
+```punpun
+fn dns_resolve_v4(host: str) -> List<str>
+```
+
+### `dns_resolve_v6`
+
+```punpun
+fn dns_resolve_v6(host: str) -> List<str>
+```
+
+### `dns_resolve_async`
+
+```punpun
+async fn dns_resolve_async(host: str) -> List<str>
+```
+
+## `stdlib/std/net/http.pp`
+
+### `HttpResponse`
+
+```punpun
+object HttpResponse
+```
+
+Structured HTTP/1.1 on top of std.net.tcp. Plain HTTP uses PunPun sockets; HTTPS uses the verified libcurl runtime but returns the same response shape. Request/response bodies are bytes so binary payloads survive unchanged.
+
+### `ok`
+
+```punpun
+public fn ok() -> bool
+```
+
+### `text`
+
+```punpun
+public fn text() -> str
+```
+
+### `header`
+
+```punpun
+public fn header(name: str) -> str
+```
+
+### `HttpRequest`
+
+```punpun
+object HttpRequest
+```
+
+### `valid`
+
+```punpun
+public fn valid() -> bool
+```
+
+### `text`
+
+```punpun
+public fn text() -> str
+```
+
+### `header`
+
+```punpun
+public fn header(name: str) -> str
+```
+
+### `HttpUrl`
+
+```punpun
+object HttpUrl
+```
+
+### `valid`
+
+```punpun
+public fn valid() -> bool
+```
+
+### `HttpClient`
+
+```punpun
+object HttpClient
+```
+
+### `set_header`
+
+```punpun
+public fn set_header(name: str, value: str) -> void
+```
+
+### `request`
+
+```punpun
+public fn request(method: str, url: str, body: bytes) -> HttpResponse
+```
+
+### `get`
+
+```punpun
+public fn get(url: str) -> HttpResponse
+```
+
+### `delete`
+
+```punpun
+public fn delete(url: str) -> HttpResponse
+```
+
+### `post`
+
+```punpun
+public fn post(url: str, body: bytes) -> HttpResponse
+```
+
+### `put`
+
+```punpun
+public fn put(url: str, body: bytes) -> HttpResponse
+```
+
+### `patch`
+
+```punpun
+public fn patch(url: str, body: bytes) -> HttpResponse
+```
+
+### `HttpChunkHead`
+
+```punpun
+struct HttpChunkHead
+```
+
+### `http_headers`
+
+```punpun
+fn http_headers() -> Map<str>
+```
+
+### `http_header_set`
+
+```punpun
+fn http_header_set(headers: Map<str>, name: str, value: str) -> void
+```
+
+### `http_header_get`
+
+```punpun
+fn http_header_get(headers: Map<str>, name: str) -> str
+```
+
+### `_http_parse_decimal`
+
+```punpun
+fn _http_parse_decimal(value: str) -> int
+```
+
+### `_http_parse_url`
+
+```punpun
+fn _http_parse_url(url: str) -> HttpUrl
+```
+
+### `_http_header_lines`
+
+```punpun
+fn _http_header_lines(headers: Map<str>, skip_transport: bool) -> str
+```
+
+### `_https_header_lines`
+
+```punpun
+fn _https_header_lines(headers: Map<str>) -> str
+```
+
+### `_http_parse_headers_text`
+
+```punpun
+fn _http_parse_headers_text(source: str) -> Map<str>
+```
+
+### `_http_find_header_end`
+
+```punpun
+fn _http_find_header_end(data: bytes) -> int
+```
+
+### `_http_hex_digit`
+
+```punpun
+fn _http_hex_digit(value: int) -> int
+```
+
+### `_http_chunk_head`
+
+```punpun
+fn _http_chunk_head(data: bytes, start: int) -> HttpChunkHead
+```
+
+### `_http_decode_chunked`
+
+```punpun
+fn _http_decode_chunked(data: bytes) -> bytes
+```
+
+### `_http_reason`
+
+```punpun
+fn _http_reason(status: int) -> str
+```
+
+### `_http_response_from_wire`
+
+```punpun
+fn _http_response_from_wire(wire: bytes, transport_error: str) -> HttpResponse
+```
+
+### `http_request`
+
+```punpun
+fn http_request(method: str, url: str, headers: Map<str>, body: bytes,
+```
+
+### `http_get`
+
+```punpun
+fn http_get(url: str) -> HttpResponse
+```
+
+### `http_delete`
+
+```punpun
+fn http_delete(url: str) -> HttpResponse
+```
+
+### `http_post_text`
+
+```punpun
+fn http_post_text(url: str, body: str, content_type: str) -> HttpResponse
+```
+
+### `http_response_text`
+
+```punpun
+fn http_response_text(status: int, body: str, content_type: str) -> HttpResponse
+```
+
+### `http_read_request`
+
+```punpun
+fn http_read_request(stream_handle: int, max_body_bytes: int, timeout_ms: int) -> HttpRequest
+```
+
+### `http_write_response`
+
+```punpun
+fn http_write_response(stream_handle: int, response: HttpResponse, timeout_ms: int) -> bool
+```
+
+### `http_serve_once`
+
+```punpun
+fn http_serve_once(listener_handle: int, handler: fn(HttpRequest) -> HttpResponse,
+```
+
+### `http_request_async`
+
+```punpun
+async fn http_request_async(method: str, url: str, headers: Map<str>, body: bytes,
+```
+
+### `http_get_async`
+
+```punpun
+async fn http_get_async(url: str) -> HttpResponse
+```
+
+### `http_post_text_async`
+
+```punpun
+async fn http_post_text_async(url: str, body: str, content_type: str) -> HttpResponse
+```
+
 ## `stdlib/std/net/https.pp`
 
 ### `https_get`
@@ -1841,6 +3931,378 @@ async fn https_get_async(url: String) -> String
 
 ```punpun
 async fn https_post_async(url: String, body: String, content_type: String) -> String
+```
+
+## `stdlib/std/net/tcp.pp`
+
+### `TcpStream`
+
+```punpun
+object TcpStream
+```
+
+Portable TCP sockets. Runtime handles are nonblocking internally; every operation takes a timeout and observes task cancellation while waiting.
+
+### `valid`
+
+```punpun
+public fn valid() -> bool
+```
+
+### `peer_host`
+
+```punpun
+public fn peer_host() -> str
+```
+
+### `peer_port`
+
+```punpun
+public fn peer_port() -> int
+```
+
+### `local_port`
+
+```punpun
+public fn local_port() -> int
+```
+
+### `set_nodelay`
+
+```punpun
+public fn set_nodelay(enabled: bool) -> bool
+```
+
+### `wait_readable`
+
+```punpun
+public fn wait_readable(timeout_ms: int) -> bool
+```
+
+### `wait_writable`
+
+```punpun
+public fn wait_writable(timeout_ms: int) -> bool
+```
+
+### `send`
+
+```punpun
+public fn send(data: bytes, timeout_ms: int) -> int
+```
+
+### `send_text`
+
+```punpun
+public fn send_text(data: str, timeout_ms: int) -> int
+```
+
+### `recv`
+
+```punpun
+public fn recv(max_bytes: int, timeout_ms: int) -> bytes
+```
+
+### `recv_text`
+
+```punpun
+public fn recv_text(max_bytes: int, timeout_ms: int) -> str
+```
+
+### `shutdown_read`
+
+```punpun
+public fn shutdown_read() -> bool
+```
+
+### `shutdown_write`
+
+```punpun
+public fn shutdown_write() -> bool
+```
+
+### `shutdown`
+
+```punpun
+public fn shutdown() -> bool
+```
+
+### `close`
+
+```punpun
+public fn close() -> bool
+```
+
+### `TcpListener`
+
+```punpun
+object TcpListener
+```
+
+### `valid`
+
+```punpun
+public fn valid() -> bool
+```
+
+### `port`
+
+```punpun
+public fn port() -> int
+```
+
+### `accept`
+
+```punpun
+public fn accept(timeout_ms: int) -> TcpStream
+```
+
+### `close`
+
+```punpun
+public fn close() -> bool
+```
+
+### `tcp_connect`
+
+```punpun
+fn tcp_connect(host: str, port: int, timeout_ms: int) -> TcpStream
+```
+
+### `tcp_listen`
+
+```punpun
+fn tcp_listen(host: str, port: int, backlog: int) -> TcpListener
+```
+
+### `tcp_connect_async`
+
+```punpun
+async fn tcp_connect_async(host: str, port: int, timeout_ms: int) -> TcpStream
+```
+
+### `tcp_accept_async`
+
+```punpun
+async fn tcp_accept_async(listener_handle: int, timeout_ms: int) -> TcpStream
+```
+
+## `stdlib/std/net/udp.pp`
+
+### `UdpPacket`
+
+```punpun
+object UdpPacket
+```
+
+Datagram sockets. recv_from records source address and port atomically with the packet and exposes them as one UdpPacket object.
+
+### `text`
+
+```punpun
+public fn text() -> str
+```
+
+### `UdpSocket`
+
+```punpun
+object UdpSocket
+```
+
+### `valid`
+
+```punpun
+public fn valid() -> bool
+```
+
+### `port`
+
+```punpun
+public fn port() -> int
+```
+
+### `send_to`
+
+```punpun
+public fn send_to(host: str, port: int, data: bytes, timeout_ms: int) -> int
+```
+
+### `send_text_to`
+
+```punpun
+public fn send_text_to(host: str, port: int, data: str, timeout_ms: int) -> int
+```
+
+### `recv_from`
+
+```punpun
+public fn recv_from(max_bytes: int, timeout_ms: int) -> UdpPacket
+```
+
+### `wait_readable`
+
+```punpun
+public fn wait_readable(timeout_ms: int) -> bool
+```
+
+### `close`
+
+```punpun
+public fn close() -> bool
+```
+
+### `udp_bind`
+
+```punpun
+fn udp_bind(host: str, port: int) -> UdpSocket
+```
+
+### `udp_recv_from_async`
+
+```punpun
+async fn udp_recv_from_async(socket_handle: int, max_bytes: int, timeout_ms: int) -> UdpPacket
+```
+
+## `stdlib/std/net/websocket.pp`
+
+### `WebSocketMessage`
+
+```punpun
+object WebSocketMessage
+```
+
+RFC 6455 WebSocket support over ws://. The frame layer handles masking, fragmentation, ping/pong, close frames, binary payloads, and timeout-aware reads. wss:// deliberately waits for a reviewed raw TLS stream binding rather than implementing TLS in PunPun.
+
+### `valid`
+
+```punpun
+public fn valid() -> bool
+```
+
+### `is_text`
+
+```punpun
+public fn is_text() -> bool
+```
+
+### `is_binary`
+
+```punpun
+public fn is_binary() -> bool
+```
+
+### `text`
+
+```punpun
+public fn text() -> str
+```
+
+### `WebSocket`
+
+```punpun
+object WebSocket
+```
+
+### `valid`
+
+```punpun
+public fn valid() -> bool
+```
+
+### `send_text`
+
+```punpun
+public fn send_text(value: str, timeout_ms: int) -> bool
+```
+
+### `send_binary`
+
+```punpun
+public fn send_binary(value: bytes, timeout_ms: int) -> bool
+```
+
+### `ping`
+
+```punpun
+public fn ping(value: bytes, timeout_ms: int) -> bool
+```
+
+### `recv`
+
+```punpun
+public fn recv(timeout_ms: int) -> WebSocketMessage
+```
+
+### `close`
+
+```punpun
+public fn close(timeout_ms: int) -> bool
+```
+
+### `WsFrame`
+
+```punpun
+object WsFrame
+```
+
+### `_ws_rotl32`
+
+```punpun
+fn _ws_rotl32(value: int, amount: int) -> int
+```
+
+### `_ws_sha1`
+
+```punpun
+fn _ws_sha1(input: bytes) -> bytes
+```
+
+### `_ws_accept_value`
+
+```punpun
+fn _ws_accept_value(key: str) -> str
+```
+
+### `_ws_recv_exact`
+
+```punpun
+fn _ws_recv_exact(handle: int, count: int, timeout_ms: int) -> bytes
+```
+
+### `_ws_send_frame`
+
+```punpun
+fn _ws_send_frame(handle: int, client_side: bool, opcode: int, payload: bytes,
+```
+
+### `_ws_read_frame`
+
+```punpun
+fn _ws_read_frame(handle: int, client_side: bool, timeout_ms: int) -> WsFrame
+```
+
+### `_ws_recv_message`
+
+```punpun
+fn _ws_recv_message(handle: int, client_side: bool, timeout_ms: int) -> WebSocketMessage
+```
+
+### `websocket_accept`
+
+```punpun
+fn websocket_accept(stream_handle: int, request: HttpRequest, timeout_ms: int) -> WebSocket
+```
+
+### `websocket_connect`
+
+```punpun
+fn websocket_connect(url: str, timeout_ms: int) -> WebSocket
+```
+
+### `websocket_connect_async`
+
+```punpun
+async fn websocket_connect_async(url: str, timeout_ms: int) -> WebSocket
 ```
 
 ## `stdlib/std/nums.pp`
@@ -1901,6 +4363,310 @@ fn option_is_none<T>(value: Option<T>) -> bool
 
 ```punpun
 fn option_unwrap_or<T: Copy>(value: Option<T>, fallback: T) -> T
+```
+
+## `stdlib/std/path.pp`
+
+### `Path`
+
+```punpun
+struct Path
+```
+
+Platform-neutral lexical path manipulation in PunPun. No filesystem access is required for normalization/relative calculations.
+
+### `name`
+
+```punpun
+public fn name()->str
+```
+
+### `parent`
+
+```punpun
+public fn parent()->Path
+```
+
+### `extension`
+
+```punpun
+public fn extension()->str
+```
+
+### `join`
+
+```punpun
+public fn join(child:str)->Path
+```
+
+### `normalized`
+
+```punpun
+public fn normalized()->Path
+```
+
+### `absolute`
+
+```punpun
+public fn absolute()->bool
+```
+
+### `path`
+
+```punpun
+fn path(value:str)->Path
+```
+
+### `path_is_separator`
+
+```punpun
+fn path_is_separator(c:int)->bool
+```
+
+### `path_is_absolute`
+
+```punpun
+fn path_is_absolute(value:str)->bool
+```
+
+### `path_normalize`
+
+```punpun
+fn path_normalize(value:str)->str
+```
+
+### `path_parts`
+
+```punpun
+fn path_parts(value:str)->List<str>
+```
+
+### `path_relative`
+
+```punpun
+fn path_relative(from_path:str,to_path:str)->str
+```
+
+### `path_change_extension`
+
+```punpun
+fn path_change_extension(value:str,extension:str)->str
+```
+
+## `stdlib/std/process.pp`
+
+### `ProcessResult`
+
+```punpun
+struct ProcessResult
+```
+
+Process helpers. Runtime primitive only executes/captures a shell command; quoting, result modelling, argument assembly and async wrappers live here.
+
+### `ok`
+
+```punpun
+public fn ok()->bool
+```
+
+### `lines`
+
+```punpun
+public fn lines()->List<str>
+```
+
+### `shell_quote_posix`
+
+```punpun
+fn shell_quote_posix(value:str)->str
+```
+
+### `shell_quote_windows`
+
+```punpun
+fn shell_quote_windows(value:str)->str
+```
+
+### `shell_quote`
+
+```punpun
+fn shell_quote(value:str)->str
+```
+
+### `process_command`
+
+```punpun
+fn process_command(program:str,args:List<str>)->str
+```
+
+### `process_run`
+
+```punpun
+fn process_run(command:str)->ProcessResult
+```
+
+### `process_run_args`
+
+```punpun
+fn process_run_args(program:str,args:List<str>)->ProcessResult
+```
+
+### `process_capture_async`
+
+```punpun
+async fn process_capture_async(command:str)->str
+```
+
+### `process_status_async`
+
+```punpun
+async fn process_status_async(command:str)->int
+```
+
+## `stdlib/std/random.pp`
+
+### `Random`
+
+```punpun
+object Random
+```
+
+Deterministic Park-Miller RNG written in PunPun. The Schrage step avoids overflow under PunPun's checked integer arithmetic.
+
+### `next_raw`
+
+```punpun
+public fn next_raw() -> int
+```
+
+### `int_between`
+
+```punpun
+public fn int_between(low: int, high: int) -> int
+```
+
+### `unit`
+
+```punpun
+public fn unit() -> float
+```
+
+### `chance`
+
+```punpun
+public fn chance(probability: float) -> bool
+```
+
+### `random_generator`
+
+```punpun
+fn random_generator(seed: int) -> Random
+```
+
+### `secure_token_hex`
+
+```punpun
+fn secure_token_hex(byte_count: int) -> str
+```
+
+### `secure_token_urlsafe`
+
+```punpun
+fn secure_token_urlsafe(byte_count: int) -> str
+```
+
+## `stdlib/std/regex.pp`
+
+### `RegexMatch`
+
+```punpun
+struct RegexMatch
+```
+
+Small backtracking regular-expression engine implemented in PunPun. Supported: literals, ., ^, $, escapes (\d \w \s), character classes/ranges, negated classes, and greedy *, +, ?. Search/replace/split are built on it.
+
+### `regex_no_match`
+
+```punpun
+fn regex_no_match() -> RegexMatch
+```
+
+### `_regex_class_end`
+
+```punpun
+fn _regex_class_end(pattern: str, start: int) -> int
+```
+
+### `_regex_named_class`
+
+```punpun
+fn _regex_named_class(kind: int, c: int) -> bool
+```
+
+### `_regex_class_matches`
+
+```punpun
+fn _regex_class_matches(pattern: str, start: int, finish: int, c: int) -> bool
+```
+
+### `_regex_atom_end`
+
+```punpun
+fn _regex_atom_end(pattern: str, at: int) -> int
+```
+
+### `_regex_atom_matches`
+
+```punpun
+fn _regex_atom_matches(pattern: str, at: int, atom_end: int, text_value: str, pos: int) -> bool
+```
+
+### `_regex_match_from`
+
+```punpun
+fn _regex_match_from(pattern: str, p: int, text_value: str, t: int, depth: int) -> int
+```
+
+### `regex_search_from`
+
+```punpun
+fn regex_search_from(pattern: str, text_value: str, offset: int) -> RegexMatch
+```
+
+### `regex_search`
+
+```punpun
+fn regex_search(pattern: str, text_value: str) -> RegexMatch
+```
+
+### `regex_is_match`
+
+```punpun
+fn regex_is_match(pattern: str, text_value: str) -> bool
+```
+
+### `regex_full_match`
+
+```punpun
+fn regex_full_match(pattern: str, text_value: str) -> bool
+```
+
+### `regex_find_all`
+
+```punpun
+fn regex_find_all(pattern: str, text_value: str) -> List<str>
+```
+
+### `regex_replace`
+
+```punpun
+fn regex_replace(pattern: str, text_value: str, replacement: str) -> str
+```
+
+### `regex_split`
+
+```punpun
+fn regex_split(pattern: str, text_value: str) -> List<str>
 ```
 
 ## `stdlib/std/result.pp`
@@ -2409,6 +5175,40 @@ fn elapsed_since(start: int) -> int
 fn format_elapsed(milliseconds: int) -> str
 ```
 
+## `stdlib/std/system_info.pp`
+
+### `SystemInfo`
+
+```punpun
+struct SystemInfo
+```
+
+Small host-information layer over unavoidable OS queries.
+
+### `system_info`
+
+```punpun
+fn system_info()->SystemInfo
+```
+
+### `environment`
+
+```punpun
+fn environment(name:str,fallback:str)->str
+```
+
+### `environment_set`
+
+```punpun
+fn environment_set(name:str,value:str)->bool
+```
+
+### `arguments`
+
+```punpun
+fn arguments()->List<str>
+```
+
 ## `stdlib/std/testing.pp`
 
 ### `expect_int`
@@ -2416,6 +5216,8 @@ fn format_elapsed(milliseconds: int) -> str
 ```punpun
 fn expect_int(actual: i64, expected: i64) -> void
 ```
+
+Assertion, aggregation and benchmark helpers written in PunPun.
 
 ### `expect_bool`
 
@@ -2427,6 +5229,72 @@ fn expect_bool(actual: bool, expected: bool) -> void
 
 ```punpun
 fn expect_str(actual: String, expected: String) -> void
+```
+
+### `expect_close`
+
+```punpun
+fn expect_close(actual:float,expected:float,tolerance:float)->void
+```
+
+### `TestSuite`
+
+```punpun
+object TestSuite
+```
+
+### `check`
+
+```punpun
+public fn check(condition:bool,message:str)->void
+```
+
+### `equal_int`
+
+```punpun
+public fn equal_int(actual:int,expected:int,message:str)->void
+```
+
+### `equal_str`
+
+```punpun
+public fn equal_str(actual:str,expected:str,message:str)->void
+```
+
+### `equal_bool`
+
+```punpun
+public fn equal_bool(actual:bool,expected:bool,message:str)->void
+```
+
+### `ok`
+
+```punpun
+public fn ok()->bool
+```
+
+### `summary`
+
+```punpun
+public fn summary()->str
+```
+
+### `assert_ok`
+
+```punpun
+public fn assert_ok()->void
+```
+
+### `Benchmark`
+
+```punpun
+struct Benchmark
+```
+
+### `benchmark`
+
+```punpun
+fn benchmark(rounds:int,work:fn()->void)->Benchmark
 ```
 
 ## `stdlib/std/text.pp`
@@ -2737,6 +5605,52 @@ fn center(text_value: str, width: int, fill: str) -> str
 
 ```punpun
 fn equals_ignore_case(left_value: str, right_value: str) -> bool
+```
+
+## `stdlib/std/text/utf8.pp`
+
+### `utf8_encode_codepoint`
+
+```punpun
+fn utf8_encode_codepoint(codepoint:int)->str
+```
+
+UTF-8 encode/decode utilities implemented in PunPun over byte strings.
+
+### `_utf8_cont`
+
+```punpun
+fn _utf8_cont(c:int)->bool
+```
+
+### `utf8_decode`
+
+```punpun
+fn utf8_decode(value:str)->List<int>
+```
+
+### `utf8_encode`
+
+```punpun
+fn utf8_encode(codepoints:List<int>)->str
+```
+
+### `utf8_reverse`
+
+```punpun
+fn utf8_reverse(value:str)->str
+```
+
+### `utf8_at`
+
+```punpun
+fn utf8_at(value:str,index:int)->int
+```
+
+### `utf8_slice`
+
+```punpun
+fn utf8_slice(value:str,start:int,end:int)->str
 ```
 
 ## `stdlib/std/text/wrap.pp`

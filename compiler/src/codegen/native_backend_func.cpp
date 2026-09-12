@@ -8,6 +8,7 @@ namespace ppc {
 
 namespace {
 const char *const kIntegerParams[6] = {"%rdi", "%rsi", "%rdx", "%rcx", "%r8", "%r9"};
+const char *const kAllocatedRegisters[5] = {"%rbx", "%r12", "%r13", "%r14", "%r15"};
 }
 
 // ---------------------------------------------------------------------------
@@ -20,6 +21,7 @@ void NativeBackend::emit_function(const MirFunction &fn, std::size_t index) {
     scratch_used_ = 0;
     scratch_high_water_ = 0;
     traps_.clear();
+    allocate_registers(fn);
 
     // Decide which allocations can live in the frame before emitting anything,
     // so their storage offsets are fixed while the body is generated.
@@ -47,8 +49,9 @@ void NativeBackend::emit_function(const MirFunction &fn, std::size_t index) {
     std::string body = out_.str();
     out_.swap(saved);
 
-    const std::size_t slots = fn.locals.size() + fn.reg_types.size() +
-                              escapes_.frame_slots_needed + scratch_high_water_;
+    const std::size_t base_slots = fn.locals.size() + 1 + fn.reg_types.size() +
+                                   escapes_.frame_slots_needed + scratch_high_water_;
+    const std::size_t slots = base_slots + used_register_slots_.size();
     // Keep %rsp 16-byte aligned at every call, as the ABI requires.
     int frame = static_cast<int>(slots * 8);
     frame = (frame + 15) & ~15;
@@ -71,14 +74,29 @@ void NativeBackend::emit_function(const MirFunction &fn, std::size_t index) {
     // and %rax, three of which carry incoming arguments.
     int gp = 0;
     int sse = 0;
+    int stack = 0;
     for (u32 i = 0; i < fn.param_count; ++i) {
         const Type *type = fn.locals[i].type;
         if (type && type->kind == TypeKind::Float) {
-            if (sse < 8) out_ << "\tmovsd\t%xmm" << sse << ", " << local_offset(i) << "(%rbp)\n";
-            ++sse;
+            if (sse < 8) {
+                out_ << "\tmovsd\t%xmm" << sse << ", " << local_offset(i) << "(%rbp)\n";
+                ++sse;
+            } else {
+                // Stack arguments begin above the saved %rbp and return address.
+                // Every PunPun ABI value occupies one eightbyte, including f64.
+                out_ << "\tmovsd\t" << (16 + stack * 8) << "(%rbp), %xmm15\n";
+                out_ << "\tmovsd\t%xmm15, " << local_offset(i) << "(%rbp)\n";
+                ++stack;
+            }
         } else {
-            if (gp < 6) store(kIntegerParams[gp], local_offset(i));
-            ++gp;
+            if (gp < 6) {
+                store(kIntegerParams[gp], local_offset(i));
+                ++gp;
+            } else {
+                out_ << "\tmovq\t" << (16 + stack * 8) << "(%rbp), %rax\n";
+                store("%rax", local_offset(i));
+                ++stack;
+            }
         }
     }
 
@@ -93,17 +111,25 @@ void NativeBackend::emit_function(const MirFunction &fn, std::size_t index) {
         out_ << "\trep stosq\n";
     }
 
-    if (gp > 6 || sse > 8) {
-        diagnostics_
-            .error(Code::BackendUnavailable,
-                   "the native backend supports at most 6 integer and 8 float parameters")
-            .label(fn.span)
-            .with_help("group the parameters into a struct, or use --backend=c");
+    // Preserve every callee-saved machine register selected by linear scan.
+    // Their save area lives after ordinary frame slots and copy scratch.
+    for (std::size_t i = 0; i < used_register_slots_.size(); ++i) {
+        const int offset = -8 * static_cast<int>(base_slots + i + 1);
+        store(kAllocatedRegisters[used_register_slots_[i]], offset);
     }
+
+    // Native uses %r10 as an internal hidden closure register. It is not part
+    // of PunPun's public ABI, so source-visible parameter registers are unchanged.
+    store("%r10", closure_offset());
+
 
     out_ << body;
 
     out_ << epilogue_label() << ":\n";
+    for (std::size_t i = used_register_slots_.size(); i-- > 0;) {
+        const int offset = -8 * static_cast<int>(base_slots + i + 1);
+        load(kAllocatedRegisters[used_register_slots_[i]], offset);
+    }
     out_ << "\tmovq\t%rbp, %rsp\n";
     out_ << "\tpopq\t%rbp\n";
     out_ << "\t.cfi_def_cfa 7, 8\n";
@@ -163,8 +189,8 @@ void NativeBackend::emit_string_pool() {
 }
 
 void NativeBackend::emit_function_table(const MirProgram &program) {
-    // A function value is an index into this table, so an indirect call is an
-    // ordinary load followed by a call through the register.
+    // A closure stores a target index into this table. Indirect calls load that
+    // target and pass the closure handle separately as the hidden environment.
     // .data.rel.ro, not .rodata: each entry is a code address that the dynamic
     // linker has to relocate, and a PIE cannot carry relocations into a section
     // that is mapped read-only from the start.
@@ -182,6 +208,121 @@ void NativeBackend::emit_function_table(const MirProgram &program) {
     out_ << "\t.text\n";
 }
 
+void NativeBackend::emit_task_trampolines(const MirProgram &program) {
+    for (std::size_t index = 0; index < program.functions.size(); ++index) {
+        const MirFunction &fn = *program.functions[index];
+        if (!fn.is_async || fn.is_extern_native) continue;
+
+        const std::size_t context_bytes = static_cast<std::size_t>(fn.param_count) * 8u;
+        int context_frame = static_cast<int>(context_bytes);
+        context_frame = (context_frame + 15) & ~15;
+
+        // Spawn wrapper. It has the same ABI as the source async function, but
+        // snapshots its arguments into a plain eightbyte context and asks the
+        // runtime to own/copy that context before starting a worker.
+        out_ << "\n\t.p2align 4\n";
+        out_ << "pptask_spawn" << index << ":\n";
+        out_ << "\t.cfi_startproc\n";
+        out_ << "\tpushq\t%rbp\n\tmovq\t%rsp, %rbp\n";
+        if (context_frame) out_ << "\tsubq\t$" << context_frame << ", %rsp\n";
+
+        int gp = 0;
+        int sse = 0;
+        int stack = 0;
+        for (u32 p = 0; p < fn.param_count; ++p) {
+            const Type *type = fn.locals[p].type;
+            const int destination = -static_cast<int>(context_bytes) + static_cast<int>(p * 8u);
+            if (type && type->kind == TypeKind::Float) {
+                if (sse < 8) {
+                    out_ << "\tmovsd\t%xmm" << sse++ << ", " << destination << "(%rbp)\n";
+                } else {
+                    out_ << "\tmovq\t" << (16 + stack * 8) << "(%rbp), %rax\n";
+                    out_ << "\tmovq\t%rax, " << destination << "(%rbp)\n";
+                    ++stack;
+                }
+            } else {
+                if (gp < 6) {
+                    out_ << "\tmovq\t" << kIntegerParams[gp++] << ", " << destination << "(%rbp)\n";
+                } else {
+                    out_ << "\tmovq\t" << (16 + stack * 8) << "(%rbp), %rax\n";
+                    out_ << "\tmovq\t%rax, " << destination << "(%rbp)\n";
+                    ++stack;
+                }
+            }
+        }
+
+        out_ << "\tleaq\tpptask" << index << "(%rip), %rdi\n";
+        if (context_bytes) {
+            out_ << "\tleaq\t-" << context_bytes << "(%rbp), %rsi\n";
+            out_ << "\tmovq\t$" << context_bytes << ", %rdx\n";
+        } else {
+            out_ << "\txorl\t%esi, %esi\n\txorl\t%edx, %edx\n";
+        }
+        out_ << "\tmovb\t$0, %al\n\tcall\tpp_task_spawn\n";
+        out_ << "\tmovq\t%rbp, %rsp\n\tpopq\t%rbp\n\tret\n";
+        out_ << "\t.cfi_endproc\n";
+
+        // Worker entry. The runtime passes the copied context pointer in %rdi;
+        // remarshal it through the ordinary PunPun calling convention so the
+        // async body is exactly the same generated function as a synchronous
+        // direct call would use.
+        out_ << "\n\t.p2align 4\n";
+        out_ << "pptask" << index << ":\n";
+        out_ << "\t.cfi_startproc\n";
+        out_ << "\tpushq\t%rbp\n\tmovq\t%rsp, %rbp\n";
+        out_ << "\tmovq\t%rdi, %r11\n";
+
+        gp = 0;
+        sse = 0;
+        std::vector<bool> on_stack(fn.param_count, false);
+        std::size_t stack_count = 0;
+        for (u32 p = 0; p < fn.param_count; ++p) {
+            const Type *type = fn.locals[p].type;
+            if (type && type->kind == TypeKind::Float) {
+                if (sse < 8) ++sse;
+                else { on_stack[p] = true; ++stack_count; }
+            } else {
+                if (gp < 6) ++gp;
+                else { on_stack[p] = true; ++stack_count; }
+            }
+        }
+        const std::size_t pad = (stack_count & 1u) ? 8u : 0u;
+        if (pad) out_ << "\tsubq\t$8, %rsp\n";
+        for (std::size_t p = fn.param_count; p-- > 0;) {
+            if (!on_stack[p]) continue;
+            out_ << "\tmovq\t" << (p * 8u) << "(%r11), %rax\n";
+            out_ << "\tpushq\t%rax\n";
+        }
+
+        gp = 0;
+        sse = 0;
+        for (u32 p = 0; p < fn.param_count; ++p) {
+            if (on_stack[p]) continue;
+            const Type *type = fn.locals[p].type;
+            if (type && type->kind == TypeKind::Float) {
+                out_ << "\tmovsd\t" << (p * 8u) << "(%r11), %xmm" << sse++ << "\n";
+            } else {
+                out_ << "\tmovq\t" << (p * 8u) << "(%r11), " << kIntegerParams[gp++] << "\n";
+            }
+        }
+        out_ << "\txorl\t%r10d, %r10d\n";
+        out_ << "\tmovb\t$" << sse << ", %al\n";
+        out_ << "\tcall\t" << function_label(index) << "\n";
+        const std::size_t stack_bytes = stack_count * 8u + pad;
+        if (stack_bytes) out_ << "\taddq\t$" << stack_bytes << ", %rsp\n";
+
+        if (!fn.result || fn.result->kind == TypeKind::Void) {
+            out_ << "\txorl\t%eax, %eax\n";
+        } else if (fn.result->kind == TypeKind::Float) {
+            out_ << "\tmovq\t%xmm0, %rax\n";
+        } else if (fn.result->kind == TypeKind::Bool) {
+            out_ << "\tmovzbq\t%al, %rax\n";
+        }
+        out_ << "\tmovq\t%rbp, %rsp\n\tpopq\t%rbp\n\tret\n";
+        out_ << "\t.cfi_endproc\n";
+    }
+}
+
 void NativeBackend::emit_entry(const MirProgram &program) {
     out_ << "\n\t.globl\tmain\n";
     out_ << "\t.type\tmain, @function\n";
@@ -194,6 +335,7 @@ void NativeBackend::emit_entry(const MirProgram &program) {
     // `arg` and `arg_count` work.
     out_ << "\tmovb\t$0, %al\n\tcall\tpp_runtime_init\n";
     if (program.entry < program.functions.size()) {
+        out_ << "\txorl\t%r10d, %r10d\n";
         out_ << "\tmovb\t$0, %al\n\tcall\t" << function_label(program.entry) << "\n";
     }
     out_ << "\tmovb\t$0, %al\n\tcall\tpp_runtime_cleanup\n";
@@ -240,6 +382,7 @@ bool NativeBackend::emit(const MirProgram &program, const CodegenOptions &option
         emit_function(*program.functions[i], i);
     }
     emit_copy_helpers();
+    emit_task_trampolines(program);
     emit_entry(program);
     bodies.swap(out_);
 

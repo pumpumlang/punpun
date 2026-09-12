@@ -1,99 +1,103 @@
-# PunPun 1.4.5 release notes
+# PunPun 1.5.0 release notes
 
-PunPun 1.4 closes three gaps that kept ordinary programs from being expressible:
-behaviour could not be passed around, sequences could not be walked, and an
-interface could not be held as a value. Everything here is an addition. The
-language version, runtime ABI, package format and lockfile format stay at 1.0
-and 1, and 0.6 source still builds.
+PunPun 1.5.0 is the halfway milestone in the 1.5 series. It takes the six
+completed upgrade tracks that were staged after 1.4.5 and publishes them as one
+coherent release: capturing closures, general iteration, a stronger native
+backend, a real networking stack, a retained GUI toolkit, and a substantially
+broader standard library written primarily in PunPun itself.
 
-## Functions are values
+The stable 1.x language/runtime ABI remains epoch 1. Existing 1.x source stays
+within the compatibility contract.
 
-`fn(T, U) -> R` is a type. A function named without parentheses is a value, and
-`fn(x: int) -> int { ... }` can be written where an expression goes.
+## Capturing closures
 
-```punpun
-fn apply(g: fn(int) -> int, v: int) -> int { return g(v); }
+Function literals now capture free locals by value into owned environments.
+Mutable captures persist across calls, copied closure handles share their
+captured environment, closures may escape their creating function, nested
+closures propagate grandparent captures, and move-only values transfer ownership
+into the closure. Borrowed captures (`&T`, `&mut T`, `Slice<T>`) remain rejected
+until lifetime-aware closure escape analysis can prove them safe.
 
-launch {
-    say(apply(fn(x: int) -> int { return x * 3; }, 14));
-}
-```
+Zero-capture function values remain allocation-free. C, bytecode, and direct
+x86-64 use the same one-word closure-handle model.
 
-A function value is the callee's index in the module function table: one word,
-which is what lets the C, native and bytecode backends share a single calling
-sequence instead of three notions of a code address.
+## General iterator protocol
 
-Function literals do not capture. A literal sees its own parameters and
-module-level names, and naming a local from around it is refused with an error
-that says so. Capturing needs an environment that owns the captured values, and
-the ownership rules have to define that before the syntax exists.
+`for value in source` is no longer limited to built-in sequences. User-defined
+iterables expose `iter()`, whose result exposes `advance() -> Option<T>`;
+iterator objects can also be looped directly. This supports custom, lazy, and
+unbounded producers without materializing a list. Existing `nums`, `List<T>`
+and `Slice<T>` keep their indexed fast path.
 
-`sort_by(items, before)` is in the standard library — the comparator that could
-not previously be handed to a sort, which is why `sort_ints` and `sort_strings`
-had to be separate functions.
+## Native x86-64 backend
 
-## Sequences iterate
+The direct backend now has CFG-aware linear-scan allocation across callee-saved
+registers, System V stack argument passing beyond the GP/SSE register limits,
+native async task spawning/await/cancellation/task-group support, and
+conservative interprocedural copy elimination for read-only value-struct
+parameters. Several ABI and escape-analysis bugs exposed by the new libraries
+were fixed as part of this work.
 
-```punpun
-for name in names { say(name); }
-```
+## Networking
 
-`for` walks `nums`, `List<T>` and `Slice<T>`, lists of aggregates included. It
-is rewritten in the checker into the indexed loop it replaces, so no backend
-carries a second loop form.
+The runtime and `std.net` now provide backend-equivalent DNS, TCP and UDP with
+portable socket handles, nonblocking operation, readiness/timeouts and task
+cancellation awareness. `std.net.http` adds structured HTTP/1.1 client/server
+support with headers, binary bodies, chunked decoding and closure handlers.
+HTTPS keeps verified libcurl transport while sharing the structured response
+shape. RFC 6455 `ws://` WebSockets include masking, fragmentation, ping/pong,
+close frames and bounded messages.
 
-## Contracts are types
+Raw TLS streams/`wss://` and HTTP connection pooling remain future work rather
+than being approximated with unsafe home-grown crypto.
 
-A contract could previously constrain a generic parameter and nothing else.
-Now it is a type:
+## GUI toolkit
 
-```punpun
-let shapes = list<Shape>();
-list_push(shapes, Square(4));
-list_push(shapes, Rect(3, 5));
-for s in shapes { say(s.name()); }
-```
+`std.gui` has grown from the original native-window foundation into a retained
+application toolkit: windows, labels, buttons, text inputs, checkboxes, sliders,
+progress bars, panels, canvases, widget state, vertical/horizontal/grid layout,
+mouse/keyboard/text/change/resize/paint/close events, closure-driven event loops,
+canvas drawing, alerts and confirmation dialogs. A headless retained backend
+makes GUI logic testable in CI. X11 is exercised with real virtual-display input;
+Win32/GDI support is implemented for the same public model.
 
-A value of contract type is the object's handle, unchanged — one word, so it
-fits a `List` slot, which is the point. For the handle alone to suffice, each
-object now carries its type identity in a hidden leading field. Dispatch reads
-that identity and selects among the types declaring they meet the contract.
+## Standard library expansion
 
-## One grammar
+The bulk of the new library logic is PunPun code, with native shims kept to host
+operations that genuinely require the OS/runtime.
 
-The migration dialect warns. Each legacy form reports `W2000`, names the modern
-spelling, and points at `pp migrate`. It still parses, because 1.x promised
-valid 0.6 source keeps compiling; removing the forms is a major-version
-decision. Warning codes now render with a `W` prefix.
+Highlights include:
 
-The repository's own examples were split between the two grammars and have been
-converted, each verified to produce identical output.
+- recursive `std.data.json` parsing/serialization/pretty-printing with Unicode
+  escape handling and typed accessors;
+- TOML/config parsing;
+- a PunPun regex engine with classes, anchors, quantifiers, search, replace and
+  split;
+- pure-PunPun SHA-256 and HMAC-SHA256 verified against published vectors;
+- deterministic RNG helpers plus separately sourced secure OS randomness;
+- RLE and LZSS compression;
+- interoperable method-0 ZIP archives with CRC-32 validation;
+- an atomic JSON-backed durable key/value database;
+- richer paths, filesystem, process, date/time, logging, testing and system APIs;
+- UTF-8 and MIME helpers;
+- generic deque and higher-order `map`, `filter`, `fold`, predicates, `zip` and
+  `enumerate` utilities that work with generic function types and capturing
+  closures.
 
-## 1.4.5 package and release integration
-
-The stable patch release coordinates the compiler, documentation, and PPX at
-one version. Linux, Arch/CachyOS, and Windows release jobs fetch the exact
-`v1.4.5` PPX tag; packaging stops if that client does not match the compiler.
-The Linux SDK and Arch package now actually contain the `ppx` command that
-their installer and validator promise.
-
-For projects with a `Punpun.toml`, `pp build`, `pp run`, and `pp check` obtain
-the materialized package roots from PPX automatically. `ppx outdated` now
-reports current and latest versions instead of its earlier placeholder answer.
-
-## Known limitations
-
-- Function literals cannot capture their surroundings.
-- Contract dispatch is a comparison chain, so it is linear in the number of
-  implementors at each call site. A jump table is the next step.
-- `for` does not walk `Map<V>` or the characters of a `str`.
-- Windows is release-smoke-tested in CI; macOS remains untested.
+The JSON, logging, filesystem and testing first-party packages now reuse the
+full standard modules instead of maintaining toy parallel implementations.
 
 ## Validation
 
-118 compiler cases across all three backends, plus PPX dependency-path and
-archive regressions, the self-host bootstrap fixed point, the ABI gate, the
-backend compatibility matrix, async stress, frontend mutation fuzzing,
-documentation link checking, the privacy audit, Linux release assembly,
-Arch/CachyOS package install-upgrade-remove validation, and Windows compiler,
-installer, file-association, upgrade, and uninstall smoke tests.
+The staged 1.5.0 source passed 154 compiler regression cases across the
+applicable C, bytecode and native backends; O0/O1/O2 standard-library matrices;
+first-party HTTPS, GUI, requests, JSON, logging, filesystem and testing package
+suites; compiler-native LSP tests; native structural codegen checks; self-host
+bootstrap fixed point; ABI epoch-1 validation; the backend compatibility matrix;
+stress testing; deterministic frontend fuzzing; documentation link checks;
+privacy audit; version/stable-surface/platform-policy checks; PPX integration;
+and release-hygiene checks.
+
+The Windows implementation has been source-integrated throughout, but changes
+added after 1.4.5 still rely on the platform release workflow for final Windows
+runtime qualification.

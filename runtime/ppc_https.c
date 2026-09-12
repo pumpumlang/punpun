@@ -33,11 +33,14 @@ enum {
     PP_CURLOPT_POSTFIELDS = 10015,
     PP_CURLOPT_USERAGENT = 10018,
     PP_CURLOPT_HTTPHEADER = 10023,
+    PP_CURLOPT_HEADERDATA = 10029,
     PP_CURLOPT_WRITEFUNCTION = 20011,
+    PP_CURLOPT_HEADERFUNCTION = 20079,
     PP_CURLOPT_CUSTOMREQUEST = 10036,
     PP_CURLOPT_NOBODY = 44,
     PP_CURLOPT_POST = 47,
     PP_CURLOPT_FOLLOWLOCATION = 52,
+    PP_CURLOPT_POSTFIELDSIZE = 60,
     PP_CURLOPT_SSL_VERIFYPEER = 64,
     PP_CURLOPT_MAXREDIRS = 68,
     PP_CURLOPT_SSL_VERIFYHOST = 81,
@@ -83,6 +86,8 @@ static char g_https_load_error[256];
 
 static PP_THREAD_LOCAL int64_t g_https_status;
 static PP_THREAD_LOCAL char g_https_error[512];
+static PP_THREAD_LOCAL const char *g_https_headers;
+static PP_THREAD_LOCAL pp_bytes *g_https_body;
 
 static void *pp_https_open_library(void) {
 #if PPC_WINDOWS
@@ -180,6 +185,32 @@ static size_t pp_https_write(char *data, size_t size, size_t count, void *contex
     return bytes;
 }
 
+static size_t pp_https_header_write(char *data, size_t size, size_t count, void *context) {
+    pp_https_buffer *buffer = (pp_https_buffer *)context;
+    if (size != 0u && count > SIZE_MAX / size) return 0;
+    const size_t bytes = size * count;
+    /* libcurl invokes the callback for every response in a redirect/auth chain.
+     * Keep only the newest header block so callers see the final response. */
+    if (bytes >= 5u && memcmp(data, "HTTP/", 5u) == 0 && buffer->length != 0u) {
+        free(buffer->data);
+        buffer->data = NULL;
+        buffer->length = 0u;
+        buffer->exceeded_limit = 0;
+    }
+    const size_t maximum = 1024u * 1024u;
+    if (bytes > maximum - buffer->length) {
+        buffer->exceeded_limit = 1;
+        return 0;
+    }
+    char *next = (char *)realloc(buffer->data, buffer->length + bytes + 1u);
+    if (!next) return 0;
+    buffer->data = next;
+    memcpy(buffer->data + buffer->length, data, bytes);
+    buffer->length += bytes;
+    buffer->data[buffer->length] = '\0';
+    return bytes;
+}
+
 static int pp_https_method_valid(const char *method) {
     if (!method || !*method) return 0;
     size_t length = 0;
@@ -220,10 +251,14 @@ static struct curl_slist *pp_https_headers(const char *headers) {
     return list;
 }
 
-const char *pp_https_request(const char *method, const char *url, const char *body,
-                             const char *headers, int64_t timeout_ms, bool follow_redirects) {
+static const char *pp_https_request_impl(const char *method, const char *url,
+                                         const char *body, size_t body_length,
+                                         const char *headers, int64_t timeout_ms,
+                                         bool follow_redirects) {
     g_https_status = 0;
     g_https_error[0] = '\0';
+    g_https_headers = "";
+    g_https_body = NULL;
     if (!url || strncmp(url, "https://", 8) != 0) {
         snprintf(g_https_error, sizeof(g_https_error), "HTTPS URL must begin with https://");
         return "";
@@ -248,6 +283,7 @@ const char *pp_https_request(const char *method, const char *url, const char *bo
         return "";
     }
     pp_https_buffer buffer = {NULL, 0u, 0};
+    pp_https_buffer response_headers = {NULL, 0u, 0};
     struct curl_slist *header_list = pp_https_headers(headers);
     if (headers && *headers && !header_list) {
         g_easy_cleanup(curl);
@@ -268,6 +304,8 @@ const char *pp_https_request(const char *method, const char *url, const char *bo
     g_easy_setopt(curl, PP_CURLOPT_USERAGENT, "PunPun-HTTPS/1.3");
     g_easy_setopt(curl, PP_CURLOPT_WRITEFUNCTION, pp_https_write);
     g_easy_setopt(curl, PP_CURLOPT_WRITEDATA, &buffer);
+    g_easy_setopt(curl, PP_CURLOPT_HEADERFUNCTION, pp_https_header_write);
+    g_easy_setopt(curl, PP_CURLOPT_HEADERDATA, &response_headers);
     if (header_list) g_easy_setopt(curl, PP_CURLOPT_HTTPHEADER, header_list);
 
     if (strcmp(method, "HEAD") == 0) {
@@ -275,9 +313,13 @@ const char *pp_https_request(const char *method, const char *url, const char *bo
     } else if (strcmp(method, "POST") == 0) {
         g_easy_setopt(curl, PP_CURLOPT_POST, 1L);
         g_easy_setopt(curl, PP_CURLOPT_POSTFIELDS, body ? body : "");
+        g_easy_setopt(curl, PP_CURLOPT_POSTFIELDSIZE, (long)body_length);
     } else if (strcmp(method, "GET") != 0) {
         g_easy_setopt(curl, PP_CURLOPT_CUSTOMREQUEST, method);
-        if (body && *body) g_easy_setopt(curl, PP_CURLOPT_POSTFIELDS, body);
+        if (body && body_length != 0u) {
+            g_easy_setopt(curl, PP_CURLOPT_POSTFIELDS, body);
+            g_easy_setopt(curl, PP_CURLOPT_POSTFIELDSIZE, (long)body_length);
+        }
     }
 
     const CURLcode code = g_easy_perform(curl);
@@ -285,6 +327,8 @@ const char *pp_https_request(const char *method, const char *url, const char *bo
         (void)g_easy_getinfo(curl, PP_CURLINFO_RESPONSE_CODE, &g_https_status);
     } else if (buffer.exceeded_limit) {
         snprintf(g_https_error, sizeof(g_https_error), "HTTPS response exceeded 64 MiB");
+    } else if (response_headers.exceeded_limit) {
+        snprintf(g_https_error, sizeof(g_https_error), "HTTPS response headers exceeded 1 MiB");
     } else {
         snprintf(g_https_error, sizeof(g_https_error), "%s", g_easy_strerror(code));
     }
@@ -293,20 +337,52 @@ const char *pp_https_request(const char *method, const char *url, const char *bo
     g_easy_cleanup(curl);
     if (code != PP_CURLE_OK) {
         free(buffer.data);
+        free(response_headers.data);
         return "";
     }
     if (!buffer.data) {
         buffer.data = (char *)malloc(1u);
         if (!buffer.data) {
+            free(response_headers.data);
             snprintf(g_https_error, sizeof(g_https_error), "out of memory storing HTTPS response");
             return "";
         }
         buffer.data[0] = '\0';
     }
+    if (!response_headers.data) {
+        response_headers.data = (char *)malloc(1u);
+        if (!response_headers.data) {
+            free(buffer.data);
+            snprintf(g_https_error, sizeof(g_https_error), "out of memory storing HTTPS headers");
+            return "";
+        }
+        response_headers.data[0] = '\0';
+    }
+    g_https_body = pp_bytes_from_data(buffer.data, (int64_t)buffer.length);
+    g_https_headers = pp_adopt_text(response_headers.data);
     return pp_adopt_text(buffer.data);
 }
 
+const char *pp_https_request(const char *method, const char *url, const char *body,
+                             const char *headers, int64_t timeout_ms, bool follow_redirects) {
+    const char *safe_body = body ? body : "";
+    return pp_https_request_impl(method, url, safe_body, strlen(safe_body), headers,
+                                 timeout_ms, follow_redirects);
+}
+
+pp_bytes *pp_https_request_bytes(const char *method, const char *url, pp_bytes *body,
+                                 const char *headers, int64_t timeout_ms,
+                                 bool follow_redirects) {
+    const int64_t length = pp_bytes_len(body);
+    const char *data = (const char *)pp_bytes_data(body);
+    (void)pp_https_request_impl(method, url, data ? data : "", (size_t)length,
+                                headers, timeout_ms, follow_redirects);
+    return pp_https_body_bytes();
+}
+
 int64_t pp_https_status(void) { return g_https_status; }
+const char *pp_https_headers_raw(void) { return g_https_headers ? g_https_headers : ""; }
+pp_bytes *pp_https_body_bytes(void) { return g_https_body ? g_https_body : pp_bytes_new(); }
 
 const char *pp_https_error(void) {
     if (g_https_error[0]) return g_https_error;

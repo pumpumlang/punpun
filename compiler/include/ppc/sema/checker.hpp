@@ -33,6 +33,13 @@ struct FunctionTemplate {
 
 /// One concrete instantiation of a template. Non-generic functions get exactly
 /// one of these; generic functions get one per distinct type-argument tuple.
+struct ClosureCapture {
+    Symbol name;
+    const Type *type = nullptr;
+    bool is_mutable = false;
+    Span span;
+};
+
 struct Specialization {
     u32 templ = 0;
     std::vector<const Type *> arguments;
@@ -41,6 +48,9 @@ struct Specialization {
     std::string mangled;
     HirFunction *hir = nullptr;
     bool checked = false;
+    /// Values closed over by a lifted function literal. They are not part of
+    /// the source-visible function type; the closure object carries them.
+    std::vector<ClosureCapture> captures;
 };
 
 /// A local variable in the function currently being checked.
@@ -109,7 +119,8 @@ class Checker {
     // -- functions ----------------------------------------------------------
     /// Finds or creates the specialization for `templ` with `arguments`, queues
     /// it for checking, and returns its index.
-    u32 specialize(u32 templ, std::vector<const Type *> arguments, Span span);
+    u32 specialize(u32 templ, std::vector<const Type *> arguments, Span span,
+                   const std::vector<ClosureCapture> &captures = {});
     void check_function(u32 specialization);
     Specialization &spec_at(u32 index) { return *specializations_[index]; }
     /// Infers type arguments for a generic call from the argument types, then

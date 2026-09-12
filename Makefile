@@ -11,7 +11,7 @@ ifeq ($(shell uname -s 2>/dev/null),Linux)
 LDLIBS += -ldl
 endif
 ifeq ($(OS),Windows_NT)
-LDLIBS += -luser32
+LDLIBS += -luser32 -lgdi32 -lws2_32
 endif
 
 PPC_SOURCES := $(wildcard compiler/src/*.cpp) \
@@ -23,7 +23,7 @@ PPC_SOURCES := $(wildcard compiler/src/*.cpp) \
                $(wildcard compiler/src/codegen/*.cpp) \
                $(wildcard compiler/src/driver/*.cpp) \
                $(wildcard compiler/src/service/*.cpp)
-RUNTIME_SOURCES := runtime/ppcrt.c runtime/ppc_https.c runtime/ppc_gui.c \
+RUNTIME_SOURCES := runtime/ppcrt.c runtime/ppc_https.c runtime/ppc_gui.c runtime/ppc_net.c \
                    runtime/ppc_platform_posix.c runtime/ppc_platform_windows.c
 PPC_OBJECTS := $(patsubst %.cpp,$(BUILD)/%.o,$(PPC_SOURCES))
 RUNTIME_OBJECTS := $(patsubst %.c,$(BUILD)/%.o,$(RUNTIME_SOURCES))
@@ -59,13 +59,18 @@ version-check: compiler
 
 compiler-test: compiler
 	python3 compiler/tests/run_tests.py --ppc ./build/ppc --backend c --backend bytecode --backend native
+	PPC=./build/ppc python3 compiler/tests/test_native_codegen.py
 	PPC=./build/ppc python3 compiler/tests/lsp/test_lsp.py
 
 package-test: compiler
 	@for backend in c native bytecode; do \
 		./build/ppc run --module-path packages/https --backend=$$backend packages/https/tests/smoke.pp | grep -Fx https-ok; \
-		./build/ppc run --module-path packages/gui --backend=$$backend packages/gui/tests/smoke.pp | grep -Fx gui-ok; \
+		PUNPUN_GUI_HEADLESS=1 ./build/ppc run --module-path packages/gui --backend=$$backend packages/gui/tests/smoke.pp | grep -Fx gui-ok; \
 		./build/ppc run --module-path packages/requests --backend=$$backend packages/requests/tests/smoke.pp | grep -Fx requests-ok; \
+		./build/ppc run --module-path packages/json --backend=$$backend packages/json/tests/smoke.pp | grep -Fx json-ok; \
+		./build/ppc run --module-path packages/logging --backend=$$backend packages/logging/tests/smoke.pp | grep -Fx logging-ok; \
+		./build/ppc run --module-path packages/filesystem --backend=$$backend packages/filesystem/tests/smoke.pp | grep -Fx filesystem-ok; \
+		./build/ppc run --module-path packages/testing --backend=$$backend packages/testing/tests/smoke.pp | grep -Fx testing-ok; \
 	done
 
 test: version-sync compiler compiler-test package-test
@@ -112,7 +117,7 @@ install: compiler
 	install -Dm755 punpun $(DESTDIR)/usr/local/bin/punpun
 	install -Dm755 pp $(DESTDIR)/usr/local/bin/pp
 	mkdir -p $(DESTDIR)/usr/local/lib/punpun/runtime
-	cp runtime/ppcrt.h runtime/ppcrt.c runtime/ppc_https.c runtime/ppc_gui.c runtime/ppc_platform.h runtime/ppc_platform_posix.c runtime/ppc_platform_windows.c $(DESTDIR)/usr/local/lib/punpun/runtime/
+	cp runtime/ppcrt.h runtime/ppcrt.c runtime/ppc_https.c runtime/ppc_gui.c runtime/ppc_net.c runtime/ppc_platform.h runtime/ppc_platform_posix.c runtime/ppc_platform_windows.c $(DESTDIR)/usr/local/lib/punpun/runtime/
 	mkdir -p $(DESTDIR)/usr/local/lib/punpun/stdlib
 	cp -R stdlib/. $(DESTDIR)/usr/local/lib/punpun/stdlib/
 

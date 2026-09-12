@@ -415,7 +415,8 @@ HirStmt *Checker::check_for_each(const Stmt *statement) {
     const Type *type = sequence->type;
     if (!type || type->is_error()) return make_stmt(HirStmt::Kind::Block, statement->span);
 
-    // Each sequence kind names its own length and element-access builtins.
+    // Built-in sequences keep their compact indexed lowering. User-defined
+    // iteration falls through to the structural iterator protocol below.
     const char *length_builtin = nullptr;
     const char *element_builtin = nullptr;
     const Type *element_type = nullptr;
@@ -434,80 +435,359 @@ HirStmt *Checker::check_for_each(const Stmt *statement) {
             element_type = type->element;
             break;
         default:
-            diagnostics_
-                .error(Code::FeatureUnsupported,
-                       types_.describe(type) + " cannot be iterated")
-                .label(statement->iterable->span)
-                .with_help("`for` walks nums, List<T> and Slice<T>; "
-                           "for a count write `for i in 0..n`");
-            return make_stmt(HirStmt::Kind::Block, statement->span);
+            break;
     }
 
-    // The whole rewrite lives in its own scope so the two synthetic locals
-    // cannot collide with anything the body declares.
+    // Every lowering evaluates the source exactly once and keeps it in a
+    // compiler-owned local. For move-only user values, entering the loop owns
+    // that value just like passing it by value to another function.
     push_scope();
     HirStmt *outer = make_stmt(HirStmt::Kind::Block, statement->span);
 
+    const Symbol sequence_name = interner_.intern("__pp_seq");
     const u32 sequence_local =
-        declare_local(interner_.intern("__pp_seq"), type, false, false, statement->span);
+        declare_local(sequence_name, type, true, false, statement->span);
     HirStmt *bind_sequence = make_stmt(HirStmt::Kind::Let, statement->span);
     bind_sequence->local = sequence_local;
     bind_sequence->value = sequence;
     outer->body.push_back(bind_sequence);
+    note_move(statement->iterable, sequence);
 
-    auto read_sequence = [&] {
-        HirExpr *read = make_expr(HirExpr::Kind::Local, statement->iterable->span, type);
-        read->local = sequence_local;
+    auto read_local = [&](u32 slot, const Type *local_type, Span span) {
+        HirExpr *read = make_expr(HirExpr::Kind::Local, span, local_type);
+        read->local = slot;
         return read;
     };
 
-    HirStmt *loop = make_stmt(HirStmt::Kind::For, statement->span);
-    loop->range_start = make_expr(HirExpr::Kind::ConstInt, statement->span, types_.int_type());
-    loop->range_start->int_value = 0;
+    if (length_builtin) {
+        auto read_sequence = [&] {
+            return read_local(sequence_local, type, statement->iterable->span);
+        };
 
-    HirExpr *length = make_expr(HirExpr::Kind::CallBuiltin, statement->iterable->span,
-                                types_.int_type());
-    length->builtin = find_builtin(length_builtin);
-    length->operands.push_back(read_sequence());
-    loop->range_end = length;
+        HirStmt *loop = make_stmt(HirStmt::Kind::For, statement->span);
+        loop->range_start = make_expr(HirExpr::Kind::ConstInt, statement->span,
+                                      types_.int_type());
+        loop->range_start->int_value = 0;
+
+        HirExpr *length = make_expr(HirExpr::Kind::CallBuiltin, statement->iterable->span,
+                                    types_.int_type());
+        length->builtin = find_builtin(length_builtin);
+        length->operands.push_back(read_sequence());
+        loop->range_end = length;
+
+        push_scope();
+        const u32 index_local =
+            declare_local(interner_.intern("__pp_index"), types_.int_type(), false, false,
+                          statement->span);
+        loop->local = index_local;
+
+        auto read_index = [&] {
+            return read_local(index_local, types_.int_type(), statement->span);
+        };
+
+        // nums and Slice index directly; List reads through its accessor builtin.
+        HirExpr *element = nullptr;
+        if (element_builtin) {
+            element = make_expr(HirExpr::Kind::CallBuiltin, statement->span, element_type);
+            element->builtin = find_builtin(element_builtin);
+            element->operands.push_back(read_sequence());
+            element->operands.push_back(read_index());
+        } else {
+            element = make_expr(HirExpr::Kind::Index, statement->span, element_type);
+            element->left = read_sequence();
+            element->right = read_index();
+        }
+
+        HirStmt *bind_element = make_stmt(HirStmt::Kind::Let, statement->span);
+        bind_element->local =
+            declare_local(statement->name, element_type, false, false, statement->span);
+        bind_element->value = element;
+        loop->body.push_back(bind_element);
+
+        ++loop_depth_;
+        check_block(statement->body, loop->body);
+        --loop_depth_;
+        pop_scope();
+
+        outer->body.push_back(loop);
+        if (types_.needs_drop(type)) {
+            HirStmt *drop = make_stmt(HirStmt::Kind::Drop, statement->span);
+            drop->local = sequence_local;
+            outer->body.push_back(drop);
+        }
+        pop_scope();
+        return outer;
+    }
+
+    // Structural protocol -------------------------------------------------
+    //
+    // Any aggregate can participate without declaring a compiler-known trait:
+    //
+    //     value.iter() -> Iterator
+    //     iterator.advance() -> Option<T>
+    //
+    // An iterator may be used directly when it has advance() itself. Protocol
+    // methods take no explicit arguments; the element type is recovered from
+    // Option<T>. This keeps the protocol useful for generic concrete iterator
+    // types without making generic contracts part of the language ABI.
+    auto aggregate_type = [&](const Type *candidate) -> const Type * {
+        while (candidate && candidate->is_pointer_like() && candidate->element) {
+            candidate = candidate->element;
+        }
+        if (!candidate || !candidate->is_aggregate() || candidate->kind == TypeKind::Enum) {
+            return nullptr;
+        }
+        return candidate;
+    };
+
+    auto protocol_method = [&](const Type *receiver, const char *method) -> u32 {
+        const Type *owner = aggregate_type(receiver);
+        if (!owner || owner->decl >= types_.struct_count()) return 0xFFFFFFFFu;
+        const StructInfo &info = types_.struct_at(owner->decl);
+        const std::string key = interner_.text(info.name) + "::" + method;
+        auto found = by_name_.find(key);
+        if (found == by_name_.end()) return 0xFFFFFFFFu;
+        u32 match = 0xFFFFFFFFu;
+        for (u32 candidate : found->second) {
+            if (candidate >= templates_.size()) continue;
+            const FunctionTemplate &templ = templates_[candidate];
+            if (!templ.decl || !templ.decl->params.empty()) continue;
+            // A protocol method cannot have method-level generic parameters:
+            // there are no call arguments from which to infer them. Owner type
+            // parameters are already concrete on `owner` and are fine.
+            if (!templ.decl->generics.empty()) continue;
+            if (match != 0xFFFFFFFFu) return 0xFFFFFFFEu;  // ambiguous
+            match = candidate;
+        }
+        return match;
+    };
+
+    auto call_protocol_method = [&](u32 templ_index, u32 receiver_slot,
+                                    const Type *receiver_type) -> HirExpr * {
+        if (templ_index >= templates_.size()) return poison(statement->span);
+        const FunctionTemplate &templ = templates_[templ_index];
+        const Type *owner = aggregate_type(receiver_type);
+        if (!owner) return poison(statement->span);
+
+        // C represents a value struct inline, while the native and bytecode
+        // backends currently represent one as an aggregate handle. Taking
+        // &mut of the synthetic iterator local would therefore mean different
+        // things across backends. Keep the protocol backend-equivalent by
+        // requiring stateful iterators to be identity objects for now.
+        if (owner->kind == TypeKind::Struct && templ.decl->self_mutable) {
+            diagnostics_
+                .error(Code::FeatureUnsupported,
+                       "a stateful iterator must be an object, not a mutable value struct")
+                .label(statement->iterable->span)
+                .note("mutable struct receivers are not yet representation-equivalent across "
+                      "all PunPun backends")
+                .with_help("make the iterator an `object`, or return an object iterator from "
+                           "iter()");
+            return poison(statement->span);
+        }
+
+        std::vector<const Type *> arguments = owner->arguments;
+        if (templ.generics.size() != arguments.size()) {
+            diagnostics_
+                .error(Code::FeatureUnsupported,
+                       "iterator protocol methods cannot require inferred type arguments")
+                .label(statement->span)
+                .with_help("put generic parameters on the iterator type, not on iter() or advance()");
+            return poison(statement->span);
+        }
+        if (!satisfies_constraints(templ, arguments, statement->span)) {
+            return poison(statement->span);
+        }
+
+        const u32 specialization = specialize(templ_index, arguments, statement->span);
+        if (specialization == 0xFFFFFFFFu) return poison(statement->span);
+        const Specialization &spec = spec_at(specialization);
+
+        HirExpr *self = read_local(receiver_slot, receiver_type, statement->span);
+        if (owner->kind == TypeKind::Struct && templ.decl->self_mutable) {
+            // The synthetic local belongs exclusively to the loop lowering, so
+            // taking this internal mutable borrow cannot conflict with source
+            // code. Building HIR directly also avoids extending a temporary
+            // borrow in the source-level borrow checker.
+            HirExpr *borrow = make_expr(HirExpr::Kind::Ref, statement->span,
+                                        types_.reference(owner, true));
+            borrow->left = self;
+            borrow->mutable_ref = true;
+            self = borrow;
+        }
+
+        HirExpr *call = make_expr(HirExpr::Kind::Call, statement->span, spec.result);
+        call->target = specialization;
+        call->operands.push_back(self);
+        return call;
+    };
+
+    const u32 iter_method = protocol_method(type, "iter");
+    const u32 self_advance_method = protocol_method(type, "advance");
+    if (iter_method == 0xFFFFFFFEu || self_advance_method == 0xFFFFFFFEu) {
+        diagnostics_
+            .error(Code::AmbiguousOverload,
+                   "iterator protocol methods must not be overloaded")
+            .label(statement->iterable->span)
+            .with_help("provide one zero-argument iter() or advance() method");
+        pop_scope();
+        return outer;
+    }
+
+    u32 iterator_local = sequence_local;
+    const Type *iterator_type = type;
+    bool separate_iterator = false;
+
+    if (iter_method != 0xFFFFFFFFu) {
+        HirExpr *iterator = call_protocol_method(iter_method, sequence_local, type);
+        if (!iterator || !iterator->type || iterator->type->is_error()) {
+            pop_scope();
+            return outer;
+        }
+        iterator_type = iterator->type;
+        iterator_local = declare_local(interner_.intern("__pp_iter"), iterator_type, true, false,
+                                       statement->span);
+        HirStmt *bind_iterator = make_stmt(HirStmt::Kind::Let, statement->span);
+        bind_iterator->local = iterator_local;
+        bind_iterator->value = iterator;
+        outer->body.push_back(bind_iterator);
+        separate_iterator = true;
+    } else if (self_advance_method == 0xFFFFFFFFu) {
+        diagnostics_
+            .error(Code::FeatureUnsupported,
+                   types_.describe(type) + " cannot be iterated")
+            .label(statement->iterable->span)
+            .note("custom iteration is structural: iter() returns an iterator whose "
+                  "advance() returns Option<T>")
+            .with_help("add `fn iter() -> YourIterator`, or make the value itself expose "
+                       "`fn advance() -> Option<T>`");
+        pop_scope();
+        return outer;
+    }
+
+    const u32 advance_method = protocol_method(iterator_type, "advance");
+    if (advance_method == 0xFFFFFFFFu || advance_method == 0xFFFFFFFEu) {
+        diagnostics_
+            .error(Code::FeatureUnsupported,
+                   "iterator type " + types_.describe(iterator_type) +
+                       " must provide one zero-argument advance() method")
+            .label(statement->iterable->span)
+            .with_help("define `fn advance() -> Option<T>` on the iterator type");
+        pop_scope();
+        return outer;
+    }
+
+    HirExpr *probe_advance = call_protocol_method(advance_method, iterator_local, iterator_type);
+    const Type *option_type = probe_advance ? probe_advance->type : nullptr;
+    if (!option_type || option_type->is_error()) {
+        pop_scope();
+        return outer;
+    }
+    if (option_type->kind != TypeKind::Enum || option_type->decl >= types_.enum_count()) {
+        diagnostics_
+            .error(Code::FeatureUnsupported, "iterator advance() must return Option<T>")
+            .label(statement->iterable->span)
+            .note("found " + types_.describe(option_type));
+        pop_scope();
+        return outer;
+    }
+
+    const EnumInfo &option_info = types_.enum_at(option_type->decl);
+    if (interner_.text(option_info.name) != "Option") {
+        diagnostics_
+            .error(Code::FeatureUnsupported, "iterator advance() must return Option<T>")
+            .label(statement->iterable->span)
+            .note("found " + types_.describe(option_type));
+        pop_scope();
+        return outer;
+    }
+
+    u32 none_variant = 0xFFFFFFFFu;
+    u32 some_variant = 0xFFFFFFFFu;
+    const Type *protocol_element = nullptr;
+    for (u32 i = 0; i < option_info.variants.size(); ++i) {
+        const VariantInfo &variant = option_info.variants[i];
+        const std::string name = interner_.text(variant.name);
+        if (name == "None" && variant.payload.empty()) none_variant = i;
+        if (name == "Some" && variant.payload.size() == 1) {
+            some_variant = i;
+            protocol_element = variant.payload[0];
+        }
+    }
+    if (none_variant == 0xFFFFFFFFu || some_variant == 0xFFFFFFFFu || !protocol_element) {
+        diagnostics_
+            .error(Code::FeatureUnsupported,
+                   "iterator advance() must return the standard Option<T> shape")
+            .label(statement->iterable->span);
+        pop_scope();
+        return outer;
+    }
+
+    // The probe above exists only to discover the result type. Rebuild the call
+    // for the loop body; otherwise that expression would be shared between HIR
+    // locations and could be lowered twice by later transformations.
+    HirStmt *loop = make_stmt(HirStmt::Kind::While, statement->span);
+    loop->value = make_expr(HirExpr::Kind::ConstBool, statement->span, types_.bool_type());
+    loop->value->bool_value = true;
 
     push_scope();
-    const u32 index_local =
-        declare_local(interner_.intern("__pp_index"), types_.int_type(), false, false,
-                      statement->span);
-    loop->local = index_local;
+    const u32 next_local = declare_local(interner_.intern("__pp_next"), option_type, true, false,
+                                         statement->span);
+    HirStmt *bind_next = make_stmt(HirStmt::Kind::Let, statement->span);
+    bind_next->local = next_local;
+    bind_next->value = call_protocol_method(advance_method, iterator_local, iterator_type);
+    loop->body.push_back(bind_next);
 
-    auto read_index = [&] {
-        HirExpr *read = make_expr(HirExpr::Kind::Local, statement->span, types_.int_type());
-        read->local = index_local;
-        return read;
+    auto read_next = [&] {
+        return read_local(next_local, option_type, statement->span);
     };
 
-    // nums and Slice index directly; List reads through its accessor builtin.
-    HirExpr *element = nullptr;
-    if (element_builtin) {
-        element = make_expr(HirExpr::Kind::CallBuiltin, statement->span, element_type);
-        element->builtin = find_builtin(element_builtin);
-        element->operands.push_back(read_sequence());
-        element->operands.push_back(read_index());
-    } else {
-        element = make_expr(HirExpr::Kind::Index, statement->span, element_type);
-        element->left = read_sequence();
-        element->right = read_index();
-    }
+    HirExpr *tag = make_expr(HirExpr::Kind::EnumTag, statement->span, types_.int_type());
+    tag->left = read_next();
+    HirExpr *wanted = make_expr(HirExpr::Kind::ConstInt, statement->span, types_.int_type());
+    wanted->int_value = static_cast<i64>(some_variant);
+    HirExpr *has_value = make_expr(HirExpr::Kind::Binary, statement->span, types_.bool_type());
+    has_value->binary_op = BinaryOp::Equal;
+    has_value->left = tag;
+    has_value->right = wanted;
+
+    HirStmt *branch = make_stmt(HirStmt::Kind::If, statement->span);
+    branch->value = has_value;
+
+    push_scope();
+    HirExpr *payload = make_expr(HirExpr::Kind::EnumPayload, statement->span, protocol_element);
+    payload->left = read_next();
+    payload->field = some_variant;
+    payload->slot = 0;
 
     HirStmt *bind_element = make_stmt(HirStmt::Kind::Let, statement->span);
     bind_element->local =
-        declare_local(statement->name, element_type, false, false, statement->span);
-    bind_element->value = element;
-    loop->body.push_back(bind_element);
+        declare_local(statement->name, protocol_element, false, false, statement->span);
+    bind_element->value = payload;
+    branch->body.push_back(bind_element);
 
     ++loop_depth_;
-    check_block(statement->body, loop->body);
+    check_block(statement->body, branch->body);
     --loop_depth_;
     pop_scope();
 
+    HirStmt *stop = make_stmt(HirStmt::Kind::Break, statement->span);
+    branch->alternative.push_back(stop);
+    loop->body.push_back(branch);
+    pop_scope();
+
     outer->body.push_back(loop);
+    if (separate_iterator && types_.needs_drop(iterator_type)) {
+        HirStmt *drop = make_stmt(HirStmt::Kind::Drop, statement->span);
+        drop->local = iterator_local;
+        outer->body.push_back(drop);
+    }
+    if (types_.needs_drop(type)) {
+        HirStmt *drop = make_stmt(HirStmt::Kind::Drop, statement->span);
+        drop->local = sequence_local;
+        outer->body.push_back(drop);
+    }
+
     pop_scope();
     return outer;
 }

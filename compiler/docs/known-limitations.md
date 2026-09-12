@@ -21,23 +21,19 @@ The mitigating fact: the C backend hands locals to the host compiler as ordinary
 C locals, so GCC's own SSA construction already performs this promotion on the
 default path. The gap is real for the native and bytecode backends only.
 
-### Register allocation
+### Native optimization follow-up
 
-The native backend still places every value in a stack slot. The measured cost
-is visible in `fib_recursive`, where native is 2.5x slower than C, and in
-artifact size, where `large_source` is 2.7x the C backend's output.
+The direct x86-64 backend now has CFG-aware linear-scan allocation for scalar
+MIR values, full scalar System V stack arguments, native async task wrappers,
+and read-only value-parameter copy elision. Allocated values deliberately retain
+spill homes so debug/materialization paths stay simple and exact. A future pass
+may remove dead spill stores after native debug-location tracking can describe
+register-only values.
 
-The baseline showed this is **not** the largest native-backend problem —
-aggregate boxing cost roughly an order of magnitude more, which is why escape
-analysis was done first. Register allocation is the correct next piece of work.
-
-### Interprocedural copy elimination
-
-`analyze_parameters` is implemented and identifies read-only parameters, but no
-backend consumes it yet. Wiring it in would let a caller pass a value struct
-without the defensive deep copy when the callee provably only reads it. The
-analysis is written and compiles; the call-site change is not done, so the
-capability does **not** exist.
+`analyze_parameters` is consumed by direct synchronous native calls. The
+bytecode backend still performs its defensive value-struct copies at call
+boundaries, so extending the same proof there remains useful work. Async calls
+remain conservative because a worker may outlive and race the spawning frame.
 
 ### Windows support
 

@@ -1,5 +1,19 @@
 # Changelog
 
+## Unreleased — native ABI and allocator pass
+
+- Direct x86-64 now uses CFG-aware linear-scan allocation for scalar MIR values
+  in callee-saved registers, while keeping spill homes for deterministic debug
+  and materialization paths.
+- System V calls now spill overflow scalar arguments to the stack instead of
+  rejecting more than six GP or eight SSE arguments.
+- Native async functions now generate runtime task contexts/trampolines and
+  support spawn, await, cancellation, task groups, and floating-point results.
+- Direct synchronous native calls consume `analyze_parameters` and omit deep
+  copies for read-only value-struct parameters.
+- Added structural codegen regressions to pin stack arguments, allocator output,
+  and native task wrappers.
+
 ## Unreleased — 47 stdlib modules, 89 new builtins, and an ABI bug
 
 ### Added — 25 more stdlib modules

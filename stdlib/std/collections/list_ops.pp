@@ -1,9 +1,7 @@
 // Operations over List<T>.
 //
-// PunPun has no closures, so the shapes that would normally take a predicate —
-// map, filter, reduce — cannot be written generically. What is here instead are
-// the structural operations that need no callback, plus concrete int and str
-// versions of the ones that do.
+// Structural List<T> operations. Higher-order map/filter/fold live in
+// std.collections.functional now that function values support captures.
 
 fn list_copy<T: Copy>(items: List<T>) -> List<T> {
     let out = list<T>();

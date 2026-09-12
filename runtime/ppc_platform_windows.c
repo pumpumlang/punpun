@@ -350,6 +350,48 @@ bool ppc_plat_current_dir(char *buffer, size_t size) {
 
 const char *ppc_plat_get_env(const char *name) { return getenv(name); }
 
+bool ppc_plat_set_env(const char *name, const char *value) {
+    if (!name || !*name) return false;
+    return _putenv_s(name, value ? value : "") == 0;
+}
+
+bool ppc_plat_hostname(char *buffer, size_t size) {
+    if (!buffer || size == 0) return false;
+    DWORD length = (DWORD)size;
+    return GetComputerNameA(buffer, &length) != 0;
+}
+
+int64_t ppc_plat_cpu_count(void) {
+    SYSTEM_INFO info;
+    GetSystemInfo(&info);
+    return info.dwNumberOfProcessors ? (int64_t)info.dwNumberOfProcessors : 1;
+}
+
+int64_t ppc_plat_run_capture(const char *command, char **output) {
+    if (output) *output = NULL;
+    if (!command || !output) return -1;
+    FILE *pipe = _popen(command, "r");
+    if (!pipe) return -1;
+    size_t capacity = 4096, length = 0;
+    char *data = (char *)malloc(capacity);
+    if (!data) { _pclose(pipe); return -1; }
+    char chunk[2048];
+    while (fgets(chunk, sizeof(chunk), pipe)) {
+        const size_t n = strlen(chunk);
+        if (length + n + 1 > capacity) {
+            while (length + n + 1 > capacity) capacity *= 2;
+            char *grown = (char *)realloc(data, capacity);
+            if (!grown) { free(data); _pclose(pipe); return -1; }
+            data = grown;
+        }
+        memcpy(data + length, chunk, n); length += n;
+    }
+    data[length] = '\0';
+    const int status = _pclose(pipe);
+    *output = data;
+    return (int64_t)status;
+}
+
 const char *ppc_plat_name(void) { return "windows"; }
 
 #endif /* PPC_WINDOWS */

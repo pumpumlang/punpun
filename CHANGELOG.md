@@ -1,5 +1,122 @@
 # Changelog
 
+## Unreleased
+
+## 1.5.0 — 2026-09-11
+
+### Standard library expansion
+
+- Replaced the first-party JSON package's injected-C parser with a recursive
+  `std.data.json` value model, parser, serializer, pretty-printer, Unicode escape
+  handling and typed object/array access written in PunPun.
+- Added PunPun-native TOML/config parsing, a backtracking regular-expression
+  engine, UTF-8 codepoint helpers, MIME lookup, deterministic RNG utilities,
+  date/time values, path logic, filesystem tree/atomic-write helpers and
+  structured logging/testing APIs.
+- Added pure-PunPun SHA-256 and HMAC-SHA256 implementations validated against
+  published vectors, plus LZSS/RLE byte compression.
+- Added interoperable method-0 ZIP archive reading/writing with CRC-32 checking
+  and a small atomic JSON-backed document/key-value database.
+- Added generic higher-order collection functions (`map`, `filter`, `fold`,
+  predicates, `zip`, `enumerate`) and a generic deque. This exposed and fixed
+  missing generic substitution inside `fn(T) -> U` types.
+- Added captured process results and host/environment helpers. Only the actual
+  platform operations are runtime shims; argument quoting, result modelling and
+  application policy live in PunPun.
+- Upgraded the `json`, `logging`, `filesystem` and `testing` first-party packages
+  to reuse the full standard modules, with package smoke tests on all backends.
+- Fixed bytecode dispatch for the new host primitives, native string equality's
+  SysV `bool` widening, and native escape/copy-elision of stack-promoted value
+  structs stored into containers, all exposed by the new PunPun-written library
+  tests.
+
+### GUI toolkit
+
+- Replaced the two-call native GUI foundation with a retained `std.gui` toolkit
+  covering windows, labels, buttons, text inputs, checkboxes, sliders, progress
+  bars, panels and canvases.
+- Added portable widget bounds/text/value/range/visible/enabled state plus
+  vertical, horizontal and grid layouts implemented in PunPun itself.
+- Added mouse, keyboard, text, change, resize, paint and close events, an
+  application event queue, and closure-driven `gui_run` event loops.
+- Added RGB canvas clear/rectangle/line/text drawing and modal confirm helpers.
+- Added `PUNPUN_GUI_HEADLESS=1`, which runs the same retained model without a
+  display so GUI programs can be regression-tested across C, bytecode and native.
+- Expanded the X11 backend with real input focus, slider interaction, WM close
+  handling and display cleanup; expanded Win32 linking/painting for GDI-backed
+  toolkit controls.
+- Fixed native x86-64 runtime-builtin calls to spill arguments beyond the six
+  System V GP registers, exposed by the seven-argument canvas rectangle call.
+
+
+### Networking stack
+
+- Added backend-equivalent DNS, TCP and UDP runtime sockets with portable
+  runtime handles, nonblocking operation, timeout/readiness waits and task
+  cancellation awareness. Windows uses Winsock through the same public API.
+- Added `std.net.dns`, `std.net.tcp` and `std.net.udp`, including listeners,
+  peer/local addressing, `TCP_NODELAY`, half/full shutdown, async wrappers and
+  binary datagrams with source addresses.
+- Added structured `std.net.http` HTTP/1.1 client/server support with header
+  maps, binary request/response bodies, closure handlers, content-length and
+  chunked decoding. Plain HTTP uses PunPun sockets directly.
+- Extended the verified libcurl HTTPS runtime with raw response headers and
+  binary request/response bodies so HTTP and HTTPS share one high-level
+  `HttpResponse` shape without weakening certificate or hostname verification.
+- Added RFC 6455 `ws://` WebSockets with client masking, text/binary messages,
+  fragmentation, ping/pong, close frames and a 16 MiB message cap.
+- Raw socket operations are exercised on C, bytecode and direct x86-64. Raw TLS
+  streams/`wss://` and HTTP keep-alive pooling remain explicit future work;
+  HTTPS async wrappers still run blocking libcurl inside cancellable worker
+  tasks rather than pretending libcurl is a nonblocking socket backend.
+
+### Native x86-64 backend
+
+- Added CFG-aware linear-scan allocation for scalar MIR values across `%rbx`
+  and `%r12`–`%r15`, with conservative spill homes retained for exact
+  materialization and debugging.
+- Added full scalar System V stack argument passing for direct and indirect
+  calls, including mixed integer/pointer and floating-point overflow past the
+  six GP and eight SSE argument registers.
+- Added native async task spawning, worker trampolines, `await`, cancellation,
+  and task-group parity with the C backend.
+- Wired read-only parameter analysis into synchronous direct native calls so
+  provably read-only value structs avoid a defensive deep copy. Async and
+  indirect calls remain conservative.
+- Added native codegen structural checks plus wide-call and async ABI regression
+  cases; the three backends continue to share the same behavioral suite.
+
+### Capturing closures
+
+- Function literals capture free locals by value into an owned environment.
+- Mutable captures persist across calls; copying a function value shares the
+  same environment, while the creating scope keeps its own copy of Copy values.
+- Closures may escape their creating function and nested closures propagate
+  grandparent captures through intermediate environments.
+- Capturing move-only values transfers ownership into the closure.
+- Capturing `&T`, `&mut T`, or `Slice<T>` is rejected until lifetime-aware
+  closure escape analysis can prove the borrow cannot dangle.
+- C, direct x86-64, and bytecode backends use the same one-word closure handle
+  model and are regression-tested for equivalent behavior.
+
+
+### General iterator protocol
+
+- `for element in value` now accepts user-defined iterables structurally: an
+  iterable exposes `iter()`, whose result exposes `advance() -> Option<T>`.
+- Iterator objects may be looped directly when they expose `advance() ->
+  Option<T>`, enabling lazy and unbounded producers without materializing a
+  sequence first.
+- Generic concrete iterator types propagate their owner type arguments through
+  the protocol, so `Option<T>` determines the loop variable type.
+- Existing `nums`, `List<T>` and `Slice<T>` loops retain their indexed fast
+  path; the protocol adds no allocation or dispatch overhead to those types.
+- Stateful protocol iterators are identity `object`s. A `struct` iterator whose
+  `advance` requires `mut self` is rejected until mutable value-struct borrows
+  have the same representation on every backend.
+- C, direct x86-64 and bytecode run the same protocol regression cases,
+  including direct iterators, generic iterables, `break`, and `continue`.
+
 ## 1.4.5 — 2026-09-11
 
 - Coordinated the language, documentation, and PPX package manager on the

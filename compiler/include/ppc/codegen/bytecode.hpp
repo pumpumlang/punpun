@@ -120,6 +120,12 @@ enum class Op : u8 {
     // Async
     Spawn,
     Await,
+
+    // Closures. Appended rather than inserted near Call so existing serialized
+    // bytecode opcode numbers keep their meaning.
+    MakeClosure,
+    LoadCapture,
+    StoreCapture,
 };
 
 const char *op_mnemonic(Op op);
@@ -140,8 +146,8 @@ struct Instr {
     u32 a = 0xFFFFFFFFu;
     u32 b = 0xFFFFFFFFu;
     u32 c = 0xFFFFFFFFu;
-    /// Immediate payload: constant value, jump target, callee index, field
-    /// index, or builtin id, depending on the opcode.
+    /// Immediate payload: constant value, jump target, closure/callee target,
+    /// field index, capture index, or builtin id, depending on the opcode.
     i64 imm = 0;
     double fimm = 0.0;
     /// Call arguments live in the program's flat argument pool.

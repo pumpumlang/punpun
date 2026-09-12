@@ -349,6 +349,77 @@ void CBackend::emit_instruction(const MirFunction &fn, const MirInst &instructio
             }
         }
 
+        case MirOp::MakeClosure: {
+            const std::string destination = reg(instruction.dest);
+            if (instruction.args.empty()) {
+                out_ << "    " << destination << " = pp_closure_named(INT64_C("
+                     << instruction.target << "));\n";
+                return;
+            }
+            out_ << "    " << destination << " = pp_closure_new(INT64_C(" << instruction.target
+                 << "), INT64_C(" << instruction.args.size() << "));\n";
+            for (std::size_t i = 0; i < instruction.args.size(); ++i) {
+                const Reg capture = instruction.args[i];
+                const Type *type = reg_type(fn, capture);
+                std::string encoded;
+                if (type && (type->kind == TypeKind::Struct || type->kind == TypeKind::Enum)) {
+                    const std::string box = "closure_box" + std::to_string(temporary_id_++);
+                    out_ << "    " << type_name(type) << " *" << box << " = ("
+                         << type_name(type) << " *)pp_object_alloc((int64_t)sizeof("
+                         << type_name(type) << "));\n";
+                    out_ << "    *" << box << " = " << reg(capture) << ";\n";
+                    encoded = "(int64_t)(intptr_t)" + box;
+                } else if (type && type->kind == TypeKind::Float) {
+                    encoded = "pp_bits_from_f64(" + reg(capture) + ")";
+                } else if (type && (type->kind == TypeKind::Int || type->kind == TypeKind::Bool)) {
+                    encoded = reg(capture);
+                } else {
+                    encoded = "(int64_t)(intptr_t)" + reg(capture);
+                }
+                out_ << "    pp_closure_set(" << destination << ", INT64_C(" << i << "), "
+                     << encoded << ");\n";
+            }
+            return;
+        }
+        case MirOp::LoadCapture: {
+            const Type *type = instruction.type;
+            const std::string raw = "pp_closure_get(pp_current_closure, INT64_C(" +
+                                    std::to_string(instruction.index) + "))";
+            out_ << "    " << reg(instruction.dest) << " = ";
+            if (type && (type->kind == TypeKind::Struct || type->kind == TypeKind::Enum)) {
+                out_ << "*(" << type_name(type) << " *)(intptr_t)" << raw;
+            } else if (type && type->kind == TypeKind::Float) {
+                out_ << "pp_f64_from_bits(" << raw << ")";
+            } else if (type && (type->kind == TypeKind::Int || type->kind == TypeKind::Bool)) {
+                out_ << raw;
+            } else {
+                out_ << "(" << type_name(type) << ")(intptr_t)" << raw;
+            }
+            out_ << ";\n";
+            return;
+        }
+        case MirOp::StoreCapture: {
+            const Type *type = instruction.type;
+            std::string encoded;
+            if (type && (type->kind == TypeKind::Struct || type->kind == TypeKind::Enum)) {
+                const std::string box = "closure_box" + std::to_string(temporary_id_++);
+                out_ << "    " << type_name(type) << " *" << box << " = ("
+                     << type_name(type) << " *)pp_object_alloc((int64_t)sizeof("
+                     << type_name(type) << "));\n";
+                out_ << "    *" << box << " = " << reg(instruction.a) << ";\n";
+                encoded = "(int64_t)(intptr_t)" + box;
+            } else if (type && type->kind == TypeKind::Float) {
+                encoded = "pp_bits_from_f64(" + reg(instruction.a) + ")";
+            } else if (type && (type->kind == TypeKind::Int || type->kind == TypeKind::Bool)) {
+                encoded = reg(instruction.a);
+            } else {
+                encoded = "(int64_t)(intptr_t)" + reg(instruction.a);
+            }
+            out_ << "    pp_closure_set(pp_current_closure, INT64_C(" << instruction.index
+                 << "), " << encoded << ");\n";
+            return;
+        }
+
         case MirOp::Call: {
             out_ << "    ";
             if (instruction.dest != kNoReg) out_ << reg(instruction.dest) << " = ";
@@ -391,15 +462,19 @@ void CBackend::emit_instruction(const MirFunction &fn, const MirInst &instructio
                     }
                 }
             }
+            const std::string saved = "closure_prev" + std::to_string(temporary_id_++);
+            out_ << "    pp_closure " << saved << " = pp_current_closure;\n";
+            out_ << "    pp_current_closure = " << reg(instruction.a) << ";\n";
             out_ << "    ";
             if (instruction.dest != kNoReg) out_ << reg(instruction.dest) << " = ";
             out_ << "((" << result << " (*)(" << parameters << "))pp_fn_table["
-                 << reg(instruction.a) << "])(";
+                 << "pp_closure_target(" << reg(instruction.a) << ")])(";
             for (std::size_t i = 0; i < instruction.args.size(); ++i) {
                 if (i) out_ << ", ";
                 out_ << reg(instruction.args[i]);
             }
             out_ << ");\n";
+            out_ << "    pp_current_closure = " << saved << ";\n";
             return;
         }
         case MirOp::CallBuiltin: emit_builtin(fn, instruction); return;
@@ -612,7 +687,7 @@ void CBackend::emit_prototypes(const MirProgram &program) {
     }
     out_ << "\n";
 
-    // A function value is an index into this table. Casting a function pointer
+    // A closure stores an index into this table. Casting a function pointer
     // to another function-pointer type and back is well defined; the call is
     // always made through the signature the checker proved the value has.
     out_ << "typedef void (*pp_fnptr)(void);\n";
@@ -735,6 +810,7 @@ bool CBackend::emit(const MirProgram &program, const CodegenOptions &options, st
     out_ << "#include <stdint.h>\n";
     out_ << "#include <string.h>\n";
     out_ << "#include \"ppcrt.h\"\n\n";
+    out_ << "static _Thread_local pp_closure pp_current_closure = 0;\n\n";
 
     collect_aggregates(program);
     emit_aggregates();

@@ -11,6 +11,7 @@ mkdir -p "$out"
 ${CC:-cc} -std=c17 -O2 -Wall -Wextra -Werror -I"$root/runtime" \
     "$out/ppc-self-stage1.c" "$root/runtime/ppcrt.c" \
     "$root/runtime/ppc_https.c" "$root/runtime/ppc_gui.c" \
+    "$root/runtime/ppc_net.c" \
     "$root/runtime/ppc_platform_posix.c" "$root/runtime/ppc_platform_windows.c" \
     -pthread -lm -ldl \
     -o "$out/ppc-self-stage2"
@@ -22,6 +23,7 @@ cmp "$out/ppc-self-stage1.c" "$out/ppc-self-stage2.c"
 ${CC:-cc} -std=c17 -O2 -Wall -Wextra -Werror -I"$root/runtime" \
     "$out/hello.c" "$root/runtime/ppcrt.c" \
     "$root/runtime/ppc_https.c" "$root/runtime/ppc_gui.c" \
+    "$root/runtime/ppc_net.c" \
     "$root/runtime/ppc_platform_posix.c" "$root/runtime/ppc_platform_windows.c" \
     -pthread -lm -ldl -o "$out/hello"
 test "$("$out/hello")" = "hello from self-hosted PunPun, world"
