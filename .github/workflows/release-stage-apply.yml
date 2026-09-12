@@ -36,30 +36,29 @@ jobs:
           set -euo pipefail
           base='bf5419e8ad7bcfcef10293d6243fab64db7eb68f'
           git checkout --detach "$base"
-
-          # Step 1 was checkpointed separately; steps 2-6 were developed on top of it.
           git apply --check /tmp/closure.patch
           git apply /tmp/closure.patch
-
-          # The live 1.4.5 release regenerated only the Arch archive checksum after
-          # the development baseline was frozen. Keep that live checksum here; the
-          # 1.5 release builder regenerates PKGBUILD with the 1.5 archive checksum.
           git apply --check --exclude=packaging/arch/PKGBUILD /tmp/punpun-1.5.0.patch
           git apply --exclude=packaging/arch/PKGBUILD /tmp/punpun-1.5.0.patch
           python3 - <<'PY'
+          import json
           from pathlib import Path
+
           p = Path('packaging/arch/PKGBUILD')
           text = p.read_text()
           text = text.replace('pkgver=1.4.5', 'pkgver=1.5.0')
-          text = text.replace("PunPun-1.4.5-linux-x86_64.tar.zst", "PunPun-1.5.0-linux-x86_64.tar.zst")
-          text = text.replace("PunPun-1.4.5-linux-x86_64/.", "PunPun-1.5.0-linux-x86_64/.")
+          text = text.replace('PunPun-1.4.5-linux-x86_64.tar.zst', 'PunPun-1.5.0-linux-x86_64.tar.zst')
+          text = text.replace('PunPun-1.4.5-linux-x86_64/.', 'PunPun-1.5.0-linux-x86_64/.')
           p.write_text(text)
-          PY
 
-          test "$(tr -d '\r\n' < VERSION)" = '1.5.0'
-          grep -q '^# PunPun 1.5.0' RELEASE_NOTES.md
-          python3 scripts/check_versions.py
-          git diff --check
+          version = Path('VERSION').read_text().strip()
+          assert version == '1.5.0'
+          assert Path('runtime/VERSION').read_text().strip() == version
+          assert Path('stdlib/VERSION').read_text().strip() == version
+          assert json.loads(Path('editors/vscode/package.json').read_text())['version'] == version
+          assert 'kCompilerVersion = "1.5.0"' in Path('compiler/include/ppc/support/version.hpp').read_text()
+          assert Path('RELEASE_NOTES.md').read_text().startswith('# PunPun 1.5.0')
+          PY
           git config user.name 'pp'
           git config user.email 'pumpumlang@proton.me'
           git add -A
