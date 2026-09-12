@@ -654,14 +654,10 @@ Expr *Parser::parse_match() {
 /// `fn(parameters) -> result { body }` written in expression position.
 ///
 /// The literal is lifted to a module-level function with a generated name, and
-/// the expression becomes a reference to it. Everything downstream then treats
-/// it exactly like a named function used as a value, so no later stage needs a
-/// second notion of what a function is.
-///
-/// A lifted function has no enclosing scope, so naming a local from the
-/// surrounding function does not resolve. That is deliberate for now:
-/// capturing closures need an environment to own the captured values, and the
-/// ownership rules have to say what that means before the syntax exists.
+/// the expression becomes a reference to it. Semantic checking discovers free
+/// locals at the creation site and attaches them as an owned closure
+/// environment, so the parser still needs only one function-body representation.
+/// Nested lifted literals are handled transitively by the capture analysis.
 Expr *Parser::parse_lambda() {
     const Span start = peek().span;
     expect(Tok::Fn, "'fn'");

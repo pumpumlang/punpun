@@ -111,7 +111,7 @@ printf '  %-32s ' "smoke.exe"
 if "$CROSS" -std=c11 -O2 "$OUT/smoke.c" \
         "$OUT/ppcrt.c.obj" "$OUT/ppc_platform_windows.c.obj" \
         "$OUT/ppc_platform_posix.c.obj" "$OUT/ppc_https.c.obj" \
-        "$OUT/ppc_gui.c.obj" -luser32 \
+        "$OUT/ppc_gui.c.obj" -luser32 -lgdi32 \
         -I "$ROOT/runtime" -o "$OUT/smoke.exe" 2> "$OUT/link.log"; then
     echo "ok"
 else

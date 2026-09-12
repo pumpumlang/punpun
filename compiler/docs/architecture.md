@@ -158,12 +158,15 @@ value semantics come for free. This is the only backend with full language
 coverage; async becomes a context struct plus a trampoline handed to
 `pp_task_spawn`.
 
-**Native x86-64.** System V assembly, AT&T syntax. Every local, register, and
-copy temporary gets an 8-byte stack slot; values are loaded and stored around
-each operation. A real register allocator is where most of a native backend's
-complexity lives, and the C backend already covers the case where peak speed
-matters. Checked arithmetic is inline (`jo` to a shared per-function trap stub)
-rather than a call, which is most of why it beats the VM.
+**Native x86-64.** System V assembly, AT&T syntax. Locals and MIR values keep
+8-byte spill homes, but scalar MIR values are assigned across `%rbx` and
+`%r12`–`%r15` with a CFG-aware linear-scan allocator; those callee-saved
+registers survive runtime/helper calls and loop backedges are accounted for by
+block liveness. Calls use the full scalar System V convention, including stack
+arguments after the six GP or eight SSE argument registers. Async calls lower
+to generated native context wrappers/trampolines around `pp_task_spawn`, and
+`await` calls the same runtime accessors as the C backend. Checked arithmetic is
+inline (`jo` to a shared per-function trap stub) rather than a call.
 
 **Bytecode.** A register-based VM, not a stack machine — the mapping from MIR is
 nearly one-to-one and there is no push/pop traffic. Slots are untagged, because

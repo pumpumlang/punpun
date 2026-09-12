@@ -13,6 +13,12 @@
 #include <stdlib.h>
 #include <string.h>
 
+#if defined(_MSC_VER)
+#  define PPCRT_THREAD_LOCAL __declspec(thread)
+#else
+#  define PPCRT_THREAD_LOCAL _Thread_local
+#endif
+
 /* ------------------------------------------------------------------ */
 /* Ownership bookkeeping                                              */
 /*                                                                    */
@@ -81,6 +87,8 @@ int32_t pp_runtime_abi_version(void) { return PUNPUN_RUNTIME_ABI_VERSION; }
 void pp_runtime_cleanup(void) {
     if (g_cleaned) return;
     g_cleaned = 1;
+    pp_net_runtime_cleanup();
+    pp_gui_runtime_cleanup();
     ppc_plat_mutex_lock(g_owned_lock);
     pp_owned *node = g_owned;
     g_owned = NULL;
@@ -106,6 +114,7 @@ void pp_runtime_init(int argc, char **argv) {
     if (!g_owned_lock) g_owned_lock = ppc_plat_mutex_new();
     if (!g_group_table_lock) g_group_table_lock = ppc_plat_mutex_new();
     if (!g_current_task_key) g_current_task_key = ppc_plat_tls_new();
+    pp_net_runtime_init();
     g_argc = argc;
     g_argv = argv; /* borrowed until cleanup */
     atexit(pp_runtime_cleanup);
@@ -124,6 +133,58 @@ void pp_object_free(void *pointer) {
      * binding dead in the compiler but does not return memory early, which
      * keeps every runtime pointer valid for the whole program. */
     (void)pointer;
+}
+
+
+struct pp_closure_env {
+    int64_t target;
+    int64_t capture_count;
+    int64_t captures[];
+};
+
+static struct pp_closure_env *pp_closure_env_from_handle(pp_closure closure) {
+    if (closure == 0) pp_panic("attempted to use a null function value");
+    if ((closure & (pp_closure)1) != 0) return NULL;
+    return (struct pp_closure_env *)(uintptr_t)closure;
+}
+
+pp_closure pp_closure_new(int64_t target, int64_t capture_count) {
+    if (target < 0) pp_panic("negative closure target");
+    if (capture_count < 0) pp_panic("negative closure capture count");
+    if (capture_count == 0) return pp_closure_named(target);
+    if ((uint64_t)capture_count >
+        (SIZE_MAX - sizeof(struct pp_closure_env)) / sizeof(int64_t)) {
+        pp_panic("closure environment is too large");
+    }
+    const size_t bytes = sizeof(struct pp_closure_env) +
+                         (size_t)capture_count * sizeof(int64_t);
+    struct pp_closure_env *env =
+        (struct pp_closure_env *)pp_object_alloc((int64_t)bytes);
+    /* pp_object_alloc is malloc-aligned, leaving tag bit 0 clear. */
+    if (((uintptr_t)env & (uintptr_t)1) != 0) pp_panic("unaligned closure environment");
+    env->target = target;
+    env->capture_count = capture_count;
+    return (pp_closure)(uintptr_t)env;
+}
+
+int64_t pp_closure_target(pp_closure closure) {
+    if (closure == 0) pp_panic("attempted to call a null function value");
+    if ((closure & (pp_closure)1) != 0) return (int64_t)(closure >> 1);
+    return pp_closure_env_from_handle(closure)->target;
+}
+
+int64_t pp_closure_get(pp_closure closure, int64_t index) {
+    struct pp_closure_env *env = pp_closure_env_from_handle(closure);
+    if (!env) pp_panic("zero-capture function has no closure environment");
+    if (index < 0 || index >= env->capture_count) pp_panic("closure capture index out of range");
+    return env->captures[index];
+}
+
+void pp_closure_set(pp_closure closure, int64_t index, int64_t slot) {
+    struct pp_closure_env *env = pp_closure_env_from_handle(closure);
+    if (!env) pp_panic("zero-capture function has no closure environment");
+    if (index < 0 || index >= env->capture_count) pp_panic("closure capture index out of range");
+    env->captures[index] = slot;
 }
 
 /* ------------------------------------------------------------------ */
@@ -600,6 +661,19 @@ pp_bytes *pp_bytes_concat(pp_bytes *left, pp_bytes *right) {
     return out;
 }
 
+const uint8_t *pp_bytes_data(pp_bytes *bytes) {
+    return bytes ? bytes->data : NULL;
+}
+
+pp_bytes *pp_bytes_from_data(const void *data, int64_t length) {
+    if (length < 0) pp_panic("negative byte buffer length");
+    pp_bytes *out = pp_bytes_new();
+    if (!data || length == 0) return out;
+    const uint8_t *source = (const uint8_t *)data;
+    for (int64_t i = 0; i < length; ++i) pp_bytes_push(out, source[i]);
+    return out;
+}
+
 /* ------------------------------------------------------------------ */
 /* Slices                                                             */
 /* ------------------------------------------------------------------ */
@@ -881,6 +955,34 @@ const char *pp_env_or(const char *name, const char *fallback) {
     const char *value = ppc_plat_get_env(name);
     return value ? value : (fallback ? fallback : "");
 }
+
+bool pp_env_set(const char *name, const char *value) { return ppc_plat_set_env(name, value); }
+
+const char *pp_hostname(void) {
+    char buffer[512];
+    if (!ppc_plat_hostname(buffer, sizeof(buffer))) return "";
+    const size_t length = strlen(buffer);
+    char *out = pp_new_text(length);
+    memcpy(out, buffer, length);
+    return out;
+}
+
+int64_t pp_cpu_count(void) { return ppc_plat_cpu_count(); }
+
+static PPCRT_THREAD_LOCAL int64_t g_process_status = -1;
+
+const char *pp_process_capture(const char *command) {
+    char *captured = NULL;
+    g_process_status = ppc_plat_run_capture(command, &captured);
+    if (!captured) return "";
+    const size_t length = strlen(captured);
+    char *out = pp_new_text(length);
+    memcpy(out, captured, length);
+    free(captured);
+    return out;
+}
+
+int64_t pp_process_status(void) { return g_process_status; }
 
 const char *pp_platform(void) { return ppc_plat_name(); }
 

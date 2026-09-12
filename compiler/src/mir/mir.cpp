@@ -101,6 +101,9 @@ const char *op_name(MirOp op) {
         case MirOp::Binary: return "bin";
         case MirOp::Unary: return "un";
         case MirOp::Call: return "call";
+        case MirOp::MakeClosure: return "closure.new";
+        case MirOp::LoadCapture: return "capture.get";
+        case MirOp::StoreCapture: return "capture.set";
         case MirOp::CallIndirect: return "call.indirect";
         case MirOp::CallBuiltin: return "call.builtin";
         case MirOp::MakeStruct: return "struct.new";
@@ -182,6 +185,12 @@ std::string dump_mir(const MirProgram &program, const TypeContext &types) {
                         out << " " << unary_op_spelling(instruction.unary_op) << " "
                             << reg_name(instruction.a);
                         break;
+                    case MirOp::LoadCapture:
+                        out << " [" << instruction.index << "]";
+                        break;
+                    case MirOp::StoreCapture:
+                        out << " [" << instruction.index << "], " << reg_name(instruction.a);
+                        break;
                     case MirOp::CallIndirect:
                         // The callee is a register, so it prints like any other
                         // operand ahead of the argument list.
@@ -192,6 +201,7 @@ std::string dump_mir(const MirProgram &program, const TypeContext &types) {
                         break;
                     case MirOp::Call:
                     case MirOp::CallBuiltin:
+                    case MirOp::MakeClosure:
                     case MirOp::MakeStruct:
                     case MirOp::MakeEnum:
                     case MirOp::MakeList: {

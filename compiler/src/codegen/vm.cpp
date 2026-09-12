@@ -268,6 +268,8 @@ Slot Vm::call_builtin(u32 builtin, const Slot *arguments, u32 argument_count,
     // --- process ------------------------------------------------------
     if (symbol == "pp_exit") { pp_exit(integer(0)); return result; }
     if (symbol == "pp_run_command") { result.integer = pp_run_command(text(0)); return result; }
+    if (symbol == "pp_process_capture") { result.text = pp_process_capture(text(0)); return result; }
+    if (symbol == "pp_process_status") { result.integer = pp_process_status(); return result; }
 
     if (symbol == "pp_numbers_view") {
         result.pointer = pp_numbers_view((pp_numbers *)pointer(0), integer(1), integer(2));
@@ -298,6 +300,9 @@ Slot Vm::call_builtin(u32 builtin, const Slot *arguments, u32 argument_count,
     if (symbol == "pp_arg") { result.text = pp_arg(integer(0)); return result; }
     if (symbol == "pp_env_has") { result.integer = pp_env_has(text(0)); return result; }
     if (symbol == "pp_env_or") { result.text = pp_env_or(text(0), text(1)); return result; }
+    if (symbol == "pp_env_set") { result.integer = pp_env_set(text(0), text(1)); return result; }
+    if (symbol == "pp_hostname") { result.text = pp_hostname(); return result; }
+    if (symbol == "pp_cpu_count") { result.integer = pp_cpu_count(); return result; }
     if (symbol == "pp_platform") { result.text = pp_platform(); return result; }
     if (symbol == "pp_current_dir") { result.text = pp_current_dir(); return result; }
 
@@ -358,16 +363,118 @@ Slot Vm::call_builtin(u32 builtin, const Slot *arguments, u32 argument_count,
     }
     if (symbol == "pp_https_status") { result.integer = pp_https_status(); return result; }
     if (symbol == "pp_https_error") { result.text = pp_https_error(); return result; }
-    if (symbol == "pp_gui_available") { result.integer = pp_gui_available(); return result; }
-    if (symbol == "pp_gui_message") {
-        result.integer = pp_gui_message(text(0), text(1));
+
+    if (symbol == "pp_net_available") { result.integer = pp_net_available(); return result; }
+    if (symbol == "pp_net_resolve") {
+        result.pointer = pp_net_resolve(text(0), integer(1));
         return result;
     }
+    if (symbol == "pp_net_tcp_connect") {
+        result.integer = pp_net_tcp_connect(text(0), integer(1), integer(2)); return result;
+    }
+    if (symbol == "pp_net_tcp_listen") {
+        result.integer = pp_net_tcp_listen(text(0), integer(1), integer(2)); return result;
+    }
+    if (symbol == "pp_net_tcp_accept") {
+        result.integer = pp_net_tcp_accept(integer(0), integer(1)); return result;
+    }
+    if (symbol == "pp_net_udp_bind") {
+        result.integer = pp_net_udp_bind(text(0), integer(1)); return result;
+    }
+    if (symbol == "pp_net_socket_close") {
+        result.integer = pp_net_socket_close(integer(0)); return result;
+    }
+    if (symbol == "pp_net_socket_shutdown") {
+        result.integer = pp_net_socket_shutdown(integer(0), integer(1)); return result;
+    }
+    if (symbol == "pp_net_socket_wait_readable") {
+        result.integer = pp_net_socket_wait_readable(integer(0), integer(1)); return result;
+    }
+    if (symbol == "pp_net_socket_wait_writable") {
+        result.integer = pp_net_socket_wait_writable(integer(0), integer(1)); return result;
+    }
+    if (symbol == "pp_net_socket_set_nodelay") {
+        result.integer = pp_net_socket_set_nodelay(integer(0), integer(1) != 0); return result;
+    }
+    if (symbol == "pp_net_socket_send") {
+        result.integer = pp_net_socket_send(integer(0), (pp_bytes *)pointer(1), integer(2));
+        return result;
+    }
+    if (symbol == "pp_net_socket_recv") {
+        result.pointer = pp_net_socket_recv(integer(0), integer(1), integer(2)); return result;
+    }
+    if (symbol == "pp_net_udp_send_to") {
+        result.integer = pp_net_udp_send_to(integer(0), text(1), integer(2),
+                                            (pp_bytes *)pointer(3), integer(4));
+        return result;
+    }
+    if (symbol == "pp_net_udp_recv_from") {
+        result.pointer = pp_net_udp_recv_from(integer(0), integer(1), integer(2)); return result;
+    }
+    if (symbol == "pp_net_socket_local_port") {
+        result.integer = pp_net_socket_local_port(integer(0)); return result;
+    }
+    if (symbol == "pp_net_socket_peer_host") {
+        result.text = pp_net_socket_peer_host(integer(0)); return result;
+    }
+    if (symbol == "pp_net_socket_peer_port") {
+        result.integer = pp_net_socket_peer_port(integer(0)); return result;
+    }
+    if (symbol == "pp_net_timed_out") { result.integer = pp_net_timed_out(); return result; }
+    if (symbol == "pp_net_eof") { result.integer = pp_net_eof(); return result; }
+    if (symbol == "pp_net_error") { result.text = pp_net_error(); return result; }
+    if (symbol == "pp_net_last_host") { result.text = pp_net_last_host(); return result; }
+    if (symbol == "pp_net_last_port") { result.integer = pp_net_last_port(); return result; }
+    if (symbol == "pp_https_headers_raw") { result.text = pp_https_headers_raw(); return result; }
+    if (symbol == "pp_https_body_bytes") { result.pointer = pp_https_body_bytes(); return result; }
+    if (symbol == "pp_https_request_bytes") {
+        result.pointer = pp_https_request_bytes(text(0), text(1), (pp_bytes *)pointer(2), text(3),
+                                                integer(4), integer(5) != 0);
+        return result;
+    }
+
+    if (symbol == "pp_gui_available") { result.integer = pp_gui_available(); return result; }
+    if (symbol == "pp_gui_headless") { result.integer = pp_gui_headless(); return result; }
+    if (symbol == "pp_gui_message") { result.integer = pp_gui_message(text(0), text(1)); return result; }
+    if (symbol == "pp_gui_window_create") { result.integer = pp_gui_window_create(text(0), integer(1), integer(2)); return result; }
+    if (symbol == "pp_gui_window_show") { result.integer = pp_gui_window_show(integer(0), integer(1) != 0); return result; }
+    if (symbol == "pp_gui_window_close") { result.integer = pp_gui_window_close(integer(0)); return result; }
+    if (symbol == "pp_gui_window_open") { result.integer = pp_gui_window_open(integer(0)); return result; }
+    if (symbol == "pp_gui_window_set_title") { result.integer = pp_gui_window_set_title(integer(0), text(1)); return result; }
+    if (symbol == "pp_gui_window_width") { result.integer = pp_gui_window_width(integer(0)); return result; }
+    if (symbol == "pp_gui_window_height") { result.integer = pp_gui_window_height(integer(0)); return result; }
+    if (symbol == "pp_gui_widget_create") { result.integer = pp_gui_widget_create(integer(0), integer(1), text(2)); return result; }
+    if (symbol == "pp_gui_widget_destroy") { result.integer = pp_gui_widget_destroy(integer(0)); return result; }
+    if (symbol == "pp_gui_widget_set_bounds") { result.integer = pp_gui_widget_set_bounds(integer(0), integer(1), integer(2), integer(3), integer(4)); return result; }
+    if (symbol == "pp_gui_widget_x") { result.integer = pp_gui_widget_x(integer(0)); return result; }
+    if (symbol == "pp_gui_widget_y") { result.integer = pp_gui_widget_y(integer(0)); return result; }
+    if (symbol == "pp_gui_widget_width") { result.integer = pp_gui_widget_width(integer(0)); return result; }
+    if (symbol == "pp_gui_widget_height") { result.integer = pp_gui_widget_height(integer(0)); return result; }
+    if (symbol == "pp_gui_widget_set_text") { result.integer = pp_gui_widget_set_text(integer(0), text(1)); return result; }
+    if (symbol == "pp_gui_widget_text") { result.text = pp_gui_widget_text(integer(0)); return result; }
+    if (symbol == "pp_gui_widget_set_value") { result.integer = pp_gui_widget_set_value(integer(0), integer(1)); return result; }
+    if (symbol == "pp_gui_widget_value") { result.integer = pp_gui_widget_value(integer(0)); return result; }
+    if (symbol == "pp_gui_widget_set_range") { result.integer = pp_gui_widget_set_range(integer(0), integer(1), integer(2)); return result; }
+    if (symbol == "pp_gui_widget_set_visible") { result.integer = pp_gui_widget_set_visible(integer(0), integer(1) != 0); return result; }
+    if (symbol == "pp_gui_widget_set_enabled") { result.integer = pp_gui_widget_set_enabled(integer(0), integer(1) != 0); return result; }
+    if (symbol == "pp_gui_redraw") { result.integer = pp_gui_redraw(integer(0)); return result; }
+    if (symbol == "pp_gui_poll") { result.integer = pp_gui_poll(integer(0), integer(1)); return result; }
+    if (symbol == "pp_gui_post_event") { result.integer = pp_gui_post_event(integer(0), integer(1), integer(2), integer(3), text(4), integer(5), integer(6)); return result; }
+    if (symbol == "pp_gui_event_window") { result.integer = pp_gui_event_window(); return result; }
+    if (symbol == "pp_gui_event_widget") { result.integer = pp_gui_event_widget(); return result; }
+    if (symbol == "pp_gui_event_key") { result.integer = pp_gui_event_key(); return result; }
+    if (symbol == "pp_gui_event_x") { result.integer = pp_gui_event_x(); return result; }
+    if (symbol == "pp_gui_event_y") { result.integer = pp_gui_event_y(); return result; }
+    if (symbol == "pp_gui_event_text") { result.text = pp_gui_event_text(); return result; }
+    if (symbol == "pp_gui_canvas_clear") { result.integer = pp_gui_canvas_clear(integer(0), integer(1)); return result; }
+    if (symbol == "pp_gui_canvas_rect") { result.integer = pp_gui_canvas_rect(integer(0), integer(1), integer(2), integer(3), integer(4), integer(5), integer(6) != 0); return result; }
+    if (symbol == "pp_gui_canvas_line") { result.integer = pp_gui_canvas_line(integer(0), integer(1), integer(2), integer(3), integer(4), integer(5)); return result; }
+    if (symbol == "pp_gui_canvas_text") { result.integer = pp_gui_canvas_text(integer(0), integer(1), integer(2), text(3), integer(4)); return result; }
 
     fail("the bytecode VM does not implement builtin '" + name + "'");
 }
 
-Slot Vm::invoke(u32 function_index, const Slot *arguments, u32 argument_count) {
+Slot Vm::invoke(u32 function_index, const Slot *arguments, u32 argument_count, i64 closure_raw) {
     if (function_index >= program_->functions.size()) fail("call to an unknown function");
     const BytecodeFunction &fn = program_->functions[function_index];
 
@@ -434,6 +541,30 @@ Slot Vm::invoke(u32 function_index, const Slot *arguments, u32 argument_count) {
             case Op::LoadLocal: frame[in.dest] = frame[in.a]; ++pc; break;
             case Op::StoreLocal: frame[in.dest] = frame[in.a]; ++pc; break;
             case Op::LocalAddr: frame[in.dest].pointer = &frame[in.a]; ++pc; break;
+            case Op::MakeClosure: {
+                pp_closure closure = in.arg_count == 0
+                                         ? pp_closure_named(in.imm)
+                                         : pp_closure_new(in.imm, in.arg_count);
+                for (u32 i = 0; i < in.arg_count; ++i) {
+                    const u32 slot = program_->arguments[in.arg_offset + i];
+                    pp_closure_set(closure, i, frame[slot].integer);
+                }
+                frame[in.dest].integer = static_cast<i64>(closure);
+                ++pc;
+                break;
+            }
+            case Op::LoadCapture: {
+                const pp_closure closure = static_cast<pp_closure>(closure_raw);
+                frame[in.dest].integer = pp_closure_get(closure, in.imm);
+                ++pc;
+                break;
+            }
+            case Op::StoreCapture: {
+                const pp_closure closure = static_cast<pp_closure>(closure_raw);
+                pp_closure_set(closure, in.imm, frame[in.a].integer);
+                ++pc;
+                break;
+            }
 
             // Checked arithmetic delegates to the runtime so overflow behaves
             // and reports identically across every backend.
@@ -511,12 +642,11 @@ Slot Vm::invoke(u32 function_index, const Slot *arguments, u32 argument_count) {
                 for (u32 i = 0; i < in.arg_count; ++i) {
                     call_arguments.push_back(frame[program_->arguments[in.arg_offset + i]]);
                 }
-                // The callee index is an ordinary value, so it is read from the
-                // register the function value lives in.
-                const u32 callee = static_cast<u32>(frame[in.a].integer);
+                const pp_closure closure = static_cast<pp_closure>(frame[in.a].integer);
+                const u32 callee = static_cast<u32>(pp_closure_target(closure));
                 const Slot value =
                     invoke(callee, call_arguments.data(),
-                           static_cast<u32>(call_arguments.size()));
+                           static_cast<u32>(call_arguments.size()), static_cast<i64>(closure));
                 frame = stack_.data() + base;
                 if (in.dest != 0xFFFFFFFFu) frame[in.dest] = value;
                 ++pc;

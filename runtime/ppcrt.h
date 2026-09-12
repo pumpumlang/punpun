@@ -32,6 +32,7 @@ typedef struct pp_map pp_map;
 typedef struct pp_bytes pp_bytes;
 typedef struct pp_i64_slice pp_i64_slice;
 typedef struct pp_task pp_task;
+typedef uintptr_t pp_closure;
 typedef uintptr_t (*pp_task_entry)(void *context);
 
 /* -- lifecycle ---------------------------------------------------------- */
@@ -39,6 +40,18 @@ void pp_runtime_init(int argc, char **argv);
 void pp_runtime_cleanup(void);
 void *pp_object_alloc(int64_t size);
 void pp_object_free(void *pointer);
+
+/* -- closures ----------------------------------------------------------- */
+/* A closure handle is one word. Bit 0 set means a zero-capture function and
+ * the remaining bits are its target index; aligned heap environment pointers
+ * have bit 0 clear. That keeps ordinary function values allocation-free. */
+static inline pp_closure pp_closure_named(int64_t target) {
+    return (((pp_closure)(uint64_t)target) << 1) | (pp_closure)1;
+}
+pp_closure pp_closure_new(int64_t target, int64_t capture_count);
+int64_t pp_closure_target(pp_closure closure);
+int64_t pp_closure_get(pp_closure closure, int64_t index);
+void pp_closure_set(pp_closure closure, int64_t index, int64_t slot);
 
 /* -- secure HTTPS -------------------------------------------------------
  * The implementation loads the system libcurl runtime dynamically. Only
@@ -51,8 +64,45 @@ bool pp_https_available(void);
 const char *pp_https_request(const char *method, const char *url, const char *body,
                              const char *headers, int64_t timeout_ms,
                              bool follow_redirects);
+pp_bytes *pp_https_request_bytes(const char *method, const char *url, pp_bytes *body,
+                                 const char *headers, int64_t timeout_ms,
+                                 bool follow_redirects);
 int64_t pp_https_status(void);
 const char *pp_https_error(void);
+const char *pp_https_headers_raw(void);
+pp_bytes *pp_https_body_bytes(void);
+
+/* -- sockets / DNS ------------------------------------------------------
+ * Handles are small positive integers owned by the runtime, never raw OS
+ * descriptors. Sockets are nonblocking internally; timeout waits are
+ * cancellation-aware and set pp_net_timed_out() instead of blocking forever.
+ */
+void pp_net_runtime_init(void);
+void pp_net_runtime_cleanup(void);
+bool pp_net_available(void);
+const char *pp_net_error(void);
+bool pp_net_timed_out(void);
+bool pp_net_eof(void);
+const char *pp_net_last_host(void);
+int64_t pp_net_last_port(void);
+pp_list *pp_net_resolve(const char *host, int64_t family);
+int64_t pp_net_tcp_connect(const char *host, int64_t port, int64_t timeout_ms);
+int64_t pp_net_tcp_listen(const char *host, int64_t port, int64_t backlog);
+int64_t pp_net_tcp_accept(int64_t listener, int64_t timeout_ms);
+int64_t pp_net_udp_bind(const char *host, int64_t port);
+bool pp_net_socket_close(int64_t handle);
+bool pp_net_socket_shutdown(int64_t handle, int64_t how);
+bool pp_net_socket_wait_readable(int64_t handle, int64_t timeout_ms);
+bool pp_net_socket_wait_writable(int64_t handle, int64_t timeout_ms);
+bool pp_net_socket_set_nodelay(int64_t handle, bool enabled);
+int64_t pp_net_socket_send(int64_t handle, pp_bytes *bytes, int64_t timeout_ms);
+pp_bytes *pp_net_socket_recv(int64_t handle, int64_t max_bytes, int64_t timeout_ms);
+int64_t pp_net_udp_send_to(int64_t handle, const char *host, int64_t port,
+                           pp_bytes *bytes, int64_t timeout_ms);
+pp_bytes *pp_net_udp_recv_from(int64_t handle, int64_t max_bytes, int64_t timeout_ms);
+int64_t pp_net_socket_local_port(int64_t handle);
+const char *pp_net_socket_peer_host(int64_t handle);
+int64_t pp_net_socket_peer_port(int64_t handle);
 
 /* -- native GUI ---------------------------------------------------------
  * Windows uses Win32; POSIX uses a dynamically loaded X11/XWayland runtime.
@@ -60,8 +110,44 @@ const char *pp_https_error(void);
  * present.
  */
 void pp_gui_runtime_init(void);
+void pp_gui_runtime_cleanup(void);
 bool pp_gui_available(void);
+bool pp_gui_headless(void);
 bool pp_gui_message(const char *title, const char *message);
+int64_t pp_gui_window_create(const char *title, int64_t width, int64_t height);
+bool pp_gui_window_show(int64_t handle, bool visible);
+bool pp_gui_window_close(int64_t handle);
+bool pp_gui_window_open(int64_t handle);
+bool pp_gui_window_set_title(int64_t handle, const char *title);
+int64_t pp_gui_window_width(int64_t handle);
+int64_t pp_gui_window_height(int64_t handle);
+int64_t pp_gui_widget_create(int64_t window, int64_t kind, const char *text);
+bool pp_gui_widget_destroy(int64_t handle);
+bool pp_gui_widget_set_bounds(int64_t handle, int64_t x, int64_t y, int64_t width, int64_t height);
+int64_t pp_gui_widget_x(int64_t handle);
+int64_t pp_gui_widget_y(int64_t handle);
+int64_t pp_gui_widget_width(int64_t handle);
+int64_t pp_gui_widget_height(int64_t handle);
+bool pp_gui_widget_set_text(int64_t handle, const char *text);
+const char *pp_gui_widget_text(int64_t handle);
+bool pp_gui_widget_set_value(int64_t handle, int64_t value);
+int64_t pp_gui_widget_value(int64_t handle);
+bool pp_gui_widget_set_range(int64_t handle, int64_t minimum, int64_t maximum);
+bool pp_gui_widget_set_visible(int64_t handle, bool visible);
+bool pp_gui_widget_set_enabled(int64_t handle, bool enabled);
+bool pp_gui_redraw(int64_t window);
+int64_t pp_gui_poll(int64_t window, int64_t timeout_ms);
+bool pp_gui_post_event(int64_t window, int64_t type, int64_t widget, int64_t key, const char *text, int64_t x, int64_t y);
+int64_t pp_gui_event_window(void);
+int64_t pp_gui_event_widget(void);
+int64_t pp_gui_event_key(void);
+int64_t pp_gui_event_x(void);
+int64_t pp_gui_event_y(void);
+const char *pp_gui_event_text(void);
+bool pp_gui_canvas_clear(int64_t widget, int64_t rgb);
+bool pp_gui_canvas_rect(int64_t widget, int64_t x, int64_t y, int64_t width, int64_t height, int64_t rgb, bool filled);
+bool pp_gui_canvas_line(int64_t widget, int64_t x1, int64_t y1, int64_t x2, int64_t y2, int64_t rgb);
+bool pp_gui_canvas_text(int64_t widget, int64_t x, int64_t y, const char *text, int64_t rgb);
 
 /* -- program arguments -------------------------------------------------- */
 int64_t pp_arg_count(void);
@@ -135,6 +221,9 @@ void pp_bytes_put(pp_bytes *bytes, int64_t index, int64_t value);
 int64_t pp_bytes_len(pp_bytes *bytes);
 pp_bytes *pp_bytes_slice(pp_bytes *bytes, int64_t start, int64_t end);
 pp_bytes *pp_bytes_concat(pp_bytes *left, pp_bytes *right);
+/* Runtime-internal binary access used by socket and crypto modules. */
+const uint8_t *pp_bytes_data(pp_bytes *bytes);
+pp_bytes *pp_bytes_from_data(const void *data, int64_t length);
 
 /* -- checked borrowed views --------------------------------------------- */
 pp_i64_slice *pp_numbers_view(pp_numbers *numbers, int64_t start, int64_t end);
@@ -254,6 +343,11 @@ const char *pp_current_dir(void);
 /* -- environment and process --------------------------------------------- */
 bool pp_env_has(const char *name);
 const char *pp_env_or(const char *name, const char *fallback);
+bool pp_env_set(const char *name, const char *value);
+const char *pp_hostname(void);
+int64_t pp_cpu_count(void);
+const char *pp_process_capture(const char *command);
+int64_t pp_process_status(void);
 const char *pp_platform(void);
 const char *pp_read_line(void);
 void pp_sleep_ms(int64_t duration);

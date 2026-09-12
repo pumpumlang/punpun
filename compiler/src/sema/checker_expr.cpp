@@ -2,8 +2,161 @@
 
 #include <algorithm>
 #include <unordered_map>
+#include <unordered_set>
 
 namespace ppc {
+
+namespace {
+
+// Finds names used by a lifted lambda that are not declared inside that lambda.
+// Resolution against the enclosing semantic scope happens afterwards, so module
+// functions, builtins, and types simply fall out while true outer locals become
+// closure captures.
+class FreeNameCollector {
+  public:
+    FreeNameCollector(Interner &interner,
+                      const std::unordered_map<u32, const FunctionDecl *> &lambdas)
+        : interner_(interner), lambdas_(lambdas) {}
+
+    std::vector<Symbol> collect(const FunctionDecl &fn) {
+        scopes_.clear();
+        free_.clear();
+        seen_.clear();
+        expanded_.clear();
+        scopes_.emplace_back();
+        for (const Param &param : fn.params) bind(param.name);
+        statements(fn.body, false);
+        scopes_.pop_back();
+        return free_;
+    }
+
+  private:
+    bool bound(Symbol name) const {
+        for (auto scope = scopes_.rbegin(); scope != scopes_.rend(); ++scope) {
+            if (scope->count(name.index)) return true;
+        }
+        return false;
+    }
+    void bind(Symbol name) {
+        if (!name.valid()) return;
+        if (scopes_.empty()) scopes_.emplace_back();
+        scopes_.back().insert(name.index);
+    }
+    void note(Symbol name) {
+        if (!name.valid() || bound(name)) return;
+        if (seen_.insert(name.index).second) free_.push_back(name);
+    }
+    void bind_pattern(const Pattern *pattern) {
+        if (!pattern) return;
+        if (pattern->kind == Pattern::Kind::Binding) bind(pattern->name);
+        for (const Pattern *child : pattern->children) bind_pattern(child);
+    }
+    void expression(const Expr *expr) {
+        if (!expr) return;
+        switch (expr->kind) {
+            case Expr::Kind::Name: {
+                // Nested function literals are lifted to generated module names.
+                // Their free variables must still propagate through this
+                // closure, otherwise a grandparent local could not reach the
+                // innermost environment.
+                auto nested = lambdas_.find(expr->name.index);
+                if (nested != lambdas_.end() && expanded_.insert(expr->name.index).second) {
+                    scopes_.emplace_back();
+                    for (const Param &param : nested->second->params) bind(param.name);
+                    statements(nested->second->body, false);
+                    scopes_.pop_back();
+                    return;
+                }
+                note(expr->name);
+                return;
+            }
+            case Expr::Kind::SelfExpr: note(interner_.intern("self")); return;
+            case Expr::Kind::IntLiteral:
+            case Expr::Kind::FloatLiteral:
+            case Expr::Kind::StringLiteral:
+            case Expr::Kind::BoolLiteral:
+            case Expr::Kind::Path:
+            case Expr::Kind::SizeOf:
+            case Expr::Kind::AlignOf:
+                return;
+            case Expr::Kind::Match: {
+                expression(expr->left);
+                for (const MatchArm &arm : expr->arms) {
+                    scopes_.emplace_back();
+                    bind_pattern(arm.pattern);
+                    expression(arm.guard);
+                    expression(arm.value);
+                    statements(arm.body, false);
+                    scopes_.pop_back();
+                }
+                return;
+            }
+            default:
+                break;
+        }
+        expression(expr->left);
+        expression(expr->right);
+        for (const Argument &argument : expr->arguments) expression(argument.value);
+        for (const Expr *element : expr->elements) expression(element);
+    }
+    void statement(const Stmt *stmt) {
+        if (!stmt) return;
+        switch (stmt->kind) {
+            case Stmt::Kind::Let:
+                expression(stmt->value);
+                bind(stmt->name);
+                return;
+            case Stmt::Kind::Assign:
+                expression(stmt->target);
+                expression(stmt->value);
+                return;
+            case Stmt::Kind::Expression:
+            case Stmt::Kind::Return:
+                expression(stmt->value);
+                return;
+            case Stmt::Kind::If:
+                expression(stmt->value);
+                statements(stmt->body, true);
+                statements(stmt->alternative, true);
+                return;
+            case Stmt::Kind::While:
+                expression(stmt->value);
+                statements(stmt->body, true);
+                return;
+            case Stmt::Kind::For: {
+                expression(stmt->range_start);
+                expression(stmt->range_end);
+                expression(stmt->iterable);
+                scopes_.emplace_back();
+                bind(stmt->name);
+                statements(stmt->body, false);
+                scopes_.pop_back();
+                return;
+            }
+            case Stmt::Kind::Block:
+            case Stmt::Kind::Unsafe:
+                statements(stmt->body, true);
+                return;
+            case Stmt::Kind::Break:
+            case Stmt::Kind::Continue:
+                return;
+        }
+    }
+    void statements(const std::vector<Stmt *> &body, bool child_scope) {
+        if (child_scope) scopes_.emplace_back();
+        for (const Stmt *stmt : body) statement(stmt);
+        if (child_scope) scopes_.pop_back();
+    }
+
+    Interner &interner_;
+    const std::unordered_map<u32, const FunctionDecl *> &lambdas_;
+    std::vector<std::unordered_set<u32>> scopes_;
+    std::vector<Symbol> free_;
+    std::unordered_set<u32> seen_;
+    std::unordered_set<u32> expanded_;
+};
+
+}  // namespace
 
 // ---------------------------------------------------------------------------
 // Expression dispatch
@@ -130,12 +283,10 @@ HirExpr *Checker::check_name(const Expr *expr, const Type *expected) {
         // The name may well exist in the enclosing function. Saying "not found"
         // would send the reader hunting for a typo that is not there.
         diagnostics_
-            .error(Code::UnknownName,
-                   "a function literal cannot use '" + name + "' from around it")
+            .error(Code::UnknownName, "cannot resolve '" + name + "' in this closure")
             .label(expr->span)
-            .note("function literals do not capture; they only see their own "
-                  "parameters and module-level names")
-            .with_help("pass '" + name + "' in as a parameter");
+            .note("captured names must be in scope when the function literal is created")
+            .with_help("move the declaration before the function literal, or pass the value in");
         return poison(expr->span);
     }
     diagnostics_.error(Code::UnknownName, "cannot find '" + name + "' in this scope")
@@ -176,10 +327,10 @@ HirExpr *Checker::check_indirect_call(const Expr *expr, HirExpr *callee) {
 
 /// A function named without parentheses, used as a value.
 ///
-/// The value is the callee's specialization index, so producing one means
-/// selecting an overload and specializing it. Selection uses the expected type
-/// when there is one, which is what lets two same-named functions be told apart
-/// by the parameter they are being passed to.
+/// Named functions become zero-capture closures. A lifted function literal is
+/// different only in that free names resolving to locals in the enclosing
+/// function are copied/moved into the closure environment. Its source-visible
+/// `fn(...) -> R` type never includes those hidden values.
 HirExpr *Checker::check_function_value(const Expr *expr, const Type *expected) {
     const std::string name = interner_.text(expr->name);
     const auto candidates = by_name_.find(name);
@@ -192,7 +343,8 @@ HirExpr *Checker::check_function_value(const Expr *expr, const Type *expected) {
     for (u32 index : overloads) {
         const FunctionTemplate &templ = templates_[index];
         // A generic function has no single address, so it cannot be a value
-        // until it is applied to type arguments.
+        // until it is applied to type arguments. Lifted lambdas themselves are
+        // non-generic; captured concrete types specialize their environment.
         if (!templ.generics.empty()) continue;
         if (wanted) {
             if (templ.rough_params.size() != wanted->arguments.size()) continue;
@@ -227,11 +379,75 @@ HirExpr *Checker::check_function_value(const Expr *expr, const Type *expected) {
         return poison(expr->span);
     }
 
-    const u32 specialization = specialize(viable.front(), {}, expr->span);
+    const u32 templ_index = viable.front();
+    const FunctionTemplate &templ = templates_[templ_index];
+    std::vector<ClosureCapture> captures;
+    std::vector<HirExpr *> captured_values;
+    bool invalid_capture = false;
+
+    if (templ.decl && templ.decl->is_lambda) {
+        std::unordered_map<u32, const FunctionDecl *> lambdas;
+        for (const FunctionTemplate &candidate : templates_) {
+            if (candidate.decl && candidate.decl->is_lambda) {
+                lambdas.emplace(candidate.name.index, candidate.decl);
+            }
+        }
+        FreeNameCollector collector(interner_, lambdas);
+        for (Symbol symbol : collector.collect(*templ.decl)) {
+            LocalBinding *binding = lookup_local(symbol);
+            if (!binding) continue;  // module name, builtin, type, or genuine unknown
+
+            reject_if_moved(symbol, expr->span);
+
+            // A closure may outlive the stack frame that created it. Borrowed
+            // values therefore cannot be captured until the language has
+            // lifetime-aware closure escape analysis. Raw pointers remain an
+            // explicitly unsafe escape hatch; owning/shared handles are safe.
+            if (binding->type &&
+                (binding->type->kind == TypeKind::Reference ||
+                 binding->type->kind == TypeKind::MutRef ||
+                 binding->type->kind == TypeKind::Slice)) {
+                diagnostics_
+                    .error(Code::BorrowEscapes,
+                           "closure capture '" + interner_.text(symbol) +
+                               "' may outlive the value it borrows")
+                    .label(expr->span, "this closure captures a borrowed value")
+                    .with_help("capture an owned value instead");
+                invalid_capture = true;
+                continue;
+            }
+
+            ClosureCapture capture;
+            capture.name = symbol;
+            capture.type = binding->type;
+            capture.is_mutable = binding->is_mutable;
+            capture.span = expr->span;
+            captures.push_back(capture);
+
+            HirExpr *value = make_expr(HirExpr::Kind::Local, expr->span, binding->type);
+            value->local = binding->slot;
+
+            // Environments own captured values. Copy values are duplicated;
+            // move-only values transfer into the closure exactly as if they had
+            // been passed through move(...).
+            Expr source;
+            source.kind = Expr::Kind::Name;
+            source.name = symbol;
+            source.span = expr->span;
+            note_move(&source, value);
+            captured_values.push_back(value);
+        }
+    }
+
+    if (invalid_capture) return poison(expr->span);
+
+    const u32 specialization = specialize(templ_index, {}, expr->span, captures);
+    if (specialization == 0xFFFFFFFFu) return poison(expr->span);
     const Specialization &info = spec_at(specialization);
     HirExpr *node = make_expr(HirExpr::Kind::FuncRef, expr->span,
                               types_.function(info.params, info.result));
     node->target = specialization;
+    node->operands = std::move(captured_values);
     return node;
 }
 

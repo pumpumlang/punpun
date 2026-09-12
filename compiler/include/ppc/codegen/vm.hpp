@@ -50,7 +50,8 @@ class Vm {
   private:
     /// Executes one function with `arguments` already evaluated. Returns the
     /// function's result, or a zero slot for a void function.
-    Slot invoke(u32 function_index, const Slot *arguments, u32 argument_count);
+    Slot invoke(u32 function_index, const Slot *arguments, u32 argument_count,
+                i64 closure = 0);
     /// Deep-copies a boxed value struct, following nested value fields.
     void *copy_struct(void *source, u32 decl);
     /// `formatter` selects the print family's output form; it is ignored by

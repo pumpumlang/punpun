@@ -1,14 +1,18 @@
 # gui
 
-First-party PunPun 1.4 native GUI foundation.
+First-party PunPun retained native GUI toolkit.
 
 ```sh
 ppx add gui
 ```
 
-The package exposes `gui_available()`, `gui_message(title, message)`,
-`gui_supported()`, and `gui_alert(message)`. Windows uses Win32. POSIX hosts
-load X11/XWayland dynamically; unavailable or headless sessions return false.
+`std.gui` now provides application windows, labels, buttons, text inputs,
+checkboxes, sliders, progress bars, panels and canvases. Widgets have retained
+text/value/visibility/enabled/bounds state, backend-independent vertical,
+horizontal and grid layouts, event polling/posting, and closure-driven event
+loops. Canvas controls support RGB clear, rectangle, line and text drawing.
 
-This package currently provides a message-window foundation, not a complete
-widget/layout toolkit.
+Windows uses Win32 controls and GDI. POSIX hosts load X11/XWayland dynamically,
+so the compiler and SDK retain no X11 build dependency. Set
+`PUNPUN_GUI_HEADLESS=1` to use the same retained model without a display for CI
+or deterministic application tests.

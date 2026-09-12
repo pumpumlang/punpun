@@ -66,7 +66,12 @@ struct EscapeInfo {
     u32 elidable_copies = 0;
 
     bool can_take_ownership(Reg id) const {
-        return id < fresh_single_use.size() && fresh_single_use[id];
+        // A promoted aggregate lives inside the current stack frame.  It may be
+        // single-use, but handing that address to a container/callee would turn
+        // copy elision into a dangling pointer as soon as this function returns.
+        // Ownership transfer is therefore only legal for heap-backed fresh values.
+        return id < fresh_single_use.size() && fresh_single_use[id] &&
+               (id >= stack_allocatable.size() || !stack_allocatable[id]);
     }
 
     bool promoted(Reg id) const {

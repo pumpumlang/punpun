@@ -15,12 +15,11 @@ namespace ppc {
 /// Emits x86-64 System V assembly directly, skipping the host C compiler.
 ///
 /// This sits between the other two backends on the compile-time / run-time
-/// curve: there is no C parsing or optimization to pay for, but the generated
-/// code is roughly what a non-optimizing compiler produces. Every MIR register
-/// and local gets its own stack slot, and values are loaded and stored around
-/// each operation rather than kept in machine registers. That is deliberate —
-/// a real register allocator is where most of a native backend's complexity
-/// lives, and the C backend already covers the case where peak speed matters.
+/// curve: there is no C parsing or host optimization pass to pay for. Locals
+/// and MIR values retain deterministic spill homes, while a CFG-aware linear-
+/// scan allocator keeps eligible scalar values in callee-saved registers across
+/// operations and calls. System V register and stack arguments are both emitted
+/// directly, including the wrappers used for native async tasks.
 ///
 /// Aggregates are boxed on the heap exactly as in the bytecode backend, so a
 /// `struct` gets an explicit deep copy wherever the language specifies value
@@ -36,8 +35,19 @@ class NativeBackend : public Backend {
 
   private:
     // -- layout -------------------------------------------------------------
-    /// Byte offset from %rbp for a MIR register's spill slot.
+    /// Byte offset from %rbp for a MIR register's spill home.  Even registers
+    /// selected by the native allocator retain a home so debugging, aggregate
+    /// materialization, and unusual instructions can address them uniformly.
     int register_offset(Reg id) const;
+    /// Assigns scalar MIR registers to callee-saved x86-64 registers with a
+    /// conservative linear-scan allocator.  Values still get spill homes, but
+    /// hot arithmetic can consume the allocated register directly.
+    void allocate_registers(const MirFunction &fn);
+    const char *allocated_register(Reg id) const;
+    void load_value(const std::string &target, Reg id);
+    void store_value(const std::string &source, Reg id);
+    /// Hidden slot holding the closure object for the current indirect call.
+    int closure_offset() const;
     /// Byte offset from %rbp for a local's slot.
     int local_offset(u32 index) const;
     /// Offset of a scratch slot used for a copy temporary.
@@ -56,6 +66,8 @@ class NativeBackend : public Backend {
     void emit_entry(const MirProgram &program);
     void emit_string_pool();
     void emit_function_table(const MirProgram &program);
+    /// Per-async-function worker trampolines and spawn wrappers.
+    void emit_task_trampolines(const MirProgram &program);
 
     /// Loads a value into a GP register, or a double into an SSE register.
     void load(const std::string &reg, int offset);
@@ -102,6 +114,9 @@ class NativeBackend : public Backend {
     int frame_bytes_ = 0;
     u32 scratch_used_ = 0;
     u32 scratch_high_water_ = 0;
+    /// -1 means spilled; otherwise indexes the small callee-saved register pool.
+    std::vector<int> register_assignment_;
+    std::vector<int> used_register_slots_;
     /// Labels for the traps this function needs, deduplicated.
     std::vector<std::string> traps_;
 

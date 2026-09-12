@@ -47,6 +47,7 @@ class MirBuilder {
     void lower_if(const HirStmt *statement);
     void lower_while(const HirStmt *statement);
     void lower_for(const HirStmt *statement);
+    void flush_captures(Span span);
 
     Reg lower_expr(const HirExpr *expr);
     Reg lower_binary(const HirExpr *expr);

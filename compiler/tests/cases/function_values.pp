@@ -1,6 +1,6 @@
 // Functions as values: passed as arguments, stored in locals, and written
-// inline. The value is the callee's index, so all three backends share one
-// calling sequence.
+// inline. Named functions and literals both use the same closure-handle
+// representation, so all three backends share one indirect calling model.
 fn double(x: int) -> int { return x * 2; }
 fn negate(x: int) -> int { return 0 - x; }
 

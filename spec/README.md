@@ -12,4 +12,7 @@ Keywords or grammar may be recognized before their semantics are enabled. Such s
 
 ## Stable 1.x contract
 
+- [`1.0/closures.md`](1.0/closures.md) defines function values, capture ownership, nested closures and borrowed-capture restrictions.
+- [`1.0/networking.md`](1.0/networking.md) defines portable socket handles, timeout/cancellation semantics, HTTP security rules and WebSocket framing guarantees.
+
 The normative stable compatibility contract is in [`1.0/`](1.0/).

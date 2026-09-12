@@ -205,6 +205,36 @@ void VmBackend::compile_instruction(const MirFunction &fn, const MirInst &source
             out.b = reg(source.b);
             return;
         }
+        case MirOp::MakeClosure: {
+            // Captures become independent homes just like parameters/fields.
+            // Value structs therefore need a deep copy before their handle is
+            // written into the closure environment.
+            std::vector<u32> captures;
+            captures.reserve(source.args.size());
+            for (Reg capture : source.args) {
+                const Type *type = capture < fn.reg_types.size() ? fn.reg_types[capture] : nullptr;
+                captures.push_back(copy_if_value_struct(type, reg(capture), source));
+            }
+            Instr &out = emit_instruction(Op::MakeClosure, source);
+            out.dest = reg(source.dest);
+            out.imm = source.target;
+            out.arg_offset = static_cast<u32>(program_->arguments.size());
+            out.arg_count = static_cast<u32>(captures.size());
+            for (u32 slot : captures) program_->arguments.push_back(slot);
+            return;
+        }
+        case MirOp::LoadCapture: {
+            Instr &out = emit_instruction(Op::LoadCapture, source);
+            out.dest = reg(source.dest);
+            out.imm = source.index;
+            return;
+        }
+        case MirOp::StoreCapture: {
+            Instr &out = emit_instruction(Op::StoreCapture, source);
+            out.a = reg(source.a);
+            out.imm = source.index;
+            return;
+        }
         case MirOp::Unary: {
             const Type *operand = source.a < fn.reg_types.size() ? fn.reg_types[source.a] : nullptr;
             Op op = Op::NegInt;

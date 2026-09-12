@@ -247,6 +247,14 @@ const Type *Checker::substitute(const Type *type, const Substitution &subst) {
             return types_.map(substitute(type->element, subst));
         case TypeKind::Task:
             return types_.task(substitute(type->element, subst));
+        case TypeKind::Function: {
+            std::vector<const Type *> parameters;
+            parameters.reserve(type->arguments.size());
+            for (const Type *parameter : type->arguments) {
+                parameters.push_back(substitute(parameter, subst));
+            }
+            return types_.function(std::move(parameters), substitute(type->element, subst));
+        }
         case TypeKind::Struct:
         case TypeKind::Object:
         case TypeKind::Enum: {
@@ -615,7 +623,8 @@ void Checker::resolve_signatures() {
 // Specialization
 // ---------------------------------------------------------------------------
 
-u32 Checker::specialize(u32 templ_index, std::vector<const Type *> arguments, Span span) {
+u32 Checker::specialize(u32 templ_index, std::vector<const Type *> arguments, Span span,
+                        const std::vector<ClosureCapture> &captures) {
     const FunctionTemplate &templ = templates_[templ_index];
 
     std::string key = templ.owner.valid()
@@ -624,6 +633,17 @@ u32 Checker::specialize(u32 templ_index, std::vector<const Type *> arguments, Sp
     for (const Type *argument : arguments) {
         key += "$";
         key += types_.mangle(argument);
+    }
+    // A lifted lambda can be instantiated from different generic outer
+    // functions. Its captured types are therefore part of specialization
+    // identity even though they are invisible in the source-level fn type.
+    if (templ.decl && templ.decl->is_lambda) {
+        key += "$closure";
+        for (const ClosureCapture &capture : captures) {
+            key += "$";
+            key += types_.mangle(capture.type);
+            key += capture.is_mutable ? "m" : "i";
+        }
     }
 
     auto cached = specialization_index_.find(key);
@@ -652,6 +672,7 @@ u32 Checker::specialize(u32 templ_index, std::vector<const Type *> arguments, Sp
         specialization.params.push_back(substitute(rough, subst));
     }
     specialization.result = substitute(templ.rough_result, subst);
+    specialization.captures = captures;
 
     const u32 index = static_cast<u32>(specializations_.size());
     specializations_.push_back(std::make_unique<Specialization>(std::move(specialization)));
@@ -832,6 +853,7 @@ HirProgram *Checker::check(const Program &program) {
     for (u32 i = 0; i < templates_.size(); ++i) {
         if (!templates_[i].generics.empty()) continue;
         if (templates_[i].owner.valid()) continue;
+        if (templates_[i].decl->is_lambda) continue;
         if (templates_[i].decl->is_extern_native) continue;
         specialize(i, {}, templates_[i].decl->span);
     }
@@ -970,6 +992,22 @@ void Checker::check_function(u32 index) {
                       decl->params[i].span);
     }
     fn->param_count = static_cast<u32>(fn->locals.size());
+
+    // Captures are source-invisible locals. The closure object supplies their
+    // initial values when the lifted lambda is entered; treating them as locals
+    // keeps the rest of semantic checking (mutability, ownership, fields,
+    // indexing) exactly the same as ordinary bindings.
+    for (const ClosureCapture &capture : specialization.captures) {
+        const u32 slot = declare_local(capture.name, capture.type, capture.is_mutable, false,
+                                       capture.span);
+        HirCapture lowered;
+        lowered.name = capture.name;
+        lowered.local = slot;
+        lowered.type = capture.type;
+        lowered.is_mutable = capture.is_mutable;
+        lowered.span = capture.span;
+        fn->captures.push_back(lowered);
+    }
 
     check_block(decl->body, fn->body);
 

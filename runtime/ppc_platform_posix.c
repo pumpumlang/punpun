@@ -20,6 +20,7 @@
 #include <dirent.h>
 #include <sys/stat.h>
 #include <sys/time.h>
+#include <sys/wait.h>
 #include <time.h>
 #include <unistd.h>
 
@@ -252,6 +253,52 @@ bool ppc_plat_current_dir(char *buffer, size_t size) {
 /* -- environment ---------------------------------------------------------- */
 
 const char *ppc_plat_get_env(const char *name) { return getenv(name); }
+
+bool ppc_plat_set_env(const char *name, const char *value) {
+    if (!name || !*name) return false;
+    if (!value) return unsetenv(name) == 0;
+    return setenv(name, value, 1) == 0;
+}
+
+bool ppc_plat_hostname(char *buffer, size_t size) {
+    if (!buffer || size == 0) return false;
+    if (gethostname(buffer, size) != 0) return false;
+    buffer[size - 1] = '\0';
+    return true;
+}
+
+int64_t ppc_plat_cpu_count(void) {
+    const long count = sysconf(_SC_NPROCESSORS_ONLN);
+    return count > 0 ? (int64_t)count : 1;
+}
+
+int64_t ppc_plat_run_capture(const char *command, char **output) {
+    if (output) *output = NULL;
+    if (!command || !output) return -1;
+    FILE *pipe = popen(command, "r");
+    if (!pipe) return -1;
+    size_t capacity = 4096, length = 0;
+    char *data = (char *)malloc(capacity);
+    if (!data) { pclose(pipe); return -1; }
+    char chunk[2048];
+    while (fgets(chunk, sizeof(chunk), pipe)) {
+        const size_t n = strlen(chunk);
+        if (length + n + 1 > capacity) {
+            while (length + n + 1 > capacity) capacity *= 2;
+            char *grown = (char *)realloc(data, capacity);
+            if (!grown) { free(data); pclose(pipe); return -1; }
+            data = grown;
+        }
+        memcpy(data + length, chunk, n); length += n;
+    }
+    data[length] = '\0';
+    const int status = pclose(pipe);
+    *output = data;
+    if (status < 0) return -1;
+    if (WIFEXITED(status)) return (int64_t)WEXITSTATUS(status);
+    if (WIFSIGNALED(status)) return 128 + (int64_t)WTERMSIG(status);
+    return (int64_t)status;
+}
 
 const char *ppc_plat_name(void) {
 #if defined(__linux__)

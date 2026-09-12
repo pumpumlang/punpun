@@ -131,6 +131,12 @@ bool ppc_plat_current_dir(char *buffer, size_t size);
 /* -- environment ---------------------------------------------------------- */
 
 const char *ppc_plat_get_env(const char *name);
+bool ppc_plat_set_env(const char *name, const char *value);
+bool ppc_plat_hostname(char *buffer, size_t size);
+int64_t ppc_plat_cpu_count(void);
+/* Runs through the host shell and captures stdout. `*output` is malloc-owned by
+ * the caller. The return value is the normalized process exit status. */
+int64_t ppc_plat_run_capture(const char *command, char **output);
 /* Compile-time platform name, matching what `platform()` returns to PunPun. */
 const char *ppc_plat_name(void);
 
