@@ -3,7 +3,7 @@ name: release-stage-apply
 on:
   push:
     branches: [release-1.5-staging]
-    paths: [.release-stage/ready]
+    paths: [.release-final/ready]
 
 permissions:
   contents: write
@@ -19,7 +19,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          cat .release-stage/patch-* > /tmp/punpun-1.5.0.patch.gz.b64
+          cp .release-final/punpun-1.5.0.patch.gz.b64 /tmp/punpun-1.5.0.patch.gz.b64
           echo '4c13b5b6ca21652466e2e58e9666b023d274ec158513ea19d2f9d8b62589429f  /tmp/punpun-1.5.0.patch.gz.b64' | sha256sum -c -
           base64 -d /tmp/punpun-1.5.0.patch.gz.b64 > /tmp/punpun-1.5.0.patch.gz
           gzip -dc /tmp/punpun-1.5.0.patch.gz > /tmp/punpun-1.5.0.patch
@@ -39,4 +39,4 @@ jobs:
           git config user.email 'pumpumlang@proton.me'
           git add -A
           git commit -m 'Release PunPun 1.5.0'
-          git push origin HEAD:refs/heads/release-1.5-final
+          git push --force origin HEAD:refs/heads/release-1.5-final
