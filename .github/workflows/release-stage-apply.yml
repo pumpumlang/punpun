@@ -1,0 +1,42 @@
+name: release-stage-apply
+
+on:
+  push:
+    branches: [release-1.5-staging]
+    paths: [.release-stage/ready]
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - name: Reconstruct and validate PunPun 1.5.0 patch
+        shell: bash
+        run: |
+          set -euo pipefail
+          cat .release-stage/patch-* > /tmp/punpun-1.5.0.patch.gz.b64
+          echo '4c13b5b6ca21652466e2e58e9666b023d274ec158513ea19d2f9d8b62589429f  /tmp/punpun-1.5.0.patch.gz.b64' | sha256sum -c -
+          base64 -d /tmp/punpun-1.5.0.patch.gz.b64 > /tmp/punpun-1.5.0.patch.gz
+          gzip -dc /tmp/punpun-1.5.0.patch.gz > /tmp/punpun-1.5.0.patch
+          echo '30a84b71cd599079a685d304d44ea7ed0f152c12f7ecc363c8c81db3cff59595  /tmp/punpun-1.5.0.patch' | sha256sum -c -
+      - name: Build clean release commit from 1.4.5 main
+        shell: bash
+        run: |
+          set -euo pipefail
+          base='bf5419e8ad7bcfcef10293d6243fab64db7eb68f'
+          git checkout --detach "$base"
+          git apply --check /tmp/punpun-1.5.0.patch
+          git apply /tmp/punpun-1.5.0.patch
+          test "$(tr -d '\r\n' < VERSION)" = '1.5.0'
+          grep -q '^# PunPun 1.5.0' RELEASE_NOTES.md
+          git diff --check
+          git config user.name 'pp'
+          git config user.email 'pumpumlang@proton.me'
+          git add -A
+          git commit -m 'Release PunPun 1.5.0'
+          git push origin HEAD:refs/heads/release-1.5-final
