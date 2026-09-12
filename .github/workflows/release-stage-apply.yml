@@ -15,25 +15,50 @@ jobs:
       - uses: actions/checkout@v7
         with:
           fetch-depth: 0
-      - name: Reconstruct and validate PunPun 1.5.0 patch
+      - name: Reconstruct PunPun 1.5.0 development layers
         shell: bash
         run: |
           set -euo pipefail
+          cat .release-stage/closure-* > /tmp/closure.patch.gz.b64
+          echo '36a0f4dfe0f16f6fee5dd756bb1c66aef395512937abdf0d9a809e1e5095ac3e  /tmp/closure.patch.gz.b64' | sha256sum -c -
+          base64 -d /tmp/closure.patch.gz.b64 > /tmp/closure.patch.gz
+          gzip -dc /tmp/closure.patch.gz > /tmp/closure.patch
+          echo '434b7e78d59850369824d419a52fb13bd6f40de59aabacf4fbade614ff2ecf06  /tmp/closure.patch' | sha256sum -c -
+
           cat .release-stage/patch-* > /tmp/punpun-1.5.0.patch.gz.b64
           echo '4c13b5b6ca21652466e2e58e9666b023d274ec158513ea19d2f9d8b62589429f  /tmp/punpun-1.5.0.patch.gz.b64' | sha256sum -c -
           base64 -d /tmp/punpun-1.5.0.patch.gz.b64 > /tmp/punpun-1.5.0.patch.gz
           gzip -dc /tmp/punpun-1.5.0.patch.gz > /tmp/punpun-1.5.0.patch
           echo '30a84b71cd599079a685d304d44ea7ed0f152c12f7ecc363c8c81db3cff59595  /tmp/punpun-1.5.0.patch' | sha256sum -c -
-      - name: Build clean release commit from 1.4.5 main
+      - name: Build clean release commit from live 1.4.5 main
         shell: bash
         run: |
           set -euo pipefail
           base='bf5419e8ad7bcfcef10293d6243fab64db7eb68f'
           git checkout --detach "$base"
-          git apply --check /tmp/punpun-1.5.0.patch
-          git apply /tmp/punpun-1.5.0.patch
+
+          # Step 1 was checkpointed separately; steps 2-6 were developed on top of it.
+          git apply --check /tmp/closure.patch
+          git apply /tmp/closure.patch
+
+          # The live 1.4.5 release regenerated only the Arch archive checksum after
+          # the development baseline was frozen. Keep that live checksum here; the
+          # 1.5 release builder regenerates PKGBUILD with the 1.5 archive checksum.
+          git apply --check --exclude=packaging/arch/PKGBUILD /tmp/punpun-1.5.0.patch
+          git apply --exclude=packaging/arch/PKGBUILD /tmp/punpun-1.5.0.patch
+          python3 - <<'PY'
+          from pathlib import Path
+          p = Path('packaging/arch/PKGBUILD')
+          text = p.read_text()
+          text = text.replace('pkgver=1.4.5', 'pkgver=1.5.0')
+          text = text.replace("PunPun-1.4.5-linux-x86_64.tar.zst", "PunPun-1.5.0-linux-x86_64.tar.zst")
+          text = text.replace("PunPun-1.4.5-linux-x86_64/.", "PunPun-1.5.0-linux-x86_64/.")
+          p.write_text(text)
+          PY
+
           test "$(tr -d '\r\n' < VERSION)" = '1.5.0'
           grep -q '^# PunPun 1.5.0' RELEASE_NOTES.md
+          python3 scripts/check_versions.py
           git diff --check
           git config user.name 'pp'
           git config user.email 'pumpumlang@proton.me'
